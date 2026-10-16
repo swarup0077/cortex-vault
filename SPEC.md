@@ -611,6 +611,7 @@ The plan has one Claude Code session per milestone, with a commit at the end of 
 | 14 Oct | Fully local ONNX models; Gradio UI; hybrid BM25 + bge + CLIP fused with RRF | §11 |
 | 16 Oct | v2 scope: Office files, OCR tiling and reading order, PDF image-region OCR, CLIP gate, content-addressed store, highlights, uploads v2 | §20 |
 | 16 Oct | Deploy path **D**: Azure for Students VM (Ubuntu 24.04, B2ls_v2), systemd, Caddy for HTTPS; the app binds 127.0.0.1 | §15. No PyTorch/GPU runtime risk, persistent disk, no sleep, keeps both ZeroGPU slots free for other projects |
+| 16 Oct | M0 probe verified on the VM: https://swarup-vault.indiasouthcentral.cloudapp.azure.com/ returns 384-d, norm 1.0 vectors identical to the laptop's; warm encode 7–10 ms; probe RSS 372 MB, Caddy 56 MB; port 7860 unreachable from outside; HTTP → HTTPS 308 | Measured 16 Oct with `gradio_client` from the laptop |
 | 16 Oct | Code reaches the VM via a bare repo on the VM (`git push vm main`), not GitHub | No third-party host or deploy key; same SSH key as admin access |
 | 16 Oct | Local Python 3.12 is uv-managed (`uv python install 3.12`; venv made with `--seed` so pip works) | No 3.12 or `py` launcher on the laptop; uv was already installed |
 | 16 Oct | Full core stack pinned in `requirements.txt` at M0 | Surfaces Windows/Linux wheel problems before M1–M3 |

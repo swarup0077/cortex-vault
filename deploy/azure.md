@@ -62,7 +62,7 @@ free -h    # Swap: 4.0Gi
 On the VM:
 
 ```bash
-git init --bare ~/vault.git
+git init --bare -b main ~/vault.git    # -b main so clones check out main
 ```
 
 On the **laptop**, in the project folder:
