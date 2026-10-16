@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# Local data: index, thumbnails, model caches (SPEC §13)
+data/
+fastembed_cache/
+.cache/
+
+# Gradio
+.gradio/
+
+# OS / Office junk
+Thumbs.db
+desktop.ini
+.DS_Store
+~$*
