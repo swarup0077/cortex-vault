@@ -8,7 +8,7 @@
 | Built with | Claude Code (session transcripts are a submission deliverable) |
 | Hard deadline | Deployed URL + transcript HTML on MS Teams before **27 Oct 2026, 2 PM** |
 | Machine | Windows laptop, CPU only, `C:\projects\personal-search-vault`. Code must also run on Linux (the hosted demo) and macOS (other people's laptops). |
-| Python | **3.12** (HF ZeroGPU runs 3.12.12; RapidOCR's docs list support below 3.13) |
+| Python | **3.12** (Ubuntu 24.04 on the Azure VM ships 3.12; RapidOCR's docs list support below 3.13) |
 | Version | v2, 16 Oct 2026. Changes since v1 are listed in §20. |
 
 ---
@@ -40,7 +40,7 @@
 |---|---|---|
 | Corpus | Folders the user adds | Prebuilt index of `corpus/` (committed under `demo_index/`) |
 | Writes | Index and re-index | Never to the demo index; uploads go into a per-session copy (§8) |
-| Bind | `127.0.0.1` only | The host's public port |
+| Bind | `127.0.0.1` only | `127.0.0.1:7860` behind Caddy, which serves HTTPS on 443 (§15) |
 | Extras | Index tab; "Open file" button (`vault/platform.py`: `os.startfile` on Windows, `open` on macOS, `xdg-open` on Linux) | Upload tab (files or a whole folder); "How it works" tab |
 | File access | Only paths stored in the DB | Only by DB id or session id. A user-supplied path is never read. |
 | Network | None after the first model download (`HF_HUB_OFFLINE=1` supported) | Same. The server itself is not private (§16). |
@@ -330,7 +330,7 @@ Example: `screenshot of the access denied error from last week` → kinds={scree
 - Upload individual files, or a whole folder via `gr.File(file_count="directory")`.
 - **Limits:** ≤ 100 files, ≤ 25 MB each, ≤ 200 MB total per session, with an extension allow-list.
   - Enforce the limits in our own code, not only through Gradio's settings.
-  - Set the final caps after measuring indexing speed in M7. Target: a 100-file mixed upload indexes in ≤ 5 min on the Space.
+  - Set the final caps after measuring indexing speed in M7. Target: a 100-file mixed upload indexes in ≤ 5 min on the deploy host (§15).
 - A progress bar with per-file status; failed files show why.
 - **Session index:** on the first upload, copy the demo index (SQLite backup API) into `/tmp/vault_sessions/<uuid4>/` and index the uploads into that copy. The demo index itself never changes.
 - **Scope toggle:** *My uploads* (the default once something is uploaded), *Sample corpus*, or *Both*.
@@ -444,7 +444,8 @@ personal-search-vault/
   CLAUDE.md  SPEC.md  README.md  requirements.txt  .gitignore
   setup.bat  setup.sh            # check Python 3.12, create venv, install, launch
   app.py                         # Gradio entry; reads VAULT_MODE
-  probe/                         # M0 hello-world Space (delete after M4)
+  probe/                         # M0 deploy probe (delete after M4)
+  deploy/                        # azure.md runbook, systemd unit, Caddyfile (§15)
   vault/
     __main__.py                  # CLI: index | reindex | search | stats | eval | scrub-exif | build-demo
     config.py                    # dataclass config + env overrides; data dir, roots, weights, gate, limits
@@ -474,7 +475,7 @@ The plan has one Claude Code session per milestone, with a commit at the end of 
 
 | # | Date | Milestone | Done when |
 |---|---|---|---|
-| M0 | Fri 16 Oct | **Scaffold + deploy probe** | Repo, git, venv on Py 3.12, `requirements.txt`, `pytest` green on an empty suite. `probe/app.py` is a hello-world Gradio app that loads bge-small via fastembed and embeds one query; it runs on a ZeroGPU Space (§15). The deploy path is recorded in §19. |
+| M0 | Fri 16 Oct | **Scaffold + deploy probe** | Repo, git, venv on Py 3.12, `requirements.txt`, `pytest` green on an empty suite. `probe/app.py` is a hello-world Gradio app that loads bge-small via fastembed and embeds one query; the probe runs on the chosen host (§15). The deploy path is recorded in §19. |
 | M1 | Sat 17 Oct | **Text pipeline** | Content-addressed discover (fast path, hashing, linking renames and duplicates, newest-first, sweep, resumable). PDF native text; docx/pptx/txt/md with the zip guard; chunking; FTS5 + bge; RRF over 2 lists; CLI `index`, `search`, `stats`. **Tests:** a PDF fixture returns the right **page**, and a pptx fixture the right **slide**. A docx fixture is found by paraphrase. Copying a file adds a path but no chunks. A rename re-embeds nothing. Deleting the last path removes all rows. |
 | M2 | Sun 18 Oct | **OCR** | RapidOCR on all images: tiling, reading order, blocks, block-aware chunks, `ocr_lines`. PDF scanned-page and image-region OCR. **Tests:** a Pillow-drawn `ERROR 0x80070005` is the top hit for `0x80070005`. Text in the bottom strip of a 1080×6000 fixture is found, and its box is in the right place. A two-column fixture gives two blocks rather than interleaved lines. Text drawn inside an embedded image on a PDF page is found. **Measured** files/sec per kind recorded in §19. |
 | M3 | Mon 19 Oct | **Photos, CLIP, metadata** | CLIP vision/text as the 3rd list, with the gate (unit-tested on synthetic scores). Classifier with a test per rule, including Snipping Tool names. Date extraction with a test per source. Thumbnails for all five kinds. |
@@ -486,7 +487,7 @@ The plan has one Claude Code session per milestone, with a commit at the end of 
 |---|---|---|---|
 | M5 | Wed 21 Oct | **Parser + rerank** | Parser tests for every §7.1 pattern, with a fixed `now`. Filter chips in the UI. Rerank with the in-place rule from §7.5, tested. |
 | M6 | Thu 22 Oct | **Full corpus + eval** | Corpus at ~200 files plus MANIFEST. ≥ 40 queries meeting the §9 coverage. `vault eval` writes the 7-row ablation table and latency. Smoke tests (§12) pass. Demo index rebuilt and redeployed. |
-| M7 | Fri 23 Oct | **Detail panel + uploads v2** | Highlight boxes, "Why this result?", "+N copies", all paths. Folder upload, scope toggle, progress, limits, TTL. A 100-file upload is timed on the Space and the final caps are set. |
+| M7 | Fri 23 Oct | **Detail panel + uploads v2** | Highlight boxes, "Why this result?", "+N copies", all paths. Folder upload, scope toggle, progress, limits, TTL. A 100-file upload is timed on the deploy host and the final caps are set. |
 | M8 | Sat 24 Oct | **Pack** | README: the problem, a GIF, architecture, the §11 decisions, the eval table, measured ingest numbers, §17 limitations, and "Run on your own files". `setup.bat` / `setup.sh`, with the install tested on a **different computer**. Offline demo rehearsed (§16). |
 | — | Sun 25 – Mon 26 Oct | Buffer | Fix whatever broke. No stretch goals unless M0–M8 are done. |
 | — | **Tue 27 Oct, before 2 PM** | Submit | URL + transcript HTML on MS Teams. |
@@ -528,13 +529,22 @@ The plan has one Claude Code session per milestone, with a commit at the end of 
 | **A. Gradio Space on ZeroGPU** | Free | Public URL, same code | Uses 1 of 2 free slots. It's GPU-oriented hardware, so verify that CPU ONNX code runs. If startup complains about a missing `@spaces.GPU`, decorate the query-encode function; the decorator is a no-op elsewhere. |
 | **B. HF PRO for one month → Gradio Space on CPU Basic (2 vCPU / 16 GB)** | $9 | Most predictable; also gives 10 ZeroGPU slots for the other projects | Needs a card |
 | **C. Laptop + Cloudflare quick tunnel** | Free | Zero setup | URL changes every run and only works while the laptop is on. Use it as a backup only. |
+| **D. Azure for Students VM + systemd + Caddy** | Paid from the Azure for Students credit | Plain Linux box: no GPU runtime or PyTorch assumptions, persistent disk, never sleeps, uses no HF slot. 2 vCPU matches the §7.8 budget. Caddy gets and renews a Let's Encrypt certificate on its own. | We run the server ourselves (updates, restarts, disk). Only 4 GiB RAM, so a 4 GB swap file. Always on (auto-shutdown off), so it draws on the credit continuously; check the balance. |
 
-**Decision rule (M0):** push the probe to a ZeroGPU Space. If it runs and a slot is free, use A; otherwise use B. Keep C ready as a fallback.
+**Decision (M0, 16 Oct): D.** The VM is ready, and it avoids ZeroGPU's PyTorch/GPU-oriented runtime entirely. A stays untried, so both free ZeroGPU slots remain for the other viva projects. Keep C ready as a fallback.
+
+**The D host:**
+- Ubuntu 24.04, `Standard_B2ls_v2` (2 vCPU, 4 GiB RAM), India South Central, user `azureuser`.
+- DNS `swarup-vault.indiasouthcentral.cloudapp.azure.com`. Inbound 22, 80 and 443 only.
+- The app binds `127.0.0.1:7860` and runs as a systemd service. Caddy is the only public listener: it serves HTTPS on 443 and redirects 80.
+- Code arrives by `git push` to a bare repo on the VM (`~/vault.git`); the checkout at `~/personal-search-vault` pulls from it. No third-party git host.
+- Model cache lives in `data/models/` on the VM (`FASTEMBED_CACHE_PATH`), so reboots don't re-download.
+- The runbook is `deploy/azure.md`.
 
 **Mechanics:**
-- `vault build-demo` builds `demo_index/` locally, and it gets committed. The Space never indexes the corpus at startup.
-- Models download on first boot.
-- Open the URL about 5 minutes before anyone looks at it, to wake the Space.
+- `vault build-demo` builds `demo_index/` locally, and it gets committed. The server never indexes the corpus at startup.
+- Models download on first start.
+- The VM doesn't sleep, but check the URL before anyone looks at it.
 
 ---
 
@@ -584,6 +594,7 @@ The plan has one Claude Code session per milestone, with a commit at the end of 
 ## 18. Security and privacy checklist
 
 - [ ] Local mode binds `127.0.0.1`; only demo mode is exposed.
+- [ ] On the VM, Gradio binds `127.0.0.1:7860`; only Caddy (80/443) and SSH (22, key-only) are reachable.
 - [ ] Demo mode resolves every served file from a DB id or a session id. No path parameters.
 - [ ] Session ids are `uuid4`; session dirs live under one root and are wiped on TTL and on start.
 - [ ] Uploads: extension allow-list; size, count and total limits enforced in code; zip guard for `.docx` / `.pptx`; every decode wrapped in try/except.
@@ -599,12 +610,18 @@ The plan has one Claude Code session per milestone, with a commit at the end of 
 |---|---|---|
 | 14 Oct | Fully local ONNX models; Gradio UI; hybrid BM25 + bge + CLIP fused with RRF | §11 |
 | 16 Oct | v2 scope: Office files, OCR tiling and reading order, PDF image-region OCR, CLIP gate, content-addressed store, highlights, uploads v2 | §20 |
-| | Deploy path: _A / B / C_ | _fill in after the M0 probe_ |
+| 16 Oct | Deploy path **D**: Azure for Students VM (Ubuntu 24.04, B2ls_v2), systemd, Caddy for HTTPS; the app binds 127.0.0.1 | §15. No PyTorch/GPU runtime risk, persistent disk, no sleep, keeps both ZeroGPU slots free for other projects |
+| 16 Oct | Code reaches the VM via a bare repo on the VM (`git push vm main`), not GitHub | No third-party host or deploy key; same SSH key as admin access |
+| 16 Oct | Local Python 3.12 is uv-managed (`uv python install 3.12`; venv made with `--seed` so pip works) | No 3.12 or `py` launcher on the laptop; uv was already installed |
+| 16 Oct | Full core stack pinned in `requirements.txt` at M0 | Surfaces Windows/Linux wheel problems before M1–M3 |
 | | Measured ingest speed (files/sec per kind) | _fill in at M2_ |
 
 ---
 
 ## 20. Changelog
+
+**v2.1 (16 Oct 2026)**
+- Deployment: added option D (Azure for Students VM + systemd + Caddy) and chose it (§15, §19). M0's deploy check is now "probe runs on the chosen host". Demo mode binds 127.0.0.1 behind Caddy (§2). Added `deploy/` (§13).
 
 **v2 (16 Oct 2026)**
 - Added `.docx`, `.pptx`, `.txt` and `.md` support (new kinds `doc` and `slides`), with a zip guard.
@@ -628,6 +645,7 @@ Checked 14–16 Oct 2026:
 - HF ZeroGPU (free-account limits, Gradio only, Python versions): https://huggingface.co/docs/hub/en/spaces-zerogpu
 - fastembed supported models: https://qdrant.github.io/fastembed/examples/Supported_Models
 - RapidOCR install: https://rapidai.github.io/RapidOCRDocs/main/install_usage/rapidocr/install.en.md
+- Caddy automatic HTTPS: https://caddyserver.com/docs/automatic-https · install on Ubuntu: https://caddyserver.com/docs/install#debian-ubuntu-raspbian
 - Gradio `File` component (`file_count="directory"`): https://www.mintlify.com/gradio-app/gradio/components/file
 
 Library docs: PyMuPDF https://pymupdf.readthedocs.io · python-docx https://python-docx.readthedocs.io · python-pptx https://python-pptx.readthedocs.io
