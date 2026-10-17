@@ -335,3 +335,42 @@ def test_screenshots_skip_the_angle_classifier(conn, cfg, fake_embedder, shots, 
     index_paths(conn, [shots], cfg)
     by_size = dict(zip(fake_ocr.seen, fake_ocr.use_cls))
     assert by_size == {(800, 200): False, (640, 480): None}  # screenshot: off; photo: the configured default
+
+
+SECRET = b"zqxjvplk"  # unchanged by the porter stemmer, so the FTS index holds these exact bytes
+
+
+def without_secure_delete(conn) -> None:
+    """Make `conn` behave like a DB written before secure delete was on: deletes leave text behind."""
+    conn.execute("PRAGMA secure_delete = OFF")
+    conn.execute("INSERT INTO chunks_fts(chunks_fts, rank) VALUES('secure-delete', 0)")
+
+
+def test_run_that_deletes_files_compacts_the_db(conn, cfg, fake_embedder, corpus) -> None:
+    without_secure_delete(conn)
+    (corpus / "notes" / "secret.txt").write_text("the zqxjvplk account", encoding="utf-8")
+    rep = index_paths(conn, [corpus], cfg)
+    assert "compact" not in rep.timings  # nothing deleted, nothing to compact
+    (corpus / "notes" / "secret.txt").unlink()
+
+    rep = index_paths(conn, [corpus], cfg)
+    assert rep.files_deleted == 1 and "compact" in rep.timings
+    assert SECRET not in cfg.db_path.read_bytes()
+    assert fts_hits(conn, "electricity") == 1  # the rest of the index is intact
+    assert_consistent(conn)
+
+
+def test_reindex_compacts_away_old_leftovers(conn, cfg, fake_embedder, corpus) -> None:
+    without_secure_delete(conn)
+    with db.transaction(conn):  # a file deleted long ago, before secure delete
+        fid = conn.execute("INSERT INTO files(sha256, kind) VALUES ('old', 'doc')").lastrowid
+        db.insert_chunk(conn, fid, None, 0, "doc_text", "the zqxjvplk account", None)
+    index_paths(conn, [corpus], cfg)
+    with db.transaction(conn):
+        db.delete_file(conn, fid)
+    assert SECRET in cfg.db_path.read_bytes()
+
+    rep = reindex(conn, cfg)
+    assert "compact" in rep.timings and SECRET not in cfg.db_path.read_bytes()
+    assert counts(conn)["files"] == 4
+    assert_consistent(conn)

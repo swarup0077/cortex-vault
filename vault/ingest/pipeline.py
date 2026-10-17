@@ -83,10 +83,11 @@ def extract(path: Path, cfg: Config, kind: str | None = None) -> Extracted:
 
 
 class _Indexer:
-    def __init__(self, conn: sqlite3.Connection, cfg: Config, embedder: models.TextEmbedder) -> None:
+    def __init__(self, conn: sqlite3.Connection, cfg: Config, embedder: models.TextEmbedder, compact: bool) -> None:
         self.conn = conn
         self.cfg = cfg
         self.embedder = embedder
+        self.always_compact = compact
         self.report = IndexReport(started_at=_now())
         self.run_id = 0
 
@@ -232,6 +233,13 @@ class _Indexer:
             for (cid, text), vec in zip(stale, vecs):
                 db.update_chunk_text(self.conn, cid, text, vec)
 
+    def compact(self) -> None:
+        with self.timed("compact"):
+            try:
+                db.compact(self.conn)
+            except sqlite3.OperationalError as e:  # e.g. another connection is reading; deletes are zeroed anyway
+                log.warning("could not compact the index: %s", e)
+
     def run(self, roots: Iterable[Path | str], stop: threading.Event | None, progress: ProgressFn | None) -> IndexReport:
         rep = self.report
         db.check_text_model(self.conn, self.embedder.name, claim=True)
@@ -296,6 +304,8 @@ class _Indexer:
         if not rep.interrupted:  # unprocessed changes would look like deletions
             self.sweep(live_roots)
         self.refresh_path_chunks()
+        if self.always_compact or rep.files_deleted:
+            self.compact()
 
         rep.finished_at = _now()
         self.conn.execute(
@@ -320,10 +330,14 @@ def index_paths(
     embedder: models.TextEmbedder | None = None,
     stop: threading.Event | None = None,
     progress: ProgressFn | None = None,
+    compact: bool = False,
 ) -> IndexReport:
-    """Incrementally index `roots`. Set `stop` to finish the current file and return early."""
+    """Incrementally index `roots`. Set `stop` to finish the current file and return early.
+
+    A run that deleted files ends by compacting the DB (FTS merge + VACUUM); `compact=True` always does.
+    """
     cfg = cfg or Config()
-    return _Indexer(conn, cfg, embedder or models.text_embedder(cfg)).run(roots, stop, progress)
+    return _Indexer(conn, cfg, embedder or models.text_embedder(cfg), compact).run(roots, stop, progress)
 
 
 def reindex(
@@ -334,8 +348,9 @@ def reindex(
     stop: threading.Event | None = None,
     progress: ProgressFn | None = None,
 ) -> IndexReport:
-    """Full rebuild of every known root, e.g. after a model change."""
+    """Full rebuild of every known root, e.g. after a model change. Ends by compacting the DB, so nothing of
+    the old index is left in the file."""
     roots = db.get_roots(conn)
     with db.transaction(conn):
         db.wipe_index(conn)
-    return index_paths(conn, roots, cfg, embedder=embedder, stop=stop, progress=progress)
+    return index_paths(conn, roots, cfg, embedder=embedder, stop=stop, progress=progress, compact=True)

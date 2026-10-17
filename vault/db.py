@@ -202,6 +202,13 @@ def delete_file(conn: sqlite3.Connection, file_id: int) -> None:
     conn.execute("DELETE FROM files WHERE id = ?", (file_id,))
 
 
+def compact(conn: sqlite3.Connection) -> None:
+    """Merge the FTS index into one segment and rewrite the file without free pages, so nothing from deleted
+    files is left in it, including leftovers from before secure delete was on. Runs outside a transaction."""
+    conn.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('optimize')")
+    conn.execute("VACUUM")
+
+
 def wipe_index(conn: sqlite3.Connection) -> None:
     """Remove every indexed file (for `reindex`). Keeps roots and run history."""
     conn.execute("DELETE FROM chunks_fts")
