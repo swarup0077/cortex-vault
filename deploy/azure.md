@@ -155,11 +155,11 @@ OCR takes seconds per image, and 2 burstable vCPUs can't index demo uploads in t
 The Azure for Students quota in India South Central:
 - **Total Regional vCPUs:** 6.
 - **DASv4 family:** 4.
-- **FALSv6 family:** 0. This subscription can't get quota increases; support's answer is to upgrade to Pay-As-You-Go, which we won't do.
+- **FALSv6 and DASv5 families:** 0. This subscription can't get quota increases at all; support's answer is to upgrade to Pay-As-You-Go, which we won't do.
 
 | When | VM |
 |---|---|
-| M4 → 30 Oct 2026 | the current VM, **resized in place from `Standard_B2ls_v2` to `Standard_D4as_v4`** (4 vCPU, 16 GB, non-burstable). Same IP and URL, no rebuild |
+| M4 → 30 Oct 2026 | the current VM, **resized in place from `Standard_B2ls_v2` to `Standard_D4as_v4`** (4 vCPU, 16 GB, non-burstable): Stop → Size → Start. Same disk, IP, NSG and host key, so no new VM and no rebuild |
 | after 30 Oct 2026 | delete the resource group (9c) |
 
 The commands run in PowerShell on the **laptop** with the Azure CLI (`winget install Microsoft.AzureCLI`, then
@@ -174,21 +174,21 @@ $VM = "<current VM name>"
 az vm list-usage --location indiasouthcentral -o table | Select-String -Pattern "DASv4|Total Regional"
 ```
 
-### 9b. Resize in place to D4as_v4, then benchmark
+### 9b. Stop → Size → Start, then benchmark
 
-The resize restarts the VM, so the site is down for a few minutes; don't do it while anyone is using it. The static IP,
-the DNS name, the disk and everything on it stay. The new total of 4 vCPUs fits both the DASv4 quota (4) and the
-regional one (6), because the 2 B-series vCPUs are released.
+The VM keeps its disk, static IP (and DNS name), NSG and SSH host key, so there's no new VM: no zone, IP or `known_hosts`
+steps. The site is down for the few minutes this takes; don't do it while anyone is using it. The new total of 4 vCPUs
+fits both the DASv4 quota (4) and the regional one (6), because the 2 B-series vCPUs are released.
 
 ```powershell
-az vm list-vm-resize-options -g $RG -n $VM -o table | Select-String "Standard_D4as_v4"
-az vm resize -g $RG -n $VM --size Standard_D4as_v4
+az vm deallocate -g $RG -n $VM                          # Stop (deallocate, so the size isn't tied to the current hardware)
+az vm resize -g $RG -n $VM --size Standard_D4as_v4      # Size
+az vm start -g $RG -n $VM                               # Start
 ```
 
-If `Standard_D4as_v4` isn't in the list, the VM's current hardware cluster can't host it. Run
-`az vm deallocate -g $RG -n $VM`, then the resize, then `az vm start -g $RG -n $VM`. A static IP survives
-deallocation. If the size still isn't offered after deallocating, check the VM's security type (`az vm show -g $RG -n $VM
---query securityProfile`) against what the size supports.
+If the resize is refused, the error says why. A quota error means the vCPU numbers above have changed. A size/feature
+error means checking the VM's security type (`az vm show -g $RG -n $VM --query securityProfile`) against what the size
+supports.
 
 Check it:
 
