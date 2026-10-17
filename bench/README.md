@@ -9,6 +9,8 @@ goes to `bench/generated/`, which is gitignored; delete it when you're done.
 | `bench_ocr.py` | OCR time and word recall for one config on 8 generated 1920×1080 UI screenshots |
 | `compare_ocr.py` | `bench_ocr.py` for several configs, interleaved, one process per run, with a summary table |
 | `make_bench_corpus.py` | Generates the mixed folder used for ingest speed (files/sec per kind) |
+| `calibrate.py` | Calibrates the provisional search thresholds on generated data (CLAUDE.md, SPEC §9 tuning rule) |
+| `scenes.py` | Drawn scenes, text-free photos and screen captures for the CLIP calibrations |
 
 The OCR models ship inside the `rapidocr` wheel. Only the ingest run needs bge-small, which downloads once
 from the HF Hub; after that, `HF_HUB_OFFLINE=1` works.
@@ -66,3 +68,17 @@ $env:VAULT_DATA_DIR = "bench\generated\data1"; python -m vault index bench\gener
 
 The report's `files/sec` rows and stage times are the numbers recorded in §19. Run it twice (`data1`, `data2`)
 and record both.
+
+## Calibration (§19 provisional values)
+
+No threshold or weight is chosen from anyone's personal files. Each one is calibrated here on generated data,
+marked provisional in `vault/config.py`, and tuned in M6 on the eval's `tune` half (SPEC §9).
+
+```
+python bench/calibrate.py dense    # dense_min_cosine: bge cosines, matching vs unrelated pairs
+python bench/calibrate.py clip     # CLIP's top hit (z and cosine): drawn scenes vs queries no picture answers
+```
+
+Each prints a summary and writes every score to `bench/generated/calibrate_<name>.json`. The texts are written
+in `calibrate.py`; the pictures are drawn by `scenes.py`. Both need the models cached (`HF_HUB_OFFLINE=1` works
+after the first download).
