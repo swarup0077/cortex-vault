@@ -80,7 +80,7 @@ SEARCH
 | Reranker | `fastembed` `TextCrossEncoder` → `Xenova/ms-marco-MiniLM-L-6-v2` | Togglable |
 | OCR | `rapidocr` + `onnxruntime` | Since v2 the inference engine is installed separately. Returns a box, text and score per line. |
 | PDF | `pymupdf` | Text per page, image positions (`get_image_info`), clipped renders, `search_for` for highlight rectangles |
-| Word / PowerPoint | `python-docx`, `python-pptx` | Pure Python, no Office install needed |
+| Word / PowerPoint | `python-docx`; `.pptx` slide/notes XML read straight from the zip (stdlib) | Pure Python, no Office install needed. python-pptx loads every part, media included, into memory, so it's used only to build test fixtures |
 | Images / EXIF | `Pillow` (+ optional `pillow-heif` for HEIC) | EXIF IFD `0x8769`, GPS IFD `0x8825` |
 | Storage | SQLite (stdlib) with FTS5; vectors stored as float32 BLOBs and loaded into NumPy | No vector DB (§11) |
 | UI | `gradio` (Blocks + custom CSS) | Runs unchanged locally, on HF Spaces or in Docker |
@@ -186,9 +186,9 @@ A rule-based function in `classify.py` returns `(kind, kind_reason)`. Each rule 
 
 **Office and text**
 - `.docx` (python-docx): paragraphs in order, then table cells row by row. Word doesn't store page numbers, so `page` is NULL.
-- `.pptx` (python-pptx): per slide, the title, every text frame, tables and speaker notes; `page` = slide number. Pictures inside slides are not OCR'd (known limitation, §17).
+- `.pptx` (slide, notes and core-properties XML parsed straight from the zip; media is never read): per slide, the title, every text frame (including inside groups), tables and speaker notes; `page` = slide number. Pictures inside slides are not OCR'd (known limitation, §17).
 - `.txt` / `.md`: read as UTF-8 with `errors="replace"`.
-- **Zip guard:** `.docx` and `.pptx` are zip archives. Before parsing, refuse a file whose total uncompressed size exceeds 200 MB or whose compression ratio exceeds 100.
+- **Zip guard:** `.docx` and `.pptx` are zip archives. It targets zip bombs, not big decks. Before parsing, refuse a file if any member over 1 MB unpacked has a compression ratio above 100 (media compresses about 1:1, so a bomb can't hide among it), or if its XML parts (`.xml`, `.rels`; media not counted) exceed 50 MB unpacked. An absolute cap on total unpacked size (`zip_max_total`) is off in local mode and set only for demo uploads.
 
 **Images (OCR)**
 - OCR **every** image, photos included, because whiteboards and signs matter.

@@ -28,9 +28,10 @@ class Config:
     text_dim: int = 384
     text_batch: int = 32
 
-    # Ingest limits (SPEC §6.3)
-    zip_max_uncompressed: int = 200 * 1024 * 1024
-    zip_max_ratio: float = 100.0
+    # Zip guard for .docx/.pptx (SPEC §6.3): targets bombs, not big decks
+    zip_max_ratio: float = 100.0  # per member over 1 MB unpacked
+    zip_max_xml_bytes: int = 50 * 1024 * 1024  # XML parts only; media isn't counted
+    zip_max_total: int | None = None  # absolute cap; set only for demo uploads (M4)
 
     # Chunking (SPEC §6.4)
     chunk_target: int = 800

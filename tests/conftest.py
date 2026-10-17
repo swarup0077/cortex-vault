@@ -132,6 +132,13 @@ def build_zip_bomb(path: Path, size: int = 50 * 2**20) -> Path:
     return path
 
 
+def add_zip_member(path: Path, name: str, data: bytes, *, compress: bool = False) -> Path:
+    """Append a part to an existing .docx/.pptx (e.g. a big media file, or a bomb posing as one)."""
+    with zipfile.ZipFile(path, "a", compression=zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED) as zf:
+        zf.writestr(name, data)
+    return path
+
+
 @pytest.fixture
 def make_pdf() -> Callable[..., Path]:
     return build_pdf
