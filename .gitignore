@@ -18,3 +18,6 @@ Thumbs.db
 desktop.ini
 .DS_Store
 ~$*
+
+# Benchmark output: generated corpora, throwaway indexes, results (bench/README.md)
+bench/generated/
