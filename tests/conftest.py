@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import re
 import sqlite3
 import zipfile
@@ -14,10 +15,12 @@ import numpy as np
 import pptx
 import pymupdf
 import pytest
+from PIL import Image, ImageDraw, ImageFont
 from pptx.util import Inches
 
 from vault import db, models
 from vault.config import Config
+from vault.ingest.records import OcrLine
 
 # ---------------------------------------------------------------- config / db
 
@@ -70,7 +73,103 @@ def fake_embedder() -> Iterator[FakeTextEmbedder]:
     models.set_text_embedder(None)
 
 
+class FakeOcrEngine:
+    """Scripted OCR: `lines_for(image)` gives each image's lines (none by default). Records image sizes."""
+
+    name = "fake-ocr"
+
+    def __init__(self) -> None:
+        self.lines_for: Callable[[np.ndarray], Sequence[OcrLine]] | None = None
+        self.seen: list[tuple[int, int]] = []  # (width, height) of every image read
+
+    def read(self, image: np.ndarray) -> list[OcrLine]:
+        self.seen.append((image.shape[1], image.shape[0]))
+        return list(self.lines_for(image)) if self.lines_for else []
+
+
+@pytest.fixture(autouse=True)
+def fake_ocr() -> Iterator[FakeOcrEngine]:
+    """Every test gets a fake OCR engine, so quick tests never load RapidOCR. Ask for `real_ocr` to opt out."""
+    e = FakeOcrEngine()
+    models.set_ocr_engine(e)
+    yield e
+    models.set_ocr_engine(None)
+
+
+_real_ocr: models.OcrEngine | None = None
+
+
+@pytest.fixture
+def real_ocr(fake_ocr) -> models.OcrEngine:
+    """The real RapidOCR engine (loaded once per test session). Tests using it are `slow`."""
+    global _real_ocr
+    if _real_ocr is None:
+        _real_ocr = models.RapidOcrEngine(Config())
+    models.set_ocr_engine(_real_ocr)
+    return _real_ocr
+
+
 # ---------------------------------------------------------------- file builders
+
+
+def font(size: int) -> ImageFont.FreeTypeFont:
+    """Pillow's bundled font, so drawn fixtures look the same on every OS."""
+    return ImageFont.load_default(size=size)
+
+
+def draw_text_image(size: tuple[int, int], texts: Sequence[tuple[int, int, str]], font_size: int = 32,
+                    *, mode: str = "RGB") -> Image.Image:
+    """Black text at (x, y) on white (or on transparent, for mode='RGBA')."""
+    bg = (0, 0, 0, 0) if mode == "RGBA" else "white"
+    img = Image.new(mode, size, bg)
+    d = ImageDraw.Draw(img)
+    for x, y, text in texts:
+        d.text((x, y), text, fill="black", font=font(font_size))
+    return img
+
+
+def text_bbox(xy: tuple[int, int], text: str, font_size: int = 32) -> tuple[float, float, float, float]:
+    """Where `draw_text_image` puts the ink of `text`."""
+    return ImageDraw.Draw(Image.new("RGB", (1, 1))).textbbox(xy, text, font=font(font_size))
+
+
+def save_image(img: Image.Image, path: Path, **kwargs) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(path, **kwargs)
+    return path
+
+
+def png_bytes(img: Image.Image) -> bytes:
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    return buf.getvalue()
+
+
+def build_pdf_with_image(path: Path, title: str, image: Image.Image,
+                         rect: tuple[float, float, float, float] = (50, 150, 550, 450), rotate: int = 0) -> Path:
+    """One page: native `title` text plus `image` placed at `rect` (a slide exported with a picture body)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    doc = pymupdf.open()
+    page = doc.new_page()
+    if title:
+        page.insert_text((50, 80), title, fontsize=18)
+    page.insert_image(pymupdf.Rect(*rect), stream=png_bytes(image), keep_proportion=False)
+    page.set_rotation(rotate)
+    doc.save(path)
+    doc.close()
+    return path
+
+
+def build_scanned_pdf(path: Path, images: Sequence[Image.Image]) -> Path:
+    """Pages that are only a full-page picture: no text layer."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    doc = pymupdf.open()
+    for img in images:
+        page = doc.new_page()
+        page.insert_image(page.rect, stream=png_bytes(img))
+    doc.save(path)
+    doc.close()
+    return path
 
 
 def build_pdf(
