@@ -317,8 +317,8 @@ Example: `screenshot of the access denied error from last week` → kinds={scree
 ## 8. UI (Gradio Blocks)
 
 **Search tab**
-- Search box (Enter to submit), kind filter chips, removable parsed-filter chips, a rerank toggle, and a "show scores" debug toggle.
-- Responsive card grid. Each card shows a thumbnail, filename, date, kind badge, page or slide number, snippet, and "+N copies" when there are duplicates.
+- Search box (Enter to submit), kind filter chips, removable parsed-filter chips and a rerank toggle (both Later, §14), and a "show scores" debug toggle.
+- A ranked list of cards: the top 20, then "Show more" up to 50. Each card shows a thumbnail, filename, date, kind badge, page or slide number, snippet, and "+N copies" when there are duplicates.
 - Clicking a card opens a detail panel with:
   - a larger preview with highlight boxes (for a PDF, the matched page rendered);
   - the full matched chunk with highlights;
@@ -332,13 +332,13 @@ Example: `screenshot of the access denied error from last week` → kinds={scree
 - Last run report, counts by kind, and an error list.
 
 **Upload tab (demo only)**
-- Upload individual files, or a whole folder via `gr.File(file_count="directory")`.
+- Upload individual files, or (Later, §14) a whole folder via `gr.File(file_count="directory")`.
 - **Limits:** ≤ 100 files, ≤ 25 MB each, ≤ 200 MB total per session, with an extension allow-list.
   - Enforce the limits in our own code, not only through Gradio's settings.
-  - Set the final caps after measuring indexing speed in M7. Target: a 100-file mixed upload indexes in ≤ 5 min on the deploy host (§15).
+  - Set the final caps after measuring indexing speed in M5. Target: a 100-file mixed upload indexes in ≤ 5 min on the deploy host (§15).
 - A progress bar with per-file status; failed files show why.
 - **Session index:** on the first upload, copy the demo index (SQLite backup API) into `/tmp/vault_sessions/<uuid4>/` and index the uploads into that copy. The demo index itself never changes.
-- **Scope toggle:** *My uploads* (the default once something is uploaded), *Sample corpus*, or *Both*.
+- **Scope toggle:** *My uploads* (the default once something is uploaded), *Sample files*, or *Both*.
 - Wipe a session after 30 min idle, and wipe all sessions on app start.
 - Visible notice: "Uploads are processed on this server, kept only for your session, and deleted after 30 minutes. For private use, run it on your own computer (see README)."
 
@@ -476,7 +476,7 @@ personal-search-vault/
 
 ## 14. Milestones and acceptance criteria
 
-The plan has one Claude Code session per milestone, with a commit at the end of each. This is one of four viva projects, so the plan front-loads a **submission-safe core** (M0–M4: working search, deployed). M5–M8 are polish to be done as time allows, trimmed using the cut list below if needed.
+The plan has one Claude Code session per milestone, with a commit at the end of each. This is one of four viva projects, so the plan front-loads a **submission-safe core** (M0–M4: working search, deployed). After that, **anything that makes the demo faster or more attractive comes first** (§19, 17 Oct): M5–M6 are done as time allows, trimmed using the cut list below if needed, M7 is a buffer, and the items under "Later" are picked one at a time, only if the owner chooses them.
 
 ### Core (must ship)
 
@@ -486,30 +486,36 @@ The plan has one Claude Code session per milestone, with a commit at the end of 
 | M1 | Sat 17 Oct | **Text pipeline** | Content-addressed discover (fast path, hashing, linking renames and duplicates, newest-first, sweep, resumable). PDF native text; docx/pptx/txt/md with the zip guard; chunking; FTS5 + bge; RRF over 2 lists; CLI `index`, `search`, `stats`. **Tests:** a PDF fixture returns the right **page**, and a pptx fixture the right **slide**. A docx fixture is found by paraphrase. Copying a file adds a path but no chunks. A rename re-embeds no content chunks (only the file's one `path` chunk, §5). Deleting the last path removes all rows. |
 | M2 | Sun 18 Oct | **OCR** | RapidOCR on all images: tiling, reading order, blocks, block-aware chunks, `ocr_lines`. PDF scanned-page and image-region OCR. **Tests:** a Pillow-drawn `ERROR 0x80070005` is the top hit for `0x80070005`. Text in the bottom strip of a 1080×6000 fixture is found, and its box is in the right place. A two-column fixture gives two blocks rather than interleaved lines. Text drawn inside an embedded image on a PDF page is found. **Measured** files/sec per kind recorded in §19. |
 | M3 | Mon 19 Oct | **Photos, CLIP, metadata** | CLIP vision/text as the 3rd list, with the gate (unit-tested on synthetic scores). Classifier with a test per rule, including Snipping Tool names. Date extraction with a test per source. Thumbnails for all five kinds. |
-| M4 | Tue 20 Oct | **UI + first deploy (submission-safe checkpoint)** | Search tab: cards, thumbnails, snippets, kind chips. Index tab. Cross-platform "Open file". `VAULT_MODE=demo` with a read-only demo index built from a ~50-file first slice of the corpus. Basic multi-file upload into a session copy of the index. Deployed, and the URL works from a phone. **After M4 plus transcripts, the submission is complete.** |
+| M4 | Tue 20 Oct | **UI + first deploy (submission-safe checkpoint)** | Search tab with a ranked list (top 20 cards + "Show more" up to 50; CLI default `-n 10`; the gate and filters never cut the list to one result), thumbnails, snippets, kind chips. Index tab. Cross-platform "Open file". `VAULT_MODE=demo` with a read-only demo index built from a ~50-file first slice of the corpus. Multi-file upload into a session copy of the index, with a scope toggle (*My uploads* / *Sample files* / *Both*); upload limits enforced in code; the 30-minute expiry. VM resized in place to `Standard_D4as_v4` and benchmarked (open item h). Deployed, and the URL works from a phone. **After M4 plus transcripts, the submission is complete.** |
 
-### Polish (target dates are flexible; the other viva projects may come first)
+### Demo first (target dates are flexible; the other viva projects may come first)
 
 | # | Date | Milestone | Done when |
 |---|---|---|---|
-| M5 | Wed 21 Oct | **Parser + rerank** | Parser tests for every §7.1 pattern, with a fixed `now`. Filter chips in the UI. Rerank with the in-place rule from §7.5, tested. |
-| M6 | Thu 22 Oct | **Full corpus + eval** | Corpus at ~200 files plus MANIFEST. ≥ 40 queries meeting the §9 coverage. `vault eval` writes the 7-row ablation table and latency. Smoke tests (§12) pass. Demo index rebuilt and redeployed. |
-| M7 | Fri 23 Oct | **Detail panel + uploads v2** | Highlight boxes, "Why this result?", "+N copies", all paths. Folder upload, scope toggle, progress, limits, TTL. A 100-file upload is timed on the deploy host and the final caps are set. |
-| M8 | Sat 24 Oct | **Pack** | README: the problem, a GIF, architecture, the §11 decisions, the eval table, measured ingest numbers, §17 limitations, and "Run on your own files". `setup.bat` / `setup.sh`, with the install tested on a **different computer**. Offline demo rehearsed (§16). |
+| M5 | Wed 21 Oct | **Speed + visual polish** | Two-phase indexing (open item g): filename and native text searchable within seconds; OCR, embeddings and CLIP run in the background, with progress shown in the UI. Highlight boxes. "Why this result?". Open items (j) and (k). A 100-file upload is timed on the VM and the final caps are set. |
+| M6 | Thu 22 Oct | **Full corpus + eval** | ~200 files covering the 7 demo scenarios, plus MANIFEST. ≥ 40 queries meeting the §9 coverage. `vault eval` writes the ablation table (§9) and latency, with laptop vs VM numbers. Open item (n) first, then (o) and (f). Demo index rebuilt and redeployed. |
+| M7 | Fri 23 Oct | **Buffer** | Finish anything left from M4–M6. Then optional items from "Later", only the ones the owner picks. |
+| M8 | Sat 24 Oct | **Pack** | README: the problem, a GIF, architecture, the §11 decisions, the eval table, measured numbers, §17 limitations, and "Run on your own files". Offline demo rehearsed (§16). |
 | — | Sun 25 – Mon 26 Oct | Buffer | Fix whatever broke. No stretch goals unless M0–M8 are done. |
 | — | **Tue 27 Oct, before 2 PM** | Submit | URL + transcript HTML on MS Teams. |
 
+**Later** (optional, decided at the time; M7 is the earliest slot):
+- the natural-language query parser (§7.1) with date filters and parsed-filter chips;
+- rerank (§7.5);
+- the "+N copies" duplicate badge;
+- folder upload;
+- auto-scan / a file watcher (`watchdog`, ~2 s debounce, because the OS fires several events per save), with an "Index now" button;
+- `setup.bat` / `setup.sh`, with the install tested on a different computer.
+
 **Cut order if behind** (drop from the top):
-1. Folder upload and the scope toggle. Keep multi-file upload.
-2. Highlight boxes. Keep text snippets; `ocr_lines` is still stored, since that's cheap.
-3. Rerank.
-4. Relative-date parsing. Keep the kind words.
-5. Eval rows 4–7. Keep rows 1–3 plus the full system.
+1. Open items (j) and (k).
+2. "Why this result?". Keep the ranks in `vault search --debug`.
+3. Highlight boxes. Keep text snippets; `ocr_lines` is still stored, since that's cheap.
+4. Eval rows beyond 1–3 and the full system.
 
 **Never cut:** a working deploy, the transcripts, and a README with honest limitations.
 
 **Stretch goals** (only after M8):
-- a `watchdog` live re-index with a ~2 s debounce, because the OS fires several events per save;
 - offline reverse geocoding for "photos from Goa" (`reverse_geocoder`);
 - near-duplicate clusters (one matmul over the CLIP vectors);
 - regex auto-tags (amounts, emails, URLs) as filter chips;
@@ -657,6 +663,7 @@ The plan has one Claude Code session per milestone, with a commit at the end of 
 | 17 Oct | **Path chunks become keyword-only** (FTS, no vector, never in dense), and their text drops the file extension. This reverses the 17 Oct decision that kept folder names in dense search; a rename or copy then embeds nothing. §5 and §7 change when it lands in M3 | Path-only chunks ("folder / filename") matched unrelated queries as weak dense hits in the owner's real-file test. The extension made "pdf" match every PDF filename (open item e) |
 | 17 Oct | OCR lines that are only one or two CJK characters (spaces and punctuation aside) are dropped when the rest of the image is mostly Latin: at least `ocr_latin_share` = 0.8 of its letters. Runs of 3+ CJK characters, and mostly CJK images, are kept | Completes the stray-CJK cleanup: an icon detected on its own (`品`, `白 这`) is a line by itself, which the within-line rule can't see (open item m). 0.8 is a first value, not measured |
 | 17 Oct | `vault reindex` ends with an FTS `optimize` and `VACUUM` (`db.compact`), and so does any index run that deleted files. A busy DB logs a warning instead of failing the run; the time is the report's `compact` stage | Secure delete only covers deletes from now on. Compacting removes what older deletes left in the FTS index and free pages, so the owner's existing index is clean after one `reindex` |
+| 17 Oct | **§14 reordered, demo first.** M4 gains the ranked list (top 20 + "Show more" to 50; the gate and filters never cut it to one result), the scope toggle, upload limits in code, the 30-minute expiry and the VM resize + benchmark (h). M5 becomes speed + visual polish: two-phase indexing (g, moved from M7), highlight boxes, "Why this result?", (j), (k), the 100-file upload timing and caps. M6 keeps the corpus and eval, with (n), (o), (f) and laptop vs VM numbers. M7 becomes a buffer. The parser, rerank, "+N copies", folder upload, a file watcher and the setup scripts move to "Later", picked one at a time | Agreed priority: anything that makes the demo faster or more attractive comes first. Until the parser is picked, `parse()` stays a pass-through (17 Oct row above); open items p and q follow from this |
 
 ### Open items
 
@@ -670,7 +677,7 @@ Status is `open`, `done` (with the commit), or `moved to Mx` (with the reason). 
 | d | 3 of the owner's real test PDFs have no text layer (scanned/handwritten): use them as real-world cases for scanned-page OCR. Scanned-page OCR shipped in M2; awaiting the owner's run (`vault reindex`, since unchanged files skip extraction). Handwriting is out of scope (§1, §17). Expected on the owner's set: `edited_ticket.pdf` has a text layer and is not OCR'd; the 414-page image-only book OCRs 30 pages and hits the cap; the 41-page handwritten notes OCR 30 pages with little usable text (see k); the 212-page scanned book with an OCR text layer OCRs only its ~9 blank or cover pages, not 30 (image regions under native text are skipped). The owner confirms on their run | M2 | done: confirmed on the owner's run, 17 Oct (scanned-page OCR in f611e74) |
 | e | The path chunk includes the file extension, so a query containing "pdf" (as in probability density) matched every PDF filename. Consider dropping the extension from the path-chunk text. See pattern (b) in item l | M3 | moved to M3: folded into (b), path chunks keyword-only |
 | f | Dense top-100 chunks can be crowded out by one long document (in the real-world test only one book appeared in the dense list). Consider retrieving more chunks before collapsing to files; measure in the eval. See pattern (a) in item l | M6 | open |
-| g | Two-phase indexing. **Phase 1** (per file, fast): list the file with its filename/path chunk (FTS) and thumbnail. **Phase 2** (background): OCR plus all embeddings. Images aren't keyword-searchable until OCR runs and OCR costs seconds per image, so OCR belongs in phase 2 with the embeddings. Dense search skips chunks without vectors; the UI shows "listed / searchable / meaning-ready" progress. Matters most for demo uploads. Due by M7 at the latest | M7 | open |
+| g | Two-phase indexing. **Phase 1** (per file, fast): list the file with its filename/path chunk (FTS) and thumbnail. **Phase 2** (background): OCR plus all embeddings. Images aren't keyword-searchable until OCR runs and OCR costs seconds per image, so OCR belongs in phase 2 with the embeddings. Dense search skips chunks without vectors; the UI shows "listed / searchable / meaning-ready" progress. Matters most for demo uploads. Moved up to M5 (§14 reorder, 17 Oct): it's what makes demo uploads feel fast | M5 | open |
 | h | At M4, resize the current VM in place from B2ls_v2 to `Standard_D4as_v4` (4 vCPU, 16 GB, non-burstable) by Stop → Size → Start: same disk, IP, NSG and host key, so no new VM. Quota in India South Central: Total Regional = 6, DASv4 = 4, FALSv6 = 0, DASv5 = 0, with no increases possible on Azure for Students. Then benchmark there with `bench/` (embedding method above; `python bench/compare_ocr.py`; the ingest-speed run; two files OCR'd in parallel) and set its OCR/embedding defaults separately if needed. Check `sqlite3.sqlite_version` ≥ 3.44 there (FTS5 secure-delete). The VM is needed only until 30 Oct 2026; delete the resource group after. Steps: `deploy/azure.md` §9 | M4 | open |
 | i | Images indexed in M2 carry an interim kind (`kind_reason='interim:ext'`) and the mtime date. M3 must reclassify and re-date them in place (EXIF, filename, dimensions only), without re-running OCR or re-embedding | M3 | open |
 | j | Time-boxed experiment (~30 min): a lighter English-only recognition model (e.g. PP-OCRv4 English mobile) from the HF Hub only (CLAUDE.md; it isn't in the rapidocr wheel). Adopt it only if `bench/bench_ocr.py` shows it ≥ 30% faster with word recall ≥ 99%, and the four M2 done-when tests still pass. Otherwise record the numbers and keep the bundled model. Context: 2.4 s per 1080p screenshot after M2 tuning vs a ≤ 1 s target, mostly recognition | M5 | open |
@@ -679,10 +686,15 @@ Status is `open`, `done` (with the commit), or `moved to Mx` (with the reason). 
 | m | The stray-CJK cleanup works within a line, so an icon detected as its own one-character line (e.g. `品` alone) is kept. If such lines still show up in snippets, drop a lone one-character CJK line when the rest of the image is Latin | M6 | done: b180a6f |
 | n | Table-of-contents pages (pattern c in item l). Flag pages with ≥ 5 "dot leader + page number" entries as `pdf_toc` (before stripping), strip leader runs from chunk text, leave TOC chunks out of dense, and let a TOC chunk stand for its file only when none of the file's other chunks is in that list. Stored text is enough to re-flag existing PDFs without re-extracting. Test: a fixture PDF with a contents page and a section page shows the section page. The owner checks the threshold on their real books. First in M6, before item o | M6 | open |
 | o | Tune the RRF weights and k with the eval, after item n. Weight changes alone can't fix pattern (a) of item l (see §19), so this is tuning on top of the M3 fixes, not instead of them | M6 | open |
+| p | The query parser is now Later (§14), but §9's `filtered` category (≥ 6 queries with kind or date words), the fixed-`now` relative-date queries, and the §12 smoke test "screenshots from last week" all need it. Decide before M6: build the kind words (and maybe dates) anyway, or drop or skip those queries until the parser is picked | M6 | open |
+| q | M6 says the corpus covers "the 7 demo scenarios"; the spec doesn't list them yet. The owner names them (§10 and §12 are the closest lists) | M6 | open |
 
 ---
 
 ## 20. Changelog
+
+**v2.2 (17 Oct 2026)**
+- Milestones M4–M8 reordered demo first, with a "Later" list of optional items (§14, §19). §8 updated to match: ranked list with "Show more", *Sample files* scope, upload caps set in M5.
 
 **v2.1 (16 Oct 2026)**
 - Deployment: added option D (Azure for Students VM + systemd + Caddy) and chose it (§15, §19). M0's deploy check is now "probe runs on the chosen host". Demo mode binds 127.0.0.1 behind Caddy (§2). Added `deploy/` (§13).
