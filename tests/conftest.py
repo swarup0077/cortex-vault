@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
+import re
 import sqlite3
 import zipfile
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 
 import docx
+import numpy as np
 import pptx
 import pymupdf
 import pytest
 from pptx.util import Inches
 
-from vault import db
+from vault import db, models
 from vault.config import Config
 
 # ---------------------------------------------------------------- config / db
@@ -30,6 +33,41 @@ def conn(cfg: Config) -> Iterator[sqlite3.Connection]:
     c = db.connect(cfg.db_path)
     yield c
     c.close()
+
+
+# ---------------------------------------------------------------- models
+
+
+class FakeTextEmbedder:
+    """Deterministic hashed bag-of-words. Records every text it embeds so tests can count re-embeds."""
+
+    name = "fake-hash-embedder"
+    dim = 64
+
+    def __init__(self) -> None:
+        self.embedded: list[str] = []
+
+    def _vec(self, text: str) -> np.ndarray:
+        v = np.zeros(self.dim, np.float32)
+        for tok in re.findall(r"\w+", text.lower()):
+            v[int(hashlib.md5(tok.encode()).hexdigest(), 16) % self.dim] += 1.0
+        n = np.linalg.norm(v)
+        return v / n if n else v
+
+    def embed_documents(self, texts):
+        self.embedded += list(texts)
+        return np.stack([self._vec(t) for t in texts]) if texts else np.zeros((0, self.dim), np.float32)
+
+    def embed_query(self, text: str) -> np.ndarray:
+        return self._vec(text)
+
+
+@pytest.fixture
+def fake_embedder() -> Iterator[FakeTextEmbedder]:
+    e = FakeTextEmbedder()
+    models.set_text_embedder(e)
+    yield e
+    models.set_text_embedder(None)
 
 
 # ---------------------------------------------------------------- file builders
