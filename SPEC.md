@@ -172,8 +172,9 @@ A rule-based function in `classify.py` returns `(kind, kind_reason)`. Each rule 
      - generic `scr_`, `screencapture`
   2. EXIF has `Make`/`Model` → `photo`.
   3. A PNG with no camera EXIF → `screenshot`.
-  4. No EXIF and dimensions matching a common screen resolution → `screenshot`.
-  5. Otherwise → `photo`.
+  4. No EXIF and dimensions matching a common screen resolution (desktop and phone, either orientation; the list is in `classify.py`) → `screenshot`.
+  5. A phone-width image (720, 1080, 1170, 1179, 1242, 1284 or 1440 px wide) at least twice as tall as it is wide, with no camera EXIF → `screenshot` (a scrolling screenshot that lost its name). Camera EXIF always wins (rule 2), because some phones shoot 20:9 photos.
+  6. Otherwise → `photo`.
 
 ### 6.3 Extract
 
@@ -209,11 +210,11 @@ A rule-based function in `classify.py` returns `(kind, kind_reason)`. Each rule 
 
 **Effective date** (first source that works, stored in `date_source`)
 1. EXIF `DateTimeOriginal`;
-2. a date in the filename (the screenshot patterns above, `IMG_20250312_…`, `PXL_2025…`);
+2. a date in the filename (the screenshot patterns above, `IMG_20250312_…`, `PXL_2025…`, and WhatsApp's two forms: `IMG-20250312-WA0001.jpg` with `VID-`/`AUD-`/`DOC-` alike, and the desktop app's `WhatsApp Image 2025-12-23 at 09.28.46.jpeg`);
 3. document metadata (`doc_meta`): PDF `creationDate`, or Office core property `created`;
 4. file mtime.
 
-Files that have lost their metadata (for example, images forwarded on WhatsApp, or `Screenshot (12).png`) fall back to mtime.
+WhatsApp strips EXIF, but its filenames keep the date. Files with neither (for example `Screenshot (12).png`) fall back to mtime.
 
 **GPS:** read from EXIF if present. It is stored only; it's used in a stretch goal.
 
@@ -221,6 +222,7 @@ Files that have lost their metadata (for example, images forwarded on WhatsApp, 
 - Images: the image itself.
 - PDFs: page 1.
 - `.docx`, `.pptx`, `.txt`, `.md`: a generated card (file-type badge plus the title or first line), since rendering Office files would need LibreOffice.
+- When a file leaves the index (last path gone, content changed, `reindex`), its thumbnail is deleted from disk. Demo uploads' thumbnails live in the session directory and go with it at expiry.
 
 ### 6.4 Chunk
 - **PDF pages and pptx slides:** one chunk per page or slide. If it's over 1,200 chars, split it into ~800-char windows with 150-char overlap, keeping the page number.
@@ -229,7 +231,7 @@ Files that have lost their metadata (for example, images forwarded on WhatsApp, 
 - Normalise whitespace and keep the original casing; FTS5 handles case-folding.
 
 ### 6.5 Embed
-- Text chunks go to bge-small in batches of 32; images go to CLIP-vision in batches of 16.
+- Text chunks go to bge-small in batches of 32; images go to CLIP-vision in batches of 16. CLIP sees every image file, screenshots included, but not PDF pages.
 - L2-normalise everything before storing.
 - Time each stage (§6.1, step 7).
 
@@ -369,17 +371,19 @@ Thumbnails and previews are served only by file id or session id. Gradio's `allo
   Write the queries *before* looking at results.
 - Relative-date queries run with a **fixed `now`** set in the eval config, so results don't drift with the calendar.
 - **Metrics:** Recall@1, Recall@5, Recall@10 and MRR@10, overall and per category. Also query latency p50/p95.
-- **Ablations** (one row each):
+- **Ablations** (one row each). "BM25" includes the all-terms list (§19, 17 Oct):
   1. BM25 only
   2. dense only
   3. CLIP only
   4. BM25 + dense
   5. all three, CLIP ungated
   6. all three, CLIP gated
-  7. all three, gated + rerank
+  7. all three, CLIP gated, without the all-terms list (measures its effect)
+  8. all three, gated + rerank (only once rerank is built; it's Later, §14)
 - **Output:** `eval/results.md` (a table plus a timestamp, corpus size and model names) and `eval/results.json`.
 - **Expected story:**
   - BM25 wins `exact`, dense wins `semantic`, CLIP wins `visual`.
+  - The all-terms list lifts `exact` and `mixed` (row 6 vs 7).
   - The gate lifts `exact` without hurting `visual`.
   - The full system is best or near-best everywhere.
 
@@ -664,6 +668,7 @@ The plan has one Claude Code session per milestone, with a commit at the end of 
 | 17 Oct | OCR lines that are only one or two CJK characters (spaces and punctuation aside) are dropped when the rest of the image is mostly Latin: at least `ocr_latin_share` = 0.8 of its letters. Runs of 3+ CJK characters, and mostly CJK images, are kept | Completes the stray-CJK cleanup: an icon detected on its own (`品`, `白 这`) is a line by itself, which the within-line rule can't see (open item m). 0.8 is a first value, not measured |
 | 17 Oct | `vault reindex` ends with an FTS `optimize` and `VACUUM` (`db.compact`), and so does any index run that deleted files. A busy DB logs a warning instead of failing the run; the time is the report's `compact` stage | Secure delete only covers deletes from now on. Compacting removes what older deletes left in the FTS index and free pages, so the owner's existing index is clean after one `reindex` |
 | 17 Oct | **§14 reordered, demo first.** M4 gains the ranked list (top 20 + "Show more" to 50; the gate and filters never cut it to one result), the scope toggle, upload limits in code, the 30-minute expiry and the VM resize + benchmark (h). M5 becomes speed + visual polish: two-phase indexing (g, moved from M7), highlight boxes, "Why this result?", (j), (k), the 100-file upload timing and caps. M6 keeps the corpus and eval, with (n), (o), (f) and laptop vs VM numbers. M7 becomes a buffer. The parser, rerank, "+N copies", folder upload, a file watcher and the setup scripts move to "Later", picked one at a time | Agreed priority: anything that makes the demo faster or more attractive comes first. Until the parser is picked, `parse()` stays a pass-through (17 Oct row above); open items p and q follow from this |
+| 17 Oct | M3 scope: (1) classifier rule 5: a phone-width image (720/1080/1170/1179/1242/1284/1440 px) at least twice as tall as wide, with no camera EXIF, is a screenshot; camera EXIF always wins. (2) WhatsApp filename dates in both forms (`IMG-YYYYMMDD-WA####`, also `VID-`/`AUD-`/`DOC-`, and `WhatsApp Image YYYY-MM-DD at HH.MM.SS`). (3) CLIP on every image file, screenshots included, not on PDF pages. (4) A file's thumbnail is deleted from disk when the file leaves the index; demo thumbnails go with the session. (5) The all-terms list counts as BM25 in the ablations, plus a row without it. (6) Classifier and dates stay in M3 | Owner's answers to the M3 plan. (1) catches scrolling screenshots that lost their filename without misfiling 20:9 phone photos. (2) WhatsApp strips EXIF but keeps the date in the name. (4) matches secure delete: nothing of a removed file stays on disk |
 
 ### Open items
 
