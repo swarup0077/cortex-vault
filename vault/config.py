@@ -18,6 +18,11 @@ def _default_models_dir() -> Path:
     return Path(env) if env else REPO_ROOT / "data" / "models"
 
 
+def _default_ocr_threads() -> int:
+    """8 measured best on the dev laptop (SPEC §19); never more than the machine has (a 4-vCPU VM uses 4)."""
+    return min(8, os.cpu_count() or 1)
+
+
 @dataclass(frozen=True)
 class Config:
     data_dir: Path = field(default_factory=_default_data_dir)
@@ -43,7 +48,8 @@ class Config:
     ocr_use_cls: bool = True  # text-angle classifier (flips upside-down lines): photos and PDF pages
     ocr_cls_screenshots: bool = False  # on-screen text is never upside down; skipping it also misreads less
     ocr_rec_batch: int = 6
-    ocr_threads: int = 8  # ONNX Runtime intra-op threads; RapidOCR ignores values above the CPU count
+    # ONNX Runtime intra-op threads per OCR session; 0 = ONNX Runtime's own default
+    ocr_threads: int = field(default_factory=_default_ocr_threads)
     ocr_min_conf: float = 0.5
     ocr_max_side: int = 2048  # wider images are scaled to this width; taller ones are cut into strips
     ocr_strip: int = 1600

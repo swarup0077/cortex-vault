@@ -57,3 +57,26 @@ def test_rapidocr_reads_a_drawn_line() -> None:
     assert [l.text for l in lines] == ["Settings saved"]
     ln = lines[0]
     assert 0 <= ln.x0 < 60 and 15 <= ln.y0 < 50 and ln.x1 > 250 and ln.conf > 0.9
+
+
+@pytest.mark.parametrize("cpus, threads", [(16, 8), (8, 8), (4, 4), (2, 2), (None, 1)])
+def test_ocr_threads_default_is_capped_by_cpu_count(monkeypatch, cpus, threads) -> None:
+    monkeypatch.setattr("os.cpu_count", lambda: cpus)
+    assert Config().ocr_threads == threads
+
+
+def test_ocr_threads_reach_onnx_runtime(monkeypatch) -> None:
+    """The engine passes the thread count to RapidOCR's ONNX Runtime session (no model is loaded here)."""
+    import rapidocr
+
+    seen = {}
+
+    class FakeRapidOCR:
+        def __init__(self, params):
+            seen.update(params)
+
+    monkeypatch.setattr(rapidocr, "RapidOCR", FakeRapidOCR)
+    models.RapidOcrEngine(Config(ocr_threads=3))
+    assert seen["EngineConfig.onnxruntime.intra_op_num_threads"] == 3
+    models.RapidOcrEngine(Config(ocr_threads=0))
+    assert seen["EngineConfig.onnxruntime.intra_op_num_threads"] == -1  # 0 → ONNX Runtime's own default
