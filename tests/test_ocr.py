@@ -5,7 +5,8 @@ import random
 import pytest
 
 from vault.config import Config
-from vault.ingest.ocr import Tiling, blocks, fix_digits, lines_text, merge_strips, plan_tiles, reading_order
+from vault.ingest.ocr import (Tiling, blocks, drop_stray_cjk, fix_digits, lines_text, merge_strips, plan_tiles,
+                              reading_order)
 from vault.ingest.records import OcrLine
 
 CFG = Config()
@@ -83,6 +84,32 @@ def test_fix_digits_leaves_words_alone(text: str) -> None:
     assert fix_digits(text) == text
 
 
+# ---------------------------------------------------------------- stray CJK characters (misread icons)
+
+
+@pytest.mark.parametrize("raw, cleaned", [
+    ("品 Settings", "Settings"),
+    ("File 白 Edit 这 View", "File Edit View"),
+    ("Downloads米", "Downloads"),
+    ("Save品Changes", "Save Changes"),
+    ("设置 Settings 品", "设置 Settings"),  # a real two-character word stays; the lone one goes
+])
+def test_drop_stray_cjk(raw: str, cleaned: str) -> None:
+    assert drop_stray_cjk(raw) == cleaned
+
+
+@pytest.mark.parametrize("text", [
+    "Settings saved",
+    "品",  # no Latin text: nothing to compare against
+    "中 文",
+    "设置",
+    "白 OK 这",  # as many CJK characters as Latin letters: not "otherwise Latin"
+    "Café résumé",
+])
+def test_drop_stray_cjk_leaves_other_lines_alone(text: str) -> None:
+    assert drop_stray_cjk(text) == text
+
+
 # ---------------------------------------------------------------- merging strips
 
 
@@ -119,6 +146,12 @@ def test_boxes_map_back_through_scaling_and_text_is_cleaned() -> None:
     t = Tiling((2048, 1000), [(0, 1000)])  # original was 4096 × 2000
     out = merge_strips([[L("code  Ox80070005", 100, 50, 300, 70)]], t, (4096, 2000), CFG)
     assert (out[0].text, out[0].x0, out[0].x1, out[0].y0, out[0].y1) == ("code 0x80070005", 200, 600, 100, 140)
+
+
+def test_stray_cjk_is_dropped_from_stored_line_text() -> None:
+    t = Tiling((800, 200), [(0, 200)])
+    out = merge_strips([[L("品 Network settings", 10, 50)]], t, (800, 200), CFG)
+    assert [l.text for l in out] == ["Network settings"]
 
 
 # ---------------------------------------------------------------- reading order and blocks

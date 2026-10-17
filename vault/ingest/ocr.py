@@ -64,8 +64,23 @@ def fix_digits(text: str) -> str:
     return _HEX_PREFIX.sub("0", text)
 
 
+_CJK = "㐀-䶿一-鿿豈-﫿"  # CJK ideographs: unified, extension A, compatibility
+_CJK_CHAR = re.compile(f"[{_CJK}]")
+_LONE_CJK = re.compile(f"(?<![{_CJK}])[{_CJK}](?![{_CJK}])")
+_LATIN = re.compile(r"[A-Za-z]")
+
+
+def drop_stray_cjk(text: str) -> str:
+    """In a line with more Latin letters than CJK characters, drop CJK characters standing alone: icons the
+    Chinese-English recogniser misread (`品 Settings` → `Settings`). Runs of two or more are kept."""
+    n_cjk = len(_CJK_CHAR.findall(text))
+    if not n_cjk or len(_LATIN.findall(text)) <= n_cjk:
+        return text
+    return " ".join(_LONE_CJK.sub(" ", text).split())
+
+
 def clean_text(text: str) -> str:
-    return fix_digits(" ".join(text.split()))
+    return fix_digits(drop_stray_cjk(" ".join(text.split())))
 
 
 # ---------------------------------------------------------------- strips → one set of lines
