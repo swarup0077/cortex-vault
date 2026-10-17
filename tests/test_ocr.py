@@ -5,8 +5,8 @@ import random
 import pytest
 
 from vault.config import Config
-from vault.ingest.ocr import (Tiling, blocks, drop_stray_cjk, fix_digits, lines_text, merge_strips, plan_tiles,
-                              reading_order)
+from vault.ingest.ocr import (Tiling, blocks, drop_cjk_fragments, drop_stray_cjk, fix_digits, lines_text, merge_strips,
+                              plan_tiles, reading_order)
 from vault.ingest.records import OcrLine
 
 CFG = Config()
@@ -108,6 +108,38 @@ def test_drop_stray_cjk(raw: str, cleaned: str) -> None:
 ])
 def test_drop_stray_cjk_leaves_other_lines_alone(text: str) -> None:
     assert drop_stray_cjk(text) == text
+
+
+ENGLISH_UI = ["Network and Internet settings", "Bluetooth and devices", "Personalisation"]
+
+
+def ui_lines(*texts: str) -> list[OcrLine]:
+    return [L(t, 10, 40 * i) for i, t in enumerate(texts)]
+
+
+@pytest.mark.parametrize("fragment", ["品", "白 这", "设置", "米。"])
+def test_lone_cjk_line_in_a_latin_image_is_dropped(fragment: str) -> None:
+    out = drop_cjk_fragments(ui_lines(ENGLISH_UI[0], fragment, *ENGLISH_UI[1:]), CFG.ocr_latin_share)
+    assert texts(out) == ENGLISH_UI
+
+
+@pytest.mark.parametrize("lines", [
+    [*ENGLISH_UI, "设置中心"],  # a run of 3+ characters is real text
+    ["设置中心", "网络和互联网", "蓝牙和其他设备", "品"],  # a mostly CJK image keeps its short lines
+    ["品"],  # nothing else to judge by
+    ["品", "1234"],  # no Latin letters at all
+    ["设置", "网络和互联网设置", "蓝牙和其他设备", "Bluetooth"],  # mixed, not mostly Latin
+    ["品1", *ENGLISH_UI],  # a digit: not a pure CJK fragment
+])
+def test_cjk_lines_that_are_kept(lines: list[str]) -> None:
+    assert texts(drop_cjk_fragments(ui_lines(*lines), CFG.ocr_latin_share)) == lines
+
+
+def test_merge_strips_drops_lone_cjk_lines() -> None:
+    t = Tiling((800, 400), [(0, 400)])
+    out = merge_strips([[L("品", 10, 10), L("Network settings", 60, 10, 300), L("Display", 10, 100)]], t,
+                       (800, 400), CFG)
+    assert texts(out) == ["Network settings", "Display"]
 
 
 # ---------------------------------------------------------------- merging strips

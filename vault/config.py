@@ -51,6 +51,9 @@ class Config:
     # ONNX Runtime intra-op threads per OCR session; 0 = ONNX Runtime's own default
     ocr_threads: int = field(default_factory=_default_ocr_threads)
     ocr_min_conf: float = 0.5
+    # An image whose letters are at least this share Latin is "mostly Latin": its lines that are only one or
+    # two CJK characters are misread icons and are dropped (SPEC §19)
+    ocr_latin_share: float = 0.8
     ocr_max_side: int = 2048  # wider images are scaled to this width; taller ones are cut into strips
     ocr_strip: int = 1600
     ocr_strip_overlap: int = 200

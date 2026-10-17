@@ -83,6 +83,26 @@ def clean_text(text: str) -> str:
     return fix_digits(drop_stray_cjk(" ".join(text.split())))
 
 
+def _is_cjk_fragment(text: str) -> bool:
+    """One or two CJK characters and nothing else but spaces and punctuation (`品`, `白 这`, `米。`)."""
+    core = [c for c in text if c.isalnum()]
+    return 1 <= len(core) <= 2 and all(_CJK_CHAR.match(c) for c in core)
+
+
+def drop_cjk_fragments(lines: Sequence[OcrLine], latin_share: float) -> list[OcrLine]:
+    """Drop lines that are only one or two CJK characters when the rest of the image is mostly Latin (at least
+    `latin_share` of its letters): icons read on their own. Real CJK text, a run of 3+ characters or an image
+    that is mostly CJK, is kept."""
+    rest = [ln for ln in lines if not _is_cjk_fragment(ln.text)]
+    if len(rest) == len(lines):
+        return list(lines)
+    latin = sum(len(_LATIN.findall(ln.text)) for ln in rest)
+    cjk = sum(len(_CJK_CHAR.findall(ln.text)) for ln in rest)
+    if latin == 0 or latin < latin_share * (latin + cjk):
+        return list(lines)
+    return rest
+
+
 # ---------------------------------------------------------------- strips → one set of lines
 
 
@@ -103,8 +123,8 @@ def merge_strips(per_strip: Sequence[Sequence[OcrLine]], tiling: Tiling, orig_si
                  cfg: Config) -> list[OcrLine]:
     """Raw lines per strip (strip pixels) → one list in original pixels.
 
-    Drops low-confidence lines and lines cut by an inner strip edge, cleans the text, and removes the
-    duplicates read twice in an overlap.
+    Drops low-confidence lines and lines cut by an inner strip edge, cleans the text, removes the duplicates
+    read twice in an overlap, and drops lone CJK lines (misread icons) from a mostly Latin image.
     """
     sx, sy = tiling.size[0] / orig_size[0], tiling.size[1] / orig_size[1]
     last = len(tiling.strips) - 1
@@ -136,7 +156,7 @@ def merge_strips(per_strip: Sequence[Sequence[OcrLine]], tiling: Tiling, orig_si
                     break
         kept[i] = [ln for ln in kept[i] if id(ln) not in drop_upper]
         kept[i + 1] = [ln for j, ln in enumerate(kept[i + 1]) if j not in drop_lower]
-    return [ln for lines in kept for ln in lines]
+    return drop_cjk_fragments([ln for lines in kept for ln in lines], cfg.ocr_latin_share)
 
 
 def ocr_image(img: Image.Image, engine: OcrEngine, cfg: Config, *, use_cls: bool | None = None) -> list[OcrLine]:
