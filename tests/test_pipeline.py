@@ -329,3 +329,9 @@ def test_corrupt_image_is_recorded_and_run_continues(conn, cfg, fake_embedder, s
     rep = index_paths(conn, [shots], cfg)
     assert rep.added == 3 and [e["status"] for e in rep.errors] == ["error"]
     assert "broken.jpg" in rep.errors[0]["path"]
+
+
+def test_screenshots_skip_the_angle_classifier(conn, cfg, fake_embedder, shots, fake_ocr) -> None:
+    index_paths(conn, [shots], cfg)
+    by_size = dict(zip(fake_ocr.seen, fake_ocr.use_cls))
+    assert by_size == {(800, 200): False, (640, 480): None}  # screenshot: off; photo: the configured default

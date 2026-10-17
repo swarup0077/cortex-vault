@@ -37,10 +37,13 @@ class Config:
     ocr_det_model: str = "PP-OCRv6_det_small.onnx"
     ocr_rec_model: str = "PP-OCRv6_rec_small.onnx"
     ocr_cls_model: str = "ch_ppocr_mobile_v2.0_cls_mobile.onnx"
-    ocr_det_limit_side: int = 736  # detector input size (RapidOCR's Det.limit_side_len)
-    ocr_det_limit_type: str = "min"  # 'min': short side at least limit; 'max': long side at most limit
-    ocr_use_cls: bool = True  # text-angle classifier (flips upside-down lines)
+    # Speed settings measured on the dev laptop (SPEC §19, OCR benchmark): 1080p screenshot 4.5 s → 2.4 s.
+    ocr_det_limit_side: int = 960  # detector input size (RapidOCR's Det.limit_side_len)
+    ocr_det_limit_type: str = "max"  # 'max': long side at most the limit; 'min': short side at least it
+    ocr_use_cls: bool = True  # text-angle classifier (flips upside-down lines): photos and PDF pages
+    ocr_cls_screenshots: bool = False  # on-screen text is never upside down; skipping it also misreads less
     ocr_rec_batch: int = 6
+    ocr_threads: int = 8  # ONNX Runtime intra-op threads; RapidOCR ignores values above the CPU count
     ocr_min_conf: float = 0.5
     ocr_max_side: int = 2048  # wider images are scaled to this width; taller ones are cut into strips
     ocr_strip: int = 1600

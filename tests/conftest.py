@@ -81,9 +81,11 @@ class FakeOcrEngine:
     def __init__(self) -> None:
         self.lines_for: Callable[[np.ndarray], Sequence[OcrLine]] | None = None
         self.seen: list[tuple[int, int]] = []  # (width, height) of every image read
+        self.use_cls: list[bool | None] = []  # the classifier override of every read
 
-    def read(self, image: np.ndarray) -> list[OcrLine]:
+    def read(self, image: np.ndarray, *, use_cls: bool | None = None) -> list[OcrLine]:
         self.seen.append((image.shape[1], image.shape[0]))
+        self.use_cls.append(use_cls)
         return list(self.lines_for(image)) if self.lines_for else []
 
 

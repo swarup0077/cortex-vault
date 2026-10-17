@@ -68,12 +68,12 @@ def _iso_from_mtime(mtime: float) -> str:
     return datetime.fromtimestamp(mtime).isoformat(timespec="seconds")
 
 
-def extract(path: Path, cfg: Config) -> Extracted:
+def extract(path: Path, cfg: Config, kind: str | None = None) -> Extracted:
     ext = path.suffix.lower()
     if ext == ".pdf":
         return extract_pdf(path, cfg)
     if ext in IMAGE_EXTS:
-        return extract_image(path, cfg)
+        return extract_image(path, cfg, kind=kind)
     if ext == ".docx":
         return extract_docx(path, cfg)
     if ext == ".pptx":
@@ -138,7 +138,7 @@ class _Indexer:
         status, error, ex, chunks = "ok", None, None, []
         try:
             with self.timed("extract"):
-                ex = extract(primary.path, self.cfg)
+                ex = extract(primary.path, self.cfg, kind)
                 chunks = chunk_extracted(ex, self.cfg)
             self.report.timings["extract"] -= ex.ocr_seconds  # report OCR as its own stage
             self.report.timings["ocr"] = self.report.timings.get("ocr", 0.0) + ex.ocr_seconds

@@ -24,7 +24,7 @@ def test_ocr_engine_is_lazy_and_injectable() -> None:
     class Fake:
         name = "fake-ocr"
 
-        def read(self, image):
+        def read(self, image, *, use_cls=None):
             return []
 
     fake = Fake()

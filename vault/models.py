@@ -83,8 +83,11 @@ def set_text_embedder(embedder: TextEmbedder | None) -> None:
 class OcrEngine(Protocol):
     name: str
 
-    def read(self, image: np.ndarray) -> list[OcrLine]:
-        """Lines in `image` (H×W×3 RGB uint8), boxes in its pixels. Not yet filtered or ordered."""
+    def read(self, image: np.ndarray, *, use_cls: bool | None = None) -> list[OcrLine]:
+        """Lines in `image` (H×W×3 RGB uint8), boxes in its pixels. Not yet filtered or ordered.
+
+        `use_cls` overrides the configured text-angle classifier for this call (screenshots skip it).
+        """
         ...
 
 
@@ -117,11 +120,12 @@ class RapidOcrEngine:
             "Rec.model_path": str(paths["Rec"]),
             "Rec.rec_batch_num": cfg.ocr_rec_batch,
             "Cls.model_path": str(paths["Cls"]),
+            "EngineConfig.onnxruntime.intra_op_num_threads": cfg.ocr_threads or -1,
         })
         self.last_elapse: list[float | None] = []  # det / cls / rec seconds of the last call (profiling)
 
-    def read(self, image: np.ndarray) -> list[OcrLine]:
-        out = self._ocr(np.ascontiguousarray(image[:, :, ::-1]))  # RapidOCR takes arrays as BGR
+    def read(self, image: np.ndarray, *, use_cls: bool | None = None) -> list[OcrLine]:
+        out = self._ocr(np.ascontiguousarray(image[:, :, ::-1]), use_cls=use_cls)  # RapidOCR takes BGR arrays
         self.last_elapse = list(getattr(out, "elapse_list", []))
         if getattr(out, "boxes", None) is None or getattr(out, "txts", None) is None:
             return []

@@ -40,10 +40,13 @@ def load_upright(path: Path) -> Image.Image:
         return to_rgb(ImageOps.exif_transpose(im))
 
 
-def extract_image(path: Path, cfg: Config, engine: models.OcrEngine | None = None) -> Extracted:
+def extract_image(path: Path, cfg: Config, engine: models.OcrEngine | None = None, *, kind: str | None = None) -> Extracted:
+    """OCR an image. Screenshots skip the text-angle classifier unless `ocr_cls_screenshots` is set:
+    on-screen text is never upside down."""
     img = load_upright(path)
+    use_cls = cfg.ocr_cls_screenshots if kind == "screenshot" else None
     t0 = time.perf_counter()
-    lines = reading_order(ocr_image(img, engine or models.ocr_engine(cfg), cfg), cfg)
+    lines = reading_order(ocr_image(img, engine or models.ocr_engine(cfg), cfg, use_cls=use_cls), cfg)
     seconds = time.perf_counter() - t0
     segments = [Segment(lines_text(lines), None, "ocr", tuple(lines))] if lines else []
     return Extracted(segments=segments, width=img.width, height=img.height, ocr_seconds=seconds, ocr_images=1)

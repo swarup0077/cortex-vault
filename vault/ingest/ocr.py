@@ -114,19 +114,22 @@ def merge_strips(per_strip: Sequence[Sequence[OcrLine]], tiling: Tiling, orig_si
                 continue
             for a in upper:
                 if id(a) not in drop_upper and _same_line(a, b):
-                    (drop_upper.add(id(a)) if b.conf > a.conf else drop_lower.add(j))
+                    if b.conf > a.conf:
+                        drop_upper.add(id(a))
+                    else:
+                        drop_lower.add(j)
                     break
         kept[i] = [ln for ln in kept[i] if id(ln) not in drop_upper]
         kept[i + 1] = [ln for j, ln in enumerate(kept[i + 1]) if j not in drop_lower]
     return [ln for lines in kept for ln in lines]
 
 
-def ocr_image(img: Image.Image, engine: OcrEngine, cfg: Config) -> list[OcrLine]:
+def ocr_image(img: Image.Image, engine: OcrEngine, cfg: Config, *, use_cls: bool | None = None) -> list[OcrLine]:
     """OCR an RGB image strip by strip. Lines are in original pixels, cleaned and deduplicated, not ordered."""
     tiling = plan_tiles(img.width, img.height, cfg)
     work = img if tiling.size == img.size else img.resize(tiling.size, Image.Resampling.LANCZOS)
     arr = np.asarray(work)
-    per_strip = [engine.read(arr[top:bottom]) for top, bottom in tiling.strips]
+    per_strip = [engine.read(arr[top:bottom], use_cls=use_cls) for top, bottom in tiling.strips]
     return merge_strips(per_strip, tiling, img.size, cfg)
 
 
