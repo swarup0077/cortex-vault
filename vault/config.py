@@ -33,6 +33,29 @@ class Config:
     zip_max_xml_bytes: int = 50 * 1024 * 1024  # XML parts only; media isn't counted
     zip_max_total: int | None = None  # absolute cap; set only for demo uploads (M4)
 
+    # OCR (SPEC §6.3). Model files ship inside the rapidocr wheel; nothing is downloaded.
+    ocr_det_model: str = "PP-OCRv6_det_small.onnx"
+    ocr_rec_model: str = "PP-OCRv6_rec_small.onnx"
+    ocr_cls_model: str = "ch_ppocr_mobile_v2.0_cls_mobile.onnx"
+    ocr_det_limit_side: int = 736  # detector input size (RapidOCR's Det.limit_side_len)
+    ocr_det_limit_type: str = "min"  # 'min': short side at least limit; 'max': long side at most limit
+    ocr_use_cls: bool = True  # text-angle classifier (flips upside-down lines)
+    ocr_rec_batch: int = 6
+    ocr_min_conf: float = 0.5
+    ocr_max_side: int = 2048  # wider images are scaled to this width; taller ones are cut into strips
+    ocr_strip: int = 1600
+    ocr_strip_overlap: int = 200
+    ocr_max_strips: int = 15
+    ocr_block_gap: float = 1.5  # × median line height: a bigger gap starts a new block / cuts a region
+    ocr_gutter: float = 0.5  # × median line height: the narrowest gap that counts as a column gutter
+
+    # PDF OCR (SPEC §6.3)
+    pdf_ocr_dpi: int = 150
+    pdf_ocr_max_pages: int = 30
+    pdf_scanned_chars: int = 20  # fewer native chars than this: OCR the whole page
+    pdf_region_min_frac: float = 0.15  # images covering at least this share of the page are OCR'd
+    pdf_region_text_chars: int = 20  # ...unless this much native text already lies inside them
+
     # Chunking (SPEC §6.4)
     chunk_target: int = 800
     chunk_overlap: int = 150
