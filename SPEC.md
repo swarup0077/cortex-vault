@@ -106,7 +106,7 @@ CREATE TABLE files (
   width INTEGER, height INTEGER,
   pages INTEGER,                       -- PDF pages or pptx slides
   gps_lat REAL, gps_lon REAL,
-  thumb_path TEXT,
+  thumb_path TEXT,                     -- relative to the data dir: thumbs/<sha256>.webp
   status TEXT NOT NULL DEFAULT 'ok',   -- 'ok' | 'error' | 'skipped'
   error TEXT,
   indexed_at TEXT

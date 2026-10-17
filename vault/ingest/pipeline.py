@@ -17,15 +17,18 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from PIL import Image
+
 from vault import db, models
 from vault.config import Config
 from vault.ingest.chunk import chunk_extracted, path_chunk_text
 from vault.ingest.classify import IMAGE_EXTS, classify, classify_image
 from vault.ingest.discover import FoundFile, sha256_file, walk_roots
-from vault.ingest.extract_image import extract_image
+from vault.ingest.extract_image import extract_image, load_upright
 from vault.ingest.extract_office import extract_docx, extract_pptx, extract_text
 from vault.ingest.extract_pdf import extract_pdf
 from vault.ingest.meta import effective_date, read_image_meta
+from vault.ingest import thumbs
 from vault.ingest.records import Extracted, SkipFile
 
 log = logging.getLogger(__name__)
@@ -66,12 +69,12 @@ def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
-def extract(path: Path, cfg: Config, kind: str | None = None) -> Extracted:
+def extract(path: Path, cfg: Config, kind: str | None = None, image: Image.Image | None = None) -> Extracted:
     ext = path.suffix.lower()
     if ext == ".pdf":
         return extract_pdf(path, cfg)
     if ext in IMAGE_EXTS:
-        return extract_image(path, cfg, kind=kind)
+        return extract_image(path, cfg, kind=kind, image=image)
     if ext == ".docx":
         return extract_docx(path, cfg)
     if ext == ".pptx":
@@ -136,10 +139,12 @@ class _Indexer:
         is_image = primary.path.suffix.lower() in IMAGE_EXTS
         meta = read_image_meta(primary.path) if is_image else None  # read once: kind, date and GPS
         kind, kind_reason = classify_image(primary.path.name, meta) if is_image else classify(primary.path)
-        status, error, ex, chunks = "ok", None, None, []
+        status, error, ex, chunks, img = "ok", None, None, [], None
         try:
             with self.timed("extract"):
-                ex = extract(primary.path, self.cfg, kind)
+                if is_image:  # decoded once, for OCR and the thumbnail
+                    img = load_upright(primary.path)
+                ex = extract(primary.path, self.cfg, kind, img)
                 chunks = chunk_extracted(ex, self.cfg)
             self.report.timings["extract"] -= ex.ocr_seconds  # report OCR as its own stage
             self.report.timings["ocr"] = self.report.timings.get("ocr", 0.0) + ex.ocr_seconds
@@ -155,6 +160,7 @@ class _Indexer:
             log.warning("%s %s: %s", status, primary.path, error)
             self.report.errors.append({"path": str(primary.path), "status": status, "error": error or ""})
 
+        thumb_path = self.thumbnail(sha, primary.path, chunks[0].text if chunks else "", img) if status == "ok" else None
         path_text = path_chunk_text(f.path for f in group)
         with self.timed("embed"):  # the path chunk is keyword-only: no vector (SPEC §5)
             vecs = self.embedder.embed_documents([c.text for c in chunks])
@@ -166,9 +172,10 @@ class _Indexer:
         with self.timed("write"), db.transaction(self.conn):
             file_id = self.conn.execute(
                 "INSERT INTO files(sha256, kind, kind_reason, effective_date, date_source, width, height, pages,"
-                " gps_lat, gps_lon, status, error, indexed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " gps_lat, gps_lon, thumb_path, status, error, indexed_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (sha, kind, kind_reason, date, date_source, ex.width if ex else None, ex.height if ex else None,
-                 ex.pages if ex else None, lat, lon, status, error, _now()),
+                 ex.pages if ex else None, lat, lon, thumb_path, status, error, _now()),
             ).lastrowid
             if status == "ok":
                 db.insert_chunk(self.conn, file_id, None, 0, "path", path_text, None)
@@ -192,6 +199,15 @@ class _Indexer:
         stats = self.report.per_kind.setdefault(kind, {"files": 0, "seconds": 0.0})
         stats["files"] += 1
         stats["seconds"] += time.perf_counter() - t0
+
+    def thumbnail(self, sha: str, path: Path, title: str, image: Image.Image | None) -> str | None:
+        """Write the file's thumbnail; a failure costs the thumbnail, never the file."""
+        with self.timed("thumbs"):
+            try:
+                return thumbs.save(thumbs.make_thumb(path, title, image), self.cfg, sha)
+            except Exception as e:
+                log.warning("no thumbnail for %s: %s", path, e)
+                return None
 
     def sweep(self, roots: list[Path]) -> None:
         """Delete paths under the walked roots that this run didn't see, then orphaned files."""
@@ -299,6 +315,8 @@ class _Indexer:
         if not rep.interrupted:  # unprocessed changes would look like deletions
             self.sweep(live_roots)
         self.refresh_path_chunks()
+        with self.timed("thumbs"):
+            thumbs.sweep(self.conn, self.cfg)  # thumbnails of content that left the index
         if self.always_compact or rep.files_deleted:
             self.compact()
 
