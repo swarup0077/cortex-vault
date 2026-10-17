@@ -30,6 +30,7 @@ def test_index_search_stats(data_dir, fake_embedder, tmp_path, make_search_corpu
     assert main(["stats"]) == 0
     out = capsys.readouterr().out
     assert "pdf" in out and "slides" in out and fake_embedder.name in out and str(root.resolve()) in out
+    assert "OCR lines 0" in out
 
     assert main(["reindex"]) == 0
     assert "added" in capsys.readouterr().out

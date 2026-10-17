@@ -133,7 +133,7 @@ def cmd_stats(console: Console, conn: sqlite3.Connection, cfg: Config) -> int:
     size = cfg.db_path.stat().st_size if cfg.db_path.exists() else 0
     console.print(
         f"files {count('files')} · paths {count('paths')} · chunks {count('chunks')} · "
-        f"text vectors {count('text_vectors')} · db {size / 2**20:.1f} MB"
+        f"text vectors {count('text_vectors')} · OCR lines {count('ocr_lines')} · db {size / 2**20:.1f} MB"
     )
     console.print(f"text model: {db.get_meta(conn, 'text_model') or '-'}")
     console.print(f"last indexed: {db.get_meta(conn, 'last_indexed') or 'never'}")
