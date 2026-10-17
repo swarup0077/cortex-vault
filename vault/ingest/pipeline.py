@@ -249,31 +249,39 @@ class _Indexer:
            again, one transaction each. A kind change alone needs no OCR: the kind reaches OCR only through that
            setting.
         """
-        rows = self.conn.execute(
-            "SELECT f.id, f.kind, f.kind_reason, iv.vec FROM files f JOIN image_vectors iv ON iv.file_id = f.id "
-            "WHERE f.status = 'ok' AND f.kind IN ('photo', 'screenshot')"
+        images = self.conn.execute(
+            "SELECT id, kind, kind_reason, ocr_cls FROM files WHERE status = 'ok' AND kind IN ('photo', 'screenshot')"
         ).fetchall()
+        undecided = {r["id"]: r for r in images if not is_final(r["kind_reason"])}
         updates = []
-        for r in rows:
-            if not is_final(r["kind_reason"]):
-                kind, reason = self.zero_shot(db.blob_to_vec(r["vec"]), (r["kind"], r["kind_reason"]))
-                if (kind, reason) != (r["kind"], r["kind_reason"]):
-                    updates.append((kind, reason, r["id"]))
+        for file_id, blob in self._vectors(list(undecided)):  # only these need their vector read
+            r = undecided[file_id]
+            kind, reason = self.zero_shot(db.blob_to_vec(blob), (r["kind"], r["kind_reason"]))
+            if (kind, reason) != (r["kind"], r["kind_reason"]):
+                updates.append((kind, reason, file_id))
         if updates:
             with self.timed("write"), db.transaction(self.conn):
                 self.conn.executemany("UPDATE files SET kind = ?, kind_reason = ? WHERE id = ?", updates)
             self.report.reclassified += len(updates)
 
-        stale = [r for r in self.conn.execute(
-            "SELECT f.id, f.kind_reason, f.ocr_cls, p.path FROM files f JOIN paths p ON p.path = "
-            "(SELECT path FROM paths WHERE file_id = f.id ORDER BY mtime DESC LIMIT 1) "
-            "WHERE f.status = 'ok' AND f.kind IN ('photo', 'screenshot')"
-        ) if r["ocr_cls"] != int(ocr_uses_cls(self.cfg, known_screen_capture(r["kind_reason"])))]
-        for r in stale:
+        reasons = {r["id"]: r["kind_reason"] for r in images} | {file_id: reason for _, reason, file_id in updates}
+        stale = [r["id"] for r in images
+                 if r["ocr_cls"] != int(ocr_uses_cls(self.cfg, known_screen_capture(reasons[r["id"]])))]
+        for file_id in stale:
             if stop is not None and stop.is_set():
                 self.report.interrupted = True
                 return
-            self.reocr(r["id"], Path(r["path"]), known_screen_capture(r["kind_reason"]))
+            path = self.conn.execute("SELECT path FROM paths WHERE file_id = ? ORDER BY mtime DESC LIMIT 1",
+                                     (file_id,)).fetchone()
+            if path is not None:
+                self.reocr(file_id, Path(path[0]), known_screen_capture(reasons[file_id]))
+
+    def _vectors(self, file_ids: list[int]) -> Iterator[tuple[int, bytes]]:
+        """Stored CLIP vectors of `file_ids` (those that have one), in batches."""
+        for start in range(0, len(file_ids), 500):
+            batch = file_ids[start:start + 500]
+            yield from self.conn.execute(
+                f"SELECT file_id, vec FROM image_vectors WHERE file_id IN ({','.join('?' * len(batch))})", batch)
 
     def reocr(self, file_id: int, path: Path, screen: bool) -> None:
         """OCR one indexed image again and replace its content chunks, OCR lines and text vectors."""
