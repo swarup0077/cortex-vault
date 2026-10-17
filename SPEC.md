@@ -630,16 +630,18 @@ The plan has one Claude Code session per milestone, with a commit at the end of 
 
 ### Open items
 
-| # | Item | When |
-|---|---|---|
-| a | Common words ("the", "is", "where") in the BM25 OR-query match nearly every chunk and add noise to RRF ranks. Decide whether to drop them when other terms remain, using the eval | M6 |
-| b | The UI keeps one `VectorIndex` and rebuilds it after indexing; `search()` already accepts a prebuilt `text_index` | M4 |
-| c | Date tests must set the Office `created` property explicitly: python-docx/python-pptx templates carry a 2013 creation date | M3 |
-| d | 3 of the owner's real test PDFs have no text layer (scanned/handwritten): use them as real-world cases for scanned-page OCR | M2 |
-| e | The path chunk includes the file extension, so a query containing "pdf" (as in probability density) matched every PDF filename. Consider dropping the extension from the path-chunk text | M5 or M6 |
-| f | Dense top-100 chunks can be crowded out by one long document (in the real-world test only one book appeared in the dense list). Consider retrieving more chunks before collapsing to files; measure in the eval | M6 |
-| g | Two-phase indexing: commit text + FTS per file first, then compute embeddings in a background pass; dense search skips chunks without vectors; the UI shows "searchable / meaning-ready" progress. Matters most for demo uploads | M7 at the latest |
-| h | Re-run the embedding benchmark on the Azure VM (different CPU, 2 vCPU; demo uploads are indexed there) and set its thread/batch defaults separately if needed. Same method as the laptop benchmark above: model cached, 128 × ~700-char chunks, warm-up batch, median of 3, one process per config | M4 |
+Status is `open`, `done` (with the commit), or `moved to Mx` (with the reason). See CLAUDE.md for when to review them.
+
+| ID | Item | Milestone | Status |
+|---|---|---|---|
+| a | Common words ("the", "is", "where") in the BM25 OR-query match nearly every chunk and add noise to RRF ranks. Decide whether to drop them when other terms remain, using the eval | M6 | open |
+| b | The UI keeps one `VectorIndex` and rebuilds it after indexing; `search()` already accepts a prebuilt `text_index` | M4 | open |
+| c | Date tests must set the Office `created` property explicitly: python-docx/python-pptx templates carry a 2013 creation date | M3 | open |
+| d | 3 of the owner's real test PDFs have no text layer (scanned/handwritten): use them as real-world cases for scanned-page OCR | M2 | open |
+| e | The path chunk includes the file extension, so a query containing "pdf" (as in probability density) matched every PDF filename. Consider dropping the extension from the path-chunk text | M6 | open |
+| f | Dense top-100 chunks can be crowded out by one long document (in the real-world test only one book appeared in the dense list). Consider retrieving more chunks before collapsing to files; measure in the eval | M6 | open |
+| g | Two-phase indexing: commit text + FTS per file first, then compute embeddings in a background pass; dense search skips chunks without vectors; the UI shows "searchable / meaning-ready" progress. Matters most for demo uploads. Due by M7 at the latest | M7 | open |
+| h | Re-run the embedding benchmark on the Azure VM (different CPU, 2 vCPU; demo uploads are indexed there) and set its thread/batch defaults separately if needed. Same method as the laptop benchmark above: model cached, 128 × ~700-char chunks, warm-up batch, median of 3, one process per config | M4 | open |
 
 ---
 

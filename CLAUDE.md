@@ -4,6 +4,7 @@ The source of truth is **SPEC.md**. Read it before starting any task. If a reque
 
 ## How we work
 - Do **one milestone per session** (SPEC §14). Start by restating the milestone's "done when" criteria. End by running the tests, then summarising what's done, what's not, and any spec changes.
+- **Open items** (SPEC §19): at the start of every milestone, list the open items tagged with that milestone and include them in the plan. Before declaring the milestone done, update each one: mark it `done` (with the commit), move it to another milestone with a reason, or add new rows for anything found along the way.
 - Work in small steps: write or adjust a test, implement, run `pytest -q`, commit. Use one commit per coherent change with an imperative message (`ingest: add rename detection by sha256`).
 - When a design choice comes up that isn't in the spec, propose it in one or two lines and ask. Record agreed choices in SPEC §19 (Decisions log).
 - Don't start stretch goals unless asked.
