@@ -1,5 +1,6 @@
 """M3 done-when with the real CLIP models: a visual query finds a picture with no text, and the gate keeps CLIP
-out of an error-code query. OCR and the text embedder stay fake: this is about the CLIP list."""
+out of an error-code query. OCR stays fake: this is about the CLIP list. The tests of the visual-query rule also
+use the real bge, because the dense floor is on its scale."""
 
 from pathlib import Path
 
@@ -33,7 +34,7 @@ def test_visual_query_finds_the_picture(conn, cfg, fake_embedder, real_clip, sce
     assert search(conn, "a chessboard", cfg).results[0].filename == "IMG_0102.jpg"
 
 
-def test_small_collection_keeps_only_similar_images(conn, cfg, fake_embedder, real_clip, tmp_path) -> None:
+def test_small_collection_keeps_only_similar_images(conn, cfg, real_clip, tmp_path) -> None:
     """Fewer than 20 images: no z-score, so a hit needs cosine >= clip_min_cosine (open item r)."""
     root = tmp_path / "few"
     save_image(draw_sunset_beach(), root / "IMG_0101.jpg", exif=camera_exif())
@@ -43,9 +44,26 @@ def test_small_collection_keeps_only_similar_images(conn, cfg, fake_embedder, re
     resp = search(conn, "electricity invoice", cfg)
     assert resp.clip["kept"] == 0 and [r.filename for r in resp.results] == ["bills.txt"]
     resp = search(conn, "sunset at the beach", cfg)
-    [sunset] = [r for r in resp.results if r.filename == "IMG_0101.jpg"]
-    assert not resp.clip["gated"] and resp.clip["kept"] == 1 and sunset.ranks["clip"] == 1
-    # bills.txt is still dense #1 here: bge scores it 0.44 against "sunset at the beach", above the 0.42 floor
+    sunset, bills = resp.results
+    assert sunset.filename == "IMG_0101.jpg" and sunset.ranks["clip"] == 1
+    assert not resp.clip["gated"] and resp.clip["kept"] == 1 and resp.clip["strong"] == 1 and resp.clip["visual"]
+    # bills.txt is still dense #1 (bge: 0.44, above the 0.42 floor), but the strong visual hit now outranks it
+    assert bills.filename == "bills.txt" and bills.ranks["dense"] == 1
+
+
+def test_visual_query_beats_a_file_sharing_one_word(conn, cfg, real_clip, scenes) -> None:
+    """Owner's real-file M3 test, on generated files: a document holding one of the query's words (BM25 #1 and
+    dense #1, 2/61) outranked the picture CLIP found (1/61) when no file held every word."""
+    from conftest import build_docx
+
+    build_docx(scenes / "travel.docx", ["Train to Goa leaves at 6 am; pack sunscreen and a hat for the beach."])
+    build_docx(scenes / "household.docx", ["The electricity invoice from the utility must be paid by the fifth."])
+    index_paths(conn, [scenes], cfg)
+    resp = search(conn, "sunset at the beach", cfg)
+    assert [r.filename for r in resp.results[:2]] == ["IMG_0101.jpg", "travel.docx"]
+    assert resp.clip["visual"] and resp.weights["bm25"] == 0.5
+    text = search(conn, "electricity invoice", cfg)  # a file holds every word: the rule stays off
+    assert text.results[0].filename == "household.docx" and not text.clip["visual"]
 
 
 def test_gate_keeps_clip_out_of_an_error_code(conn, cfg, fake_embedder, real_clip, scenes) -> None:

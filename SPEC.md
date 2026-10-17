@@ -289,11 +289,13 @@ Example: `screenshot of the access denied error from last week` → kinds={scree
 - Compute z = (score − mean) / std over all filter-passing candidate images, and keep only hits with **z ≥ 2.0** (configurable), at most 50.
 - If there are fewer than 20 candidates, keep the top 5 instead, but only those with cosine ≥ `clip_min_cosine` (0.26, provisional; §19). Without it, a small collection lifted up to 5 unrelated images into every query.
 - If the query contains a quoted phrase or a code-like token, multiply CLIP's RRF weight by 0.5 (configurable). A code-like token is either a hex value like `0x80070005`, a run of 6 or more digits, or a token of 4 or more characters mixing letters and digits.
+- The gate also marks **strong** hits for the visual-query rule (§7.4): z ≥ `clip_strong_z` (3.25), or, with fewer than 20 candidates, cosine ≥ `clip_strong_cosine` (0.28). Both provisional (§19).
 - The gate logic is unit-tested on synthetic score arrays. The eval compares gated vs ungated (§9).
 
 ### 7.4 Fusion
 1. **Collapse to file:** for each retriever, keep each file's best-ranked chunk. That rank is the file's rank in that list, and the chunk is remembered as the snippet candidate.
 2. **Reciprocal Rank Fusion:** `score(f) = Σ_r w_r / (k + rank_r(f))`, with `k = 60` and `w_r = 1.0` by default, adjusted by the gate. A file missing from a list contributes 0 for that list. A weight of 0 leaves a list out. The all-terms list exists because ranks alone can't separate a file that holds the rare exact word (BM25 #1, crowded out of dense) from a long document that both lists like a little (BM25 #2 + dense #1): see §19, 17 Oct.
+   - **Visual-query rule (§19, 18 Oct):** when the all-terms list is empty (no file holds every content word), the query is neither quoted nor code-like, and CLIP has at least one strong hit (§7.3), BM25's weight is multiplied by 0.5 and each strong CLIP hit's by 2; weaker gated hits keep the normal weight. Without it, a file matching one or two of the words through BM25 and dense (2/61) always outranked CLIP's #1 (1/61); now CLIP's strong #1 (2/61) beats any file that only BM25 #1 and dense #1 found (0.5/61 + 1/61). The factors are provisional.
 3. **Snippet:** the best chunk from the all-terms list if present, else from BM25, else from dense. Query terms are highlighted with `<mark>` in a ~200-char window. Image-only hits get no snippet and a "visual match" badge.
 
 ### 7.5 Rerank (togglable, on by default)

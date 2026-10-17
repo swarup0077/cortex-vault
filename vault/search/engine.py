@@ -49,7 +49,8 @@ class SearchResponse:
     parsed: ParsedQuery
     results: list[SearchResult]
     timings_ms: dict[str, float]
-    clip: dict[str, object] = field(default_factory=dict)  # candidates, kept, gated, weight (for --debug)
+    clip: dict[str, object] = field(default_factory=dict)  # candidates, kept, strong, gated, weight, visual
+    weights: dict[str, float] = field(default_factory=dict)  # each list's RRF weight for this query
 
 
 class _Stopwatch:
@@ -109,7 +110,7 @@ def search(
     now: datetime | None = None,
     limit: int | None = None,
 ) -> SearchResponse:
-    """Parse → BM25 + all-terms + dense + gated CLIP → collapse to file → RRF → snippet.
+    """Parse → BM25 + all-terms + dense + gated CLIP → collapse to file → RRF (with the visual-query rule) → snippet.
 
     Pass prebuilt `text_index` / `image_index` to avoid reloading vectors on every query (the UI does; the CLI
     needn't). The CLIP text model loads only when the index holds image vectors.
@@ -159,7 +160,14 @@ def search(
              "clip": [(file_id, None) for file_id, _ in gated.hits]}
     lists = {name: ranked for name, ranked in lists.items() if cfg.weights.get(name, 1.0) > 0}
     weights = {**cfg.weights, "clip": cfg.weights.get("clip", 1.0) * gated.weight_factor}
-    fused = rrf(lists, cfg.rrf_k, weights)[:limit]
+    # Visual-query rule (SPEC §7.4): no file holds every word, so BM25 has only partial matches, and CLIP has a
+    # strong outlier. Without it, any file in two lists (2/61) beats CLIP's #1 alone (1/61), however strong.
+    visual = bool(gated.strong) and not all_hits and gated.weight_factor == 1.0
+    boosts: dict[str, dict[int, float]] = {}
+    if visual:
+        weights["bm25"] = weights.get("bm25", 1.0) * cfg.visual_bm25_factor
+        boosts["clip"] = dict.fromkeys(gated.strong, cfg.visual_clip_factor)
+    fused = rrf(lists, cfg.rrf_k, weights, boosts)[:limit]
     sw.lap("fuse")
 
     # Snippet chunk: the one holding every term if any, else BM25's best for the file, else dense's.
@@ -178,6 +186,6 @@ def search(
         for f in fused
     ]
     sw.lap("hydrate")
-    clip_info = {"candidates": gated.candidates, "kept": len(gated.hits), "gated": gated.gated,
-                 "weight": weights["clip"]}
-    return SearchResponse(query, pq, results, sw.ms, clip_info)
+    clip_info = {"candidates": gated.candidates, "kept": len(gated.hits), "strong": len(gated.strong),
+                 "gated": gated.gated, "weight": weights["clip"], "visual": visual}
+    return SearchResponse(query, pq, results, sw.ms, clip_info, weights)

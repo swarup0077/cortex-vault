@@ -100,6 +100,19 @@ class Config:
     # pairs scored 0.265-0.326, non-matching ones up to 0.258 bar one at 0.275. Tune with the eval in M6.
     clip_min_cosine: float = 0.26
     clip_code_weight: float = 0.5  # CLIP's RRF weight is multiplied by this for quoted or code-like queries
+    # Visual-query rule (SPEC §7.4): when no file holds every content word (the all-terms list is empty), the query
+    # is neither quoted nor code-like, and CLIP's top hit is a strong outlier, BM25's weight is multiplied by
+    # visual_bm25_factor and each *strong* CLIP hit's by visual_clip_factor; weaker gated hits keep the normal
+    # weight. CLIP's #1 then scores 2/61, above the 0.5/61 + 1/61 of a file that only BM25 #1 and dense #1 found.
+    # Strong: z >= clip_strong_z, or with fewer than clip_gate_min_candidates images, cosine >= clip_strong_cosine.
+    # All provisional (bench/calibrate.py rule: 12 drawn scenes, 35 paraphrase queries, real CLIP and bge). With
+    # the rule off, 1 of 12 scenes was #1 (a file sharing one word with the query beat it). At z 3.25: 10/12 among
+    # 36 images and 11/12 among 200, for no paraphrase #1 lost at 36 and one at 200 (every level 3.0-4.0 lost
+    # that one). Under 20 images, cosine 0.28: 12/12, and the rule fired on no paraphrase.
+    clip_strong_z: float = 3.25
+    clip_strong_cosine: float = 0.28
+    visual_bm25_factor: float = 0.5
+    visual_clip_factor: float = 2.0
     snippet_chars: int = 200
     max_results: int = 20
 

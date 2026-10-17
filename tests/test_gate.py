@@ -65,6 +65,26 @@ def test_few_candidates_keep_only_hits_above_the_min_cosine() -> None:
     assert len(gate(ids(4), scores, Q, Config(clip_min_cosine=0.0)).hits) == 4
 
 
+def test_strong_hits_are_the_ones_far_above_the_rest() -> None:
+    """The visual-query rule boosts only hits with z >= clip_strong_z; weaker gated hits are kept but not strong."""
+    scores = np.full(100, 0.20)
+    scores[:3] = [0.40, 0.30, 0.28]
+    g = gate(ids(100), scores, Q, CFG)
+    z = (scores - scores.mean()) / scores.std()
+    assert [f for f, _ in g.hits] == [100, 101, 102] and all(z[:3] >= CFG.clip_gate_z)
+    assert g.strong == frozenset(100 + i for i in range(3) if z[i] >= CFG.clip_strong_z)
+    assert gate(ids(100), scores, Q, Config(clip_strong_z=5.0)).strong == {100}  # z ≈ 8.4, 4.1, 3.3
+    assert gate(ids(100), scores, Q, Config(clip_strong_z=float(z[2]))).strong == {100, 101, 102}  # inclusive
+
+
+def test_few_candidates_are_strong_by_cosine() -> None:
+    scores = np.array([0.31, 0.29, 0.27, 0.20])
+    g = gate(ids(4), scores, Q, CFG)
+    assert [f for f, _ in g.hits] == [100, 101, 102]  # >= clip_min_cosine
+    assert g.strong == {f for f, s in g.hits if s >= CFG.clip_strong_cosine}
+    assert gate(ids(4), scores, Q, Config(clip_strong_cosine=0.30)).strong == {100}
+
+
 def test_ties_keep_file_id_order() -> None:
     g = gate(ids(3), np.array([0.27, 0.3, 0.3]), Q, CFG)
     assert [f for f, _ in g.hits] == [101, 102, 100]

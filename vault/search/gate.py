@@ -2,7 +2,8 @@
 
 CLIP ranks every image for every query, even `error 0x80070005`. In RRF its rank 1 counts as much as BM25's.
 The gate keeps an image only when it scores well above the other candidates, and halves CLIP's weight for
-quoted or code-like queries, where exact text is what matters.
+quoted or code-like queries, where exact text is what matters. It also marks the hits that stand out strongly,
+for the engine's visual-query rule (SPEC §7.4).
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ class Gated:
     gated: bool  # the z-score filter ran (False: too few candidates, the top few were kept as they are)
     weight_factor: float  # multiplies CLIP's RRF weight
     candidates: int
+    strong: frozenset[int] = frozenset()  # hits that are strong outliers (the visual-query rule, SPEC §7.4)
 
 
 def is_code_like(text: str) -> bool:
@@ -44,10 +46,12 @@ def gate(ids: np.ndarray, scores: np.ndarray, pq: ParsedQuery, cfg: Config) -> G
     order = np.argsort(-scores, kind="stable")  # ties keep the given (file id) order
     if n < cfg.clip_gate_min_candidates:  # too few for a z-score: the top few, if similar enough at all
         keep = [i for i in order[: cfg.clip_gate_fallback_top] if scores[i] >= cfg.clip_min_cosine]
-        return Gated([(int(ids[i]), float(scores[i])) for i in keep], False, factor, n)
+        strong = frozenset(int(ids[i]) for i in keep if scores[i] >= cfg.clip_strong_cosine)
+        return Gated([(int(ids[i]), float(scores[i])) for i in keep], False, factor, n, strong)
     std = float(scores.std())
     if std == 0.0:  # every image scores the same: none stands out
         return Gated([], True, factor, n)
     z = (scores - scores.mean()) / std
     keep = [i for i in order if z[i] >= cfg.clip_gate_z][: cfg.clip_gate_max]
-    return Gated([(int(ids[i]), float(scores[i])) for i in keep], True, factor, n)
+    strong = frozenset(int(ids[i]) for i in keep if z[i] >= cfg.clip_strong_z)
+    return Gated([(int(ids[i]), float(scores[i])) for i in keep], True, factor, n, strong)

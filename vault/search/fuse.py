@@ -25,15 +25,20 @@ def collapse(hits: Sequence[Hit]) -> list[tuple[int, int]]:
 
 
 def rrf(
-    lists: Mapping[str, Sequence[tuple[int, int]]], k: int = 60, weights: Mapping[str, float] | None = None
+    lists: Mapping[str, Sequence[tuple[int, int]]], k: int = 60, weights: Mapping[str, float] | None = None,
+    boosts: Mapping[str, Mapping[int, float]] | None = None,
 ) -> list[Fused]:
-    """score(f) = Σ_r w_r / (k + rank_r(f)); a file missing from a list contributes 0 for it."""
+    """score(f) = Σ_r w_r · b_r(f) / (k + rank_r(f)); a file missing from a list contributes 0 for it.
+
+    `boosts[list][file_id]` multiplies one file's weight in one list (default 1); its rank is unchanged.
+    """
     fused: dict[int, Fused] = {}
     for name, ranked in lists.items():
         w = (weights or {}).get(name, 1.0)
+        boost = (boosts or {}).get(name, {})
         for rank, (file_id, chunk_id) in enumerate(ranked, start=1):
             f = fused.setdefault(file_id, Fused(file_id, 0.0))
-            f.score += w / (k + rank)
+            f.score += w * boost.get(file_id, 1.0) / (k + rank)
             f.ranks[name] = rank
             f.chunks[name] = chunk_id
     return sorted(fused.values(), key=lambda f: (-f.score, min(f.ranks.values()), f.file_id))

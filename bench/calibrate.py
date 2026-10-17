@@ -1,7 +1,8 @@
 """Calibrate the provisional search thresholds on generated data (CLAUDE.md, SPEC §9 tuning rule).
 
     python bench/calibrate.py dense     # dense_min_cosine: bge cosines of matching vs unrelated pairs
-    python bench/calibrate.py clip      # clip_strong_z / clip_strong_cosine: CLIP's top hit, matching vs not
+    python bench/calibrate.py clip      # CLIP's top hit (z and cosine): drawn scenes vs queries no picture answers
+    python bench/calibrate.py rule      # clip_strong_z / clip_strong_cosine end to end: scene and paraphrase recall
 
 Each prints a summary and writes every score to bench/generated/calibrate_<name>.json. Nothing here comes from
 anyone's personal files: the texts are written below and the pictures are drawn by `scenes.py`. The values in
@@ -271,8 +272,97 @@ def clip() -> dict:
     return {"summary": summary, "rows": rows}
 
 
+# ---------------------------------------------------------------- rule: the visual-query rule end to end
+
+# One text file per scene query that shares a word with it but isn't about it: the real-file failure pattern
+# (a file matching 1-2 common words through BM25 and dense outranked CLIP's strong hit).
+WEAK_WORD_DOCS = {
+    "sunset": "Train to Goa leaves at 6 am; pack sunscreen and a hat for the beach.",
+    "chess": "The chess club meets on Thursdays in the library; bring your own board.",
+    "field": "Fill in the blue form and return it to the field office by Friday.",
+    "mountains": "The mountains trip is cancelled; refunds go out next week.",
+    "moon": "Night shift starts at 10 pm; sign in at the front desk.",
+    "dice": "Book a table for four at 8 pm under the name Rao.",
+    "traffic": "Traffic on the ring road is heavy; leave by 7 to catch the flight.",
+    "apple": "Apple ID verification code: enter it within ten minutes.",
+    "house": "House rules: no shoes inside, and the last one out locks the door.",
+    "rainbow": "Sky Broadband: your bill for October is ready to view.",
+    "chart": "Bar exam results are published on the council website on Monday.",
+    "smiley": "Face ID failed; enter your passcode to continue.",
+}
+STRONG_Z = [3.0, 3.25, 3.5, 3.75, 4.0, None]  # None: the rule never fires (today's ranking)
+STRONG_COS = [0.27, 0.28, 0.29, 0.30, None]
+
+
+class _NoOcr:
+    """Images stay text-free: the rule is about CLIP against the text files."""
+
+    name = "no-ocr"
+
+    def read(self, image, *, use_cls=None):
+        return []
+
+
+def _rank(results, filename: str) -> int | None:
+    return next((i for i, r in enumerate(results, start=1) if r.filename == filename), None)
+
+
+def _library(root: Path, n_extra: int) -> dict[str, str]:
+    """Write the files under neutral names (a name like `sunset.png` would match its query through the path
+    chunk) and return {content name: filename}."""
+    root.mkdir(parents=True)
+    files: dict[str, str] = {}
+    for i, (name, text) in enumerate({**DOCS, **{f"weak-{k}": v for k, v in WEAK_WORD_DOCS.items()}}.items()):
+        files[name] = f"doc_{i:03}.txt"
+        (root / files[name]).write_text(text, encoding="utf-8")
+    names, images = _clip_collection(n_extra)
+    for i, (name, img) in enumerate(zip(names, images)):
+        files[name] = f"IMG_{i:04}.png"
+        img.save(root / files[name])
+    return files
+
+
+def rule() -> dict:
+    import shutil
+    from dataclasses import replace
+
+    import scenes
+    from vault import db
+    from vault.ingest.pipeline import index_paths
+    from vault.search.engine import search
+
+    models.set_ocr_engine(_NoOcr())
+    rows, summary = [], {}
+    for n_extra, levels, field in ((24, STRONG_Z, "clip_strong_z"), (188, STRONG_Z, "clip_strong_z"),
+                                   (4, STRONG_COS, "clip_strong_cosine")):
+        work = OUT / f"rule_{n_extra}"
+        shutil.rmtree(work, ignore_errors=True)
+        files = _library(work / "files", n_extra)
+        base = Config(data_dir=work / "data")
+        conn = db.connect(base.db_path)
+        index_paths(conn, [work / "files"], base)
+        n_images = len(scenes.SCENES) + n_extra
+        table = {}
+        for level in levels:
+            cfg = replace(base, **{field: level if level is not None else float("inf")})
+            scene_r = [_rank(search(conn, q, cfg).results, files[name]) for name, _, q in scenes.SCENES]
+            para_r = [_rank(search(conn, q, cfg).results, files[target]) for q, target, _ in PAIRS]
+            fired = sum(search(conn, q, cfg).clip["visual"] for q, _, _ in PAIRS)
+            table[str(level or "off")] = {
+                "scene_R@1": sum(r == 1 for r in scene_r), "scene_R@5": sum(r is not None and r <= 5 for r in scene_r),
+                "para_R@1": sum(r == 1 for r in para_r),
+                "para_MRR": round(sum(1 / r for r in para_r if r) / len(para_r), 3),
+                "rule_fired_on_paraphrases": fired,
+            }
+            rows.append({"images": n_images, field: level, "scene_ranks": scene_r, "para_ranks": para_r})
+        conn.close()
+        summary[f"{n_images} images ({len(scenes.SCENES)} scenes), {field}"] = table
+    summary["queries"] = {"scenes": len(scenes.SCENES), "paraphrases": len(PAIRS)}
+    return {"summary": summary, "rows": rows}
+
+
 def main(argv: list[str]) -> None:
-    jobs = {"dense": dense, "clip": clip}
+    jobs = {"dense": dense, "clip": clip, "rule": rule}
     if not argv or argv[0] not in jobs:
         sys.exit(f"usage: python bench/calibrate.py {{{'|'.join(jobs)}}}")
     out = jobs[argv[0]]()

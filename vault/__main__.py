@@ -110,6 +110,7 @@ def cmd_search(console: Console, conn: sqlite3.Connection, cfg: Config, args: ar
     if args.debug:
         console.print(f"[magenta]parsed={resp.parsed}[/]")
         console.print(f"[magenta]clip={resp.clip}[/]")
+        console.print(f"[magenta]weights={resp.weights}[/]")
         console.print(f"[magenta]timings ms={resp.timings_ms} total={sum(resp.timings_ms.values()):.1f}[/]")
     return 0
 

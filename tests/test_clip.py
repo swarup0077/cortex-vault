@@ -67,7 +67,7 @@ def test_visual_match_has_no_snippet_and_a_badge(conn, cfg, fake_embedder, tmp_p
     assert r.filename == "IMG_1.jpg" and r.ranks["clip"] == 1 and r.ranks["bm25"] is None
     assert r.badges == ["visual match"] and r.snippet_html == "" and r.thumb_url.startswith("thumbs/")
     # < 20 images: the top 5, but only those at least clip_min_cosine similar (green and blue score 0)
-    assert resp.clip == {"candidates": 3, "kept": 1, "gated": False, "weight": 1.0}
+    assert resp.clip == {"candidates": 3, "kept": 1, "strong": 1, "gated": False, "weight": 1.0, "visual": True}
 
 
 def test_text_free_photo_stays_out_of_a_text_query(conn, cfg, fake_embedder, tmp_path) -> None:
@@ -78,7 +78,7 @@ def test_text_free_photo_stays_out_of_a_text_query(conn, cfg, fake_embedder, tmp
     index_paths(conn, [root], cfg)
     resp = search(conn, "electricity invoice", cfg)
     assert [r.filename for r in resp.results] == ["bills.txt"]
-    assert resp.clip == {"candidates": 1, "kept": 0, "gated": False, "weight": 1.0}
+    assert resp.clip == {"candidates": 1, "kept": 0, "strong": 0, "gated": False, "weight": 1.0, "visual": False}
 
 
 def test_unrelated_text_file_stays_out_of_a_visual_query(conn, cfg, fake_embedder, tmp_path) -> None:
@@ -115,8 +115,82 @@ def test_gate_keeps_clip_out_of_an_error_code_query(conn, cfg, fake_embedder, fa
     index_paths(conn, [root], cfg)
     resp = search(conn, "0x80070005", cfg)
     assert resp.results[0].filename == "Screenshot (7).png"
-    assert resp.clip == {"candidates": 26, "kept": 0, "gated": True, "weight": 0.5}
+    assert resp.clip == {"candidates": 26, "kept": 0, "strong": 0, "gated": True, "weight": 0.5, "visual": False}
     assert all(r.ranks["clip"] is None for r in resp.results)
+
+
+# ---------------------------------------------------------------- the visual-query rule (SPEC §7.4)
+
+
+def car_scene(root: Path, doc: str) -> None:
+    """A red photo among 24 grey ones (its z is about 4.9, a strong outlier) and one text file."""
+    photo(root, "IMG_0001.jpg", "red")  # a neutral name: the path chunk mustn't match the query
+    for i in range(24):
+        photo(root, f"IMG_{i + 100}.jpg", "gray", shade=i)
+    (root / "note.txt").write_text(doc, encoding="utf-8")
+
+
+def weak_dense(cfg):
+    """No dense floor: the fake embedder's cosines aren't on bge's scale, and the rule must hold for a weak dense
+    hit that a real floor lets through."""
+    from dataclasses import replace
+
+    return replace(cfg, dense_min_cosine=0.0)
+
+
+def test_strong_visual_match_beats_a_partial_word_match(conn, cfg, fake_embedder, tmp_path) -> None:
+    """Owner's real-file M3 test: when no file holds all the query's words, a file matching some of them through
+    BM25 and dense (2/61) outranked CLIP's strong #1 (1/61)."""
+    cfg = weak_dense(cfg)
+    car_scene(tmp_path / "c", "The car was parked outside the station all night.")
+    index_paths(conn, [tmp_path / "c"], cfg)
+    resp = search(conn, "red car parked outside", cfg)
+    top, note = resp.results[0], next(r for r in resp.results if r.filename == "note.txt")
+    assert top.filename == "IMG_0001.jpg" and top.ranks["clip"] == 1
+    assert note.ranks["bm25"] == 1 and note.ranks["dense"] == 1 and note.ranks["all_terms"] is None
+    assert resp.clip["visual"] and resp.clip["strong"] == 1 and resp.weights["bm25"] == 0.5
+    assert top.rrf_score == pytest.approx(2 / 61) and note.rrf_score == pytest.approx(0.5 / 61 + 1 / 61)
+
+
+@pytest.mark.parametrize("query, doc", [
+    ("red car parked outside", "The red car was parked outside the station all night."),  # a file holds every word
+    ("red car AB12CD parked outside", "The car AB12CD was parked outside the station."),  # code-like: text wins
+])  # (quoted phrases halve CLIP too, test_gate.py; the parser doesn't extract them until it's picked, §7.1)
+def test_visual_rule_stays_off(conn, cfg, fake_embedder, tmp_path, query, doc) -> None:
+    cfg = weak_dense(cfg)
+    car_scene(tmp_path / "c", doc)
+    index_paths(conn, [tmp_path / "c"], cfg)
+    resp = search(conn, query, cfg)
+    assert not resp.clip["visual"] and resp.weights["bm25"] == 1.0
+    assert resp.results[0].filename == "note.txt"
+
+
+def test_visual_rule_needs_a_strong_hit(conn, cfg, fake_embedder, tmp_path) -> None:
+    from dataclasses import replace
+
+    cfg = replace(weak_dense(cfg), clip_strong_z=5.0)  # the red photo's z is ~4.9: gated, not strong
+    car_scene(tmp_path / "c", "The car was parked outside the station all night.")
+    index_paths(conn, [tmp_path / "c"], cfg)
+    resp = search(conn, "red car parked outside", cfg)
+    assert resp.clip["kept"] == 1 and resp.clip["strong"] == 0 and not resp.clip["visual"]
+    assert resp.results[0].filename == "note.txt"
+
+
+def test_visual_rule_boosts_only_the_strong_hits(conn, cfg, fake_embedder, tmp_path, monkeypatch) -> None:
+    """A weaker gated hit keeps the normal weight, so a long list of photos can't bury a matching document."""
+    from vault.search import engine
+    from vault.search.gate import Gated
+
+    root = tmp_path / "c"
+    for name in ("IMG_A.jpg", "IMG_B.jpg"):
+        photo(root, name, "red", shade=len(name) + (name == "IMG_B.jpg"))
+    index_paths(conn, [root], cfg)
+    ids = dict(conn.execute("SELECT substr(p.path, -9), p.file_id FROM paths p").fetchall())
+    a, b = ids["IMG_A.jpg"], ids["IMG_B.jpg"]
+    monkeypatch.setattr(engine, "gate", lambda *args: Gated([(a, 0.31), (b, 0.27)], True, 1.0, 30, frozenset({a})))
+    by_name = {r.filename: r for r in search(conn, "red", cfg).results}
+    assert by_name["IMG_A.jpg"].rrf_score == pytest.approx(2 / 61)
+    assert by_name["IMG_B.jpg"].rrf_score == pytest.approx(1 / 62)
 
 
 def test_clip_retriever_applies_the_filters_first(conn, cfg, fake_embedder, tmp_path) -> None:

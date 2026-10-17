@@ -77,7 +77,12 @@ marked provisional in `vault/config.py`, and tuned in M6 on the eval's `tune` ha
 ```
 python bench/calibrate.py dense    # dense_min_cosine: bge cosines, matching vs unrelated pairs
 python bench/calibrate.py clip     # CLIP's top hit (z and cosine): drawn scenes vs queries no picture answers
+python bench/calibrate.py rule     # clip_strong_z / clip_strong_cosine end to end: scene vs paraphrase recall
 ```
+
+`rule` indexes a generated library (the 24 paraphrase texts, 12 texts that share one word with a scene query,
+the 12 scenes and 24 or 188 distractor images, no OCR) into `bench/generated/rule_*` with the real models, then
+sweeps the strong levels. It takes a few minutes on the dev laptop.
 
 Each prints a summary and writes every score to `bench/generated/calibrate_<name>.json`. The texts are written
 in `calibrate.py`; the pictures are drawn by `scenes.py`. Both need the models cached (`HF_HUB_OFFLINE=1` works

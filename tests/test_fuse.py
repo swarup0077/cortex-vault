@@ -25,6 +25,13 @@ def test_rrf_weights_and_ties() -> None:
     assert [f.file_id for f in tie] == [4, 5]  # equal score and rank: lower id first, deterministic
 
 
+def test_rrf_boost_multiplies_one_file_in_one_list() -> None:
+    fused = rrf({"clip": [(1, None), (2, None)], "dense": [(3, 30)]}, k=60, boosts={"clip": {1: 2.0}})
+    by_id = {f.file_id: f for f in fused}
+    assert by_id[1].score == pytest.approx(2 / 61) and by_id[2].score == pytest.approx(1 / 62)
+    assert by_id[1].ranks == {"clip": 1} and by_id[3].score == pytest.approx(1 / 61)
+
+
 def test_all_terms_list_lifts_the_exact_match() -> None:
     """Owner's pattern (a): screenshot S is BM25 #1 but missing from dense; transcript T is BM25 #2 and dense #1."""
     lists = {"bm25": [(1, 10), (2, 20)], "dense": [(2, 21)]}
