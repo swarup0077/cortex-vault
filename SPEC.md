@@ -80,7 +80,7 @@ SEARCH
 | Reranker | `fastembed` `TextCrossEncoder` → `Xenova/ms-marco-MiniLM-L-6-v2` | Togglable |
 | OCR | `rapidocr` + `onnxruntime` | Since v2 the inference engine is installed separately. Returns a box, text and score per line. |
 | PDF | `pymupdf` | Text per page, image positions (`get_image_info`), clipped renders, `search_for` for highlight rectangles |
-| Word / PowerPoint | `python-docx`; `.pptx` slide/notes XML read straight from the zip (stdlib) | Pure Python, no Office install needed. python-pptx loads every part, media included, into memory, so it's used only to build test fixtures |
+| Word / PowerPoint | Document, slide and notes XML read straight from the zip (stdlib `zipfile` + `ElementTree`) | No Office install needed. python-docx and python-pptx load every part, media included, into memory, so they're used only to build test fixtures and as the equivalence reference |
 | Images / EXIF | `Pillow` (+ optional `pillow-heif` for HEIC) | EXIF IFD `0x8769`, GPS IFD `0x8825` |
 | Storage | SQLite (stdlib) with FTS5; vectors stored as float32 BLOBs and loaded into NumPy | No vector DB (§11) |
 | UI | `gradio` (Blocks + custom CSS) | Runs unchanged locally, on HF Spaces or in Docker |
@@ -185,7 +185,7 @@ A rule-based function in `classify.py` returns `(kind, kind_reason)`. Each rule 
 - Store OCR line boxes in page points. Encrypted PDFs → `skipped`.
 
 **Office and text**
-- `.docx` (python-docx): paragraphs in order, then table cells row by row. Word doesn't store page numbers, so `page` is NULL.
+- `.docx` (`word/document.xml` parsed straight from the zip; media is never read): body paragraphs in order, then table cells row by row, with the same text as python-docx (tabs, line breaks, hyperlinks, merged cells). Word doesn't store page numbers, so `page` is NULL.
 - `.pptx` (slide, notes and core-properties XML parsed straight from the zip; media is never read): per slide, the title, every text frame (including inside groups), tables and speaker notes; `page` = slide number. Pictures inside slides are not OCR'd (known limitation, §17).
 - `.txt` / `.md`: read as UTF-8 with `errors="replace"`.
 - **Zip guard:** `.docx` and `.pptx` are zip archives. It targets zip bombs, not big decks. Before parsing, refuse a file if any member over 1 MB unpacked has a compression ratio above 100 (media compresses about 1:1, so a bomb can't hide among it), or if its XML parts (`.xml`, `.rels`; media not counted) exceed 50 MB unpacked. An absolute cap on total unpacked size (`zip_max_total`) is off in local mode and set only for demo uploads.
@@ -621,7 +621,25 @@ The plan has one Claude Code session per milestone, with a commit at the end of 
 | 17 Oct | `models.py` lets tests inject a deterministic fake text embedder; only search-quality tests load bge (marked `slow`) | Fast pipeline tests without model loads |
 | 17 Oct | Until M5 the parser passes text through; retrievers already accept kind/date filters | M5 only fills in the parser |
 | 17 Oct | `vault reindex` added in M1 (wipe the index, re-index the known roots) | The model-mismatch message points users to it |
+| 17 Oct | Path chunks are refreshed in one pass at the end of each run (compare each file's expected `path` text with the stored one; re-embed only the stale ones, in one batch), not whenever a path changes | Refreshing on every path change embedded a rename twice: once when the new path linked, again when the sweep dropped the old one. The end-of-run pass embeds once and also heals a path chunk left stale by a crash between those steps |
+| 17 Oct | Zip guard targets bombs, not big files: refuse a member over 1 MB unpacked with ratio > 100, or XML parts > 50 MB; the absolute cap (`zip_max_total`) applies only to demo uploads. `.pptx` text is read from the slide/notes XML in the zip instead of python-pptx (§6.3) | Real-world test: a normal 287 MB deck with embedded video was skipped by the old 200 MB cap. python-pptx loads all media into memory: peak 288 MB vs 0.2 MB reading the XML directly, with identical text on both real decks |
+| 17 Oct | `.docx` text is also read straight from `word/document.xml` (body paragraphs, then table rows), matching python-docx's text rules: tabs, text-wrapping breaks, hyperlinks, cells merged across or down repeating their text | Same reason as `.pptx`: python-docx loads all media into memory. Identical output to python-docx on the test fixtures and on both real test docx files (824 and 10 segments). Like python-docx, text in content controls (`w:sdt`) and text boxes is not read |
+| 17 Oct | Embedding defaults unchanged: fastembed's quantized `Qdrant/bge-small-en-v1.5-onnx-Q`, ONNX Runtime's default thread count, batch 32 | No configuration was a clear win; see the benchmark below. The first real-world run did not re-download the model (cache dated before the run); its 83 s for 812 chunks (9.8 chunks/s) was all embedding |
+| 17 Oct | **Embedding benchmark** (laptop: i5-1340P, 4 P-cores + 8 E-cores, 16 threads, Balanced power plan, on AC). 128 chunks of ~700 chars from SPEC.md, model cached, warm-up batch first, median of 3 runs, one process per config, nothing else running. Chunks/sec: **quantized, default threads, batch 32:** 15.8 / 17.4 / 10.4 / 9.1 / 9.7 / 15.9 / 10.0 across separate runs. **Threads** (quantized, batch 32; best of 2): 1 → 1.6, 2 → 11.3, 4 → 7.9, 6 → 10.7, 8 → 12.3, 12 → 10.6, 16 → 10.3. **P-cores only** (affinity to CPUs 0–7), quantized: 4 threads 11.8, 8 threads 14.0; with Windows power throttling (EcoQoS) turned off for the process: 13.4 and 14.9. **Full-precision** `BAAI/bge-small-en-v1.5` `onnx/model.onnx`: default 11.4 / 18.1 / 11.5; throttling off 17.9; P-cores 4/8 threads 10.5 / 13.6; P-cores + throttling off 14.3 / 16.4. **Batch** (quantized, default threads): 8 → 18.8 / 8.9 / 8.6 / 8.6 (interleaved with batch 32 → 9.7 / 15.9 / 10.0); 128 → 9.3 | Every config falls in the same ~9–18 band; repeated runs of one config swing between a ~9 and a ~17 chunks/s state, so laptop power/thermal state matters more than any setting tested. Embedding is compute-bound (~7 GFLOP per 160-token chunk on bge-small), so the fix for slow first indexes is two-phase indexing (open item g), not tuning |
 | | Measured ingest speed (files/sec per kind) | _fill in at M2_ |
+
+### Open items
+
+| # | Item | When |
+|---|---|---|
+| a | Common words ("the", "is", "where") in the BM25 OR-query match nearly every chunk and add noise to RRF ranks. Decide whether to drop them when other terms remain, using the eval | M6 |
+| b | The UI keeps one `VectorIndex` and rebuilds it after indexing; `search()` already accepts a prebuilt `text_index` | M4 |
+| c | Date tests must set the Office `created` property explicitly: python-docx/python-pptx templates carry a 2013 creation date | M3 |
+| d | 3 of the owner's real test PDFs have no text layer (scanned/handwritten): use them as real-world cases for scanned-page OCR | M2 |
+| e | The path chunk includes the file extension, so a query containing "pdf" (as in probability density) matched every PDF filename. Consider dropping the extension from the path-chunk text | M5 or M6 |
+| f | Dense top-100 chunks can be crowded out by one long document (in the real-world test only one book appeared in the dense list). Consider retrieving more chunks before collapsing to files; measure in the eval | M6 |
+| g | Two-phase indexing: commit text + FTS per file first, then compute embeddings in a background pass; dense search skips chunks without vectors; the UI shows "searchable / meaning-ready" progress. Matters most for demo uploads | M7 at the latest |
+| h | Re-run the embedding benchmark on the Azure VM (different CPU, 2 vCPU; demo uploads are indexed there) and set its thread/batch defaults separately if needed. Same method as the laptop benchmark above: model cached, 128 × ~700-char chunks, warm-up batch, median of 3, one process per config | M4 |
 
 ---
 
