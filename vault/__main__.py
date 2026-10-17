@@ -66,6 +66,7 @@ def _print_report(console: Console, rep: IndexReport) -> None:
         ("errors / skipped", len(rep.errors)), ("OCR'd images + PDF pages", rep.ocr_images),
         ("  of which no text", rep.ocr_empty),
         ("older files brought up to date", rep.backfilled),
+        ("images whose kind CLIP decided", rep.reclassified), ("images re-OCR'd (angle setting)", rep.reocr),
     ]:
         t.add_row(label, str(value))
     for stage, secs in rep.timings.items():

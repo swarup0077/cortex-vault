@@ -194,6 +194,36 @@ def noise_photo(seed: int, size: tuple[int, int] = (W, H)) -> Image.Image:
     return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
 
 
+def sign_photo(seed: int, size: tuple[int, int] = (1600, 1200)) -> Image.Image:
+    """A photographed notice: a noisy, shaded wall with a light sign of large text, slightly blurred."""
+    rnd = random.Random(seed)
+    w, h = size
+    base = np.asarray(noise_photo(seed, size), np.float32) * 0.6 + 40
+    img = Image.fromarray(np.clip(base, 0, 255).astype(np.uint8))
+    d = ImageDraw.Draw(img)
+    x0, y0 = int(w * rnd.uniform(0.15, 0.3)), int(h * rnd.uniform(0.2, 0.35))
+    x1, y1 = int(w * rnd.uniform(0.7, 0.85)), int(h * rnd.uniform(0.6, 0.75))
+    d.rounded_rectangle((x0, y0, x1, y1), 20, fill=(235, 232, 220))
+    size_px = max(18, (y1 - y0) // 6)
+    for k in range(3):
+        d.text((x0 + size_px, y0 + size_px * (0.6 + 1.5 * k)), sentence(rnd, 3).upper(), fill=(20, 20, 20),
+               font=font(size_px))
+    return img.filter(ImageFilter.GaussianBlur(1.2))
+
+
+def text_page(seed: int, size: tuple[int, int] = (1080, 1350)) -> Image.Image:
+    """A plain page of text on white, like a screenshot of a document or a note."""
+    rnd = random.Random(seed)
+    w, h = size
+    img = Image.new("RGB", (w, h), "white")
+    d = ImageDraw.Draw(img)
+    y = 40
+    while y < h - 60:
+        d.text((40, y), sentence(rnd, rnd.randint(6, 10)), fill=(25, 25, 25), font=font(28))
+        y += 46
+    return img
+
+
 def desktop_screenshot(seed: int) -> Image.Image:
     return screenshot(seed)[0]
 

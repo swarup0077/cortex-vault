@@ -41,12 +41,17 @@ def clip_input(img: Image.Image, side: int) -> Image.Image:
                       Image.Resampling.BICUBIC)
 
 
-def extract_image(path: Path, cfg: Config, engine: models.OcrEngine | None = None, *, kind: str | None = None,
+def ocr_uses_cls(cfg: Config, screen_capture: bool) -> bool:
+    """Whether OCR runs the text-angle classifier: a known screen capture (by filename or as a PNG) skips it
+    unless `ocr_cls_screenshots` is set, since on-screen text is never upside down. Every other image keeps it."""
+    return cfg.ocr_cls_screenshots if screen_capture else cfg.ocr_use_cls
+
+
+def extract_image(path: Path, cfg: Config, engine: models.OcrEngine | None = None, *, screen_capture: bool = False,
                   image: Image.Image | None = None) -> Extracted:
-    """OCR an image (pass `image` if it's already loaded upright). Screenshots skip the text-angle classifier
-    unless `ocr_cls_screenshots` is set: on-screen text is never upside down."""
+    """OCR an image (pass `image` if it's already loaded upright). `screen_capture`: see `ocr_uses_cls`."""
     img = image if image is not None else load_upright(path)
-    use_cls = cfg.ocr_cls_screenshots if kind == "screenshot" else None
+    use_cls = cfg.ocr_cls_screenshots if screen_capture else None  # None: the engine's configured default
     t0 = time.perf_counter()
     lines = reading_order(ocr_image(img, engine or models.ocr_engine(cfg), cfg, use_cls=use_cls), cfg)
     seconds = time.perf_counter() - t0

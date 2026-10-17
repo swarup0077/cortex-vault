@@ -78,6 +78,7 @@ marked provisional in `vault/config.py`, and tuned in M6 on the eval's `tune` ha
 python bench/calibrate.py dense    # dense_min_cosine: bge cosines, matching vs unrelated pairs
 python bench/calibrate.py clip     # CLIP's top hit (z and cosine): drawn scenes vs queries no picture answers
 python bench/calibrate.py rule     # clip_strong_z / clip_strong_cosine end to end: scene vs paraphrase recall
+python bench/calibrate.py kind     # clip_screenshot_margin: generated screen captures vs photo-like pictures
 ```
 
 `rule` indexes a generated library (the 24 paraphrase texts, 12 texts that share one word with a scene query,

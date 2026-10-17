@@ -99,13 +99,16 @@ class FakeClipVision:
 
 
 class FakeClipText:
-    """Query side of the fake CLIP: the colours named in the text; no colour words gives a zero vector."""
+    """Query side of the fake CLIP: the colours named in the text; no colour words gives a zero vector. For the
+    screenshot-vs-photo prompts it sees screens as white and photographs as grey."""
 
     name = "fake-clip"
     dim = len(COLOURS)
+    SYNONYMS = {"screenshot": "white", "photograph": "gray"}
 
     def embed_text(self, text: str) -> np.ndarray:
-        v = np.array([1.0 if c in re.findall(r"\w+", text.lower()) else 0.0 for c in COLOURS], np.float32)
+        words = {self.SYNONYMS.get(w, w) for w in re.findall(r"\w+", text.lower())}
+        v = np.array([1.0 if c in words else 0.0 for c in COLOURS], np.float32)
         n = np.linalg.norm(v)
         return v / n if n else v
 
@@ -222,6 +225,30 @@ def draw_sunset_beach(w: int = 640, h: int = 480) -> Image.Image:
     for y in range(int(h * 0.55), int(h * 0.78)):
         d.line([(0, y), (w, y)], fill=(30, 50, 110))
     d.rectangle((0, h * 0.78, w, h), fill=(220, 190, 140))
+    return img
+
+
+def draw_desktop_ui(w: int = 1600, h: int = 900) -> Image.Image:
+    """A desktop app window: dark title bar, grey sidebar of menu items, body text and an error dialog with an OK
+    button. Real CLIP reads it as a screenshot (SPEC §6.2 rule 4)."""
+    img = Image.new("RGB", (w, h), (243, 243, 243))
+    d = ImageDraw.Draw(img)
+    d.rectangle((0, 0, w, 40), fill=(32, 32, 32))
+    d.text((16, 11), "Settings - Workspace", fill=(240, 240, 240), font=font(15))
+    d.rectangle((0, 40, w // 6, h), fill=(228, 228, 228))
+    for i in range(min(14, (h - 80) // 34)):
+        d.text((24, 70 + i * 34), ["Home", "Accounts", "Network", "Display", "Storage", "Privacy", "Updates"][i % 7],
+               fill=(30, 30, 30), font=font(15))
+    y = 80
+    while y < h - 60:
+        d.text((w // 6 + 40, y), "Sync your settings across devices and keep backups of your files", fill=(30, 30, 30),
+               font=font(15))
+        y += 26
+    x0, y0 = w // 2, h // 2
+    d.rectangle((x0, y0, x0 + w // 3, y0 + h // 4), fill="white", outline=(160, 160, 160))
+    d.text((x0 + 20, y0 + 20), "Error", fill=(30, 30, 30), font=font(18))
+    d.text((x0 + 20, y0 + 60), "Operation failed with code 0x80070005.", fill=(30, 30, 30), font=font(15))
+    d.rectangle((x0 + w // 3 - 120, y0 + h // 4 - 50, x0 + w // 3 - 20, y0 + h // 4 - 15), fill=(0, 95, 184))
     return img
 
 

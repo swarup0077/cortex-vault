@@ -3,6 +3,7 @@
     python bench/calibrate.py dense     # dense_min_cosine: bge cosines of matching vs unrelated pairs
     python bench/calibrate.py clip      # CLIP's top hit (z and cosine): drawn scenes vs queries no picture answers
     python bench/calibrate.py rule      # clip_strong_z / clip_strong_cosine end to end: scene and paraphrase recall
+    python bench/calibrate.py kind      # clip_screenshot_margin: generated screen captures vs photo-like pictures
 
 Each prints a summary and writes every score to bench/generated/calibrate_<name>.json. Nothing here comes from
 anyone's personal files: the texts are written below and the pictures are drawn by `scenes.py`. The values in
@@ -361,8 +362,64 @@ def rule() -> dict:
     return {"summary": summary, "rows": rows}
 
 
+# ---------------------------------------------------------------- kind: screenshot vs photo by CLIP zero-shot
+
+# Sizes a forwarded file arrives at (WhatsApp resizes to 1600 px on the long side), plus camera and screen sizes.
+KIND_SIZES = [(720, 1600), (1600, 720), (1600, 900), (1200, 1600), (1600, 1200), (1080, 2400), (1920, 1080)]
+
+
+def _fit(img, size: tuple[int, int]):
+    """`img` scaled to cover `size` and centre-cropped to it, as a resize to a forwarded size would leave it."""
+    from PIL import Image
+
+    w, h = size
+    scale = max(w / img.width, h / img.height)
+    img = img.resize((max(w, round(img.width * scale)), max(h, round(img.height * scale))), Image.Resampling.BICUBIC)
+    left, top = (img.width - w) // 2, (img.height - h) // 2
+    return img.crop((left, top, left + w, top + h))
+
+
+def kind() -> dict:
+    import scenes
+    from vault.ingest.classify import PHOTO_PROMPTS, SCREENSHOT_PROMPTS, clip_kind, prompt_vectors
+    from vault.ingest.extract_image import clip_input
+
+    cfg = Config()
+    vision, text = models.clip_vision(cfg), models.clip_text(cfg)
+    S, P = prompt_vectors(text.embed_text, SCREENSHOT_PROMPTS), prompt_vectors(text.embed_text, PHOTO_PROMPTS)
+    shots = [("desktop", lambda i, sz: scenes.desktop_screenshot(i)), ("chat", lambda i, sz: scenes.phone_chat(i, sz)),
+             ("code", lambda i, sz: scenes.code_editor(i, sz)), ("text page", lambda i, sz: scenes.text_page(i, sz))]
+    photos = [("noise photo", lambda i, sz: scenes.noise_photo(i, sz)), ("sign photo", lambda i, sz: scenes.sign_photo(i, sz)),
+              ("scene", lambda i, sz: scenes.SCENES[i % len(scenes.SCENES)][1]())]
+    rows = []
+    for truth, makers in (("screenshot", shots), ("photo", photos)):
+        for label, make in makers:
+            for i, size in enumerate(KIND_SIZES * 2):  # two of each size, different seeds
+                img = _fit(make(2000 + i, size), size)
+                vec = vision.embed_images([clip_input(img, cfg.clip_side)])[0]
+                lead = float(np.mean(S @ vec) - np.mean(P @ vec))
+                rows.append({"truth": truth, "kind": label, "size": f"{size[0]}x{size[1]}", "lead": lead,
+                             "default_margin_says": clip_kind(vec, S, P, cfg.clip_screenshot_margin)[0]})
+    s_lead = [r["lead"] for r in rows if r["truth"] == "screenshot"]
+    p_lead = [r["lead"] for r in rows if r["truth"] == "photo"]
+    by_margin = {}
+    for m in np.round(np.arange(0.0, 0.0751, 0.005), 3):
+        right_s, right_p = int(sum(x >= m for x in s_lead)), int(sum(x < m for x in p_lead))
+        by_margin[str(float(m))] = {"screenshots_right": right_s, "photos_right": right_p,
+                             "balanced": round((right_s / len(s_lead) + right_p / len(p_lead)) / 2, 3)}
+    per_kind = {}
+    for r in rows:
+        per_kind.setdefault(f'{r["truth"]}: {r["kind"]}', []).append(r["lead"])
+    return {"summary": {
+        "model": vision.name, "prompts": {"screenshot": SCREENSHOT_PROMPTS, "photo": PHOTO_PROMPTS},
+        "screenshot_lead": stats(s_lead), "photo_lead": stats(p_lead),
+        "lead_by_kind": {k: stats(v) for k, v in per_kind.items()},
+        "right_by_margin": by_margin, "n": {"screenshots": len(s_lead), "photos": len(p_lead)},
+    }, "rows": rows}
+
+
 def main(argv: list[str]) -> None:
-    jobs = {"dense": dense, "clip": clip, "rule": rule}
+    jobs = {"dense": dense, "clip": clip, "rule": rule, "kind": kind}
     if not argv or argv[0] not in jobs:
         sys.exit(f"usage: python bench/calibrate.py {{{'|'.join(jobs)}}}")
     out = jobs[argv[0]]()

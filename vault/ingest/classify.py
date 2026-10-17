@@ -1,9 +1,14 @@
-"""Rule-based file kind (SPEC §6.2). Text formats go by extension; images by name, EXIF and size, in order."""
+"""File kind (SPEC §6.2). Text formats go by extension. Images go by name, camera EXIF and PNG, in order; any other
+image is a screenshot or a photo by what CLIP sees in it (`clip_kind`), with the old size rules as the fallback
+when CLIP can't run."""
 
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from pathlib import Path
+
+import numpy as np
 
 from vault.ingest.meta import ImageMeta, read_image_meta
 
@@ -30,6 +35,37 @@ SCREEN_SIZES = frozenset({
 PHONE_WIDTHS = frozenset({720, 1080, 1170, 1179, 1242, 1284, 1440})
 
 
+# Zero-shot prompts for images no rule decides (SPEC §6.2 rule 4): the mean cosine to each list is compared.
+# Three-prompt lists (phone, app, sign...) did no better on the generated set (bench/calibrate.py kind), so the
+# simplest pair stays.
+SCREENSHOT_PROMPTS = ("a screenshot of a computer or phone screen",)
+PHOTO_PROMPTS = ("a photograph",)
+
+
+def is_final(reason: str) -> bool:
+    """True when a rule decided the kind for good: a screenshot name, camera EXIF, a PNG, CLIP, or not an image.
+    Anything else (the size fallbacks, interim kinds) is decided by CLIP once the image has a vector."""
+    return not (reason == "default" or reason.startswith(("screen-size:", "tall-phone:", "interim:")))
+
+
+def known_screen_capture(reason: str) -> bool:
+    """A screenshot by its filename or as a PNG: on-screen text is never upside down, so OCR can skip the angle
+    classifier. Screenshots that only CLIP or a size rule found keep it: they may be forwarded photos."""
+    return reason.startswith("filename:") or reason == "png-no-exif"
+
+
+def clip_kind(image_vec: np.ndarray, screenshot_vecs: np.ndarray, photo_vecs: np.ndarray,
+              margin: float) -> tuple[str, str]:
+    """Screenshot if the image is at least `margin` closer (mean cosine) to the screenshot prompts than to the
+    photo ones. Vectors are L2-normalised CLIP vectors: one image, and one row per prompt."""
+    lead = float(np.mean(screenshot_vecs @ image_vec) - np.mean(photo_vecs @ image_vec))
+    return ("screenshot", "clip:screenshot") if lead >= margin else ("photo", "clip:photo")
+
+
+def prompt_vectors(embed_text, prompts: Sequence[str]) -> np.ndarray:
+    return np.stack([embed_text(p) for p in prompts])
+
+
 def classify(path: Path, meta: ImageMeta | None = None) -> tuple[str, str]:
     """Return `(kind, kind_reason)`. For images, pass `meta` if it's already read; otherwise it's read here."""
     ext = path.suffix.lower()
@@ -41,7 +77,12 @@ def classify(path: Path, meta: ImageMeta | None = None) -> tuple[str, str]:
 
 
 def classify_image(name: str, meta: ImageMeta | None) -> tuple[str, str]:
-    """The §6.2 image rules in order. `meta` is None for an unreadable image (name and extension rules only)."""
+    """The §6.2 image rules in order. `meta` is None for an unreadable image (name and extension rules only).
+
+    Only rules 1-3 are final. The size rules after them are the fallback for when CLIP can't run: a forwarded
+    photo has no camera EXIF and often a screen-like size (WhatsApp makes a 20:9 photo 720×1600), so CLIP decides
+    those images (`is_final`, `clip_kind`).
+    """
     for label, pat in SCREENSHOT_NAMES:
         if pat.match(name):
             return "screenshot", f"filename:{label}"

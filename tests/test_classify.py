@@ -5,8 +5,10 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+import numpy as np
+
 from conftest import camera_exif, save_image
-from vault.ingest.classify import classify
+from vault.ingest.classify import classify, clip_kind, is_final, known_screen_capture
 
 
 def img(tmp_path: Path, name: str, size=(640, 480), **save) -> Path:
@@ -79,3 +81,24 @@ def test_rule6_otherwise_photo(tmp_path, size) -> None:
 def test_unreadable_image_falls_back_to_name_and_extension(tmp_path, name, kind) -> None:
     (tmp_path / name).write_bytes(b"not an image")
     assert classify(tmp_path / name)[0] == kind
+
+
+# ---------------------------------------------------------------- CLIP decides what no rule does (rule 4, SPEC §6.2)
+
+
+@pytest.mark.parametrize("reason, final, capture", [
+    ("filename:snipping-tool", True, True), ("png-no-exif", True, True), ("exif:camera", True, False),
+    ("clip:screenshot", True, False), ("clip:photo", True, False), ("ext:.pdf", True, False),
+    ("screen-size:1600x900", False, False), ("tall-phone:720x1600", False, False), ("default", False, False),
+    ("interim:ext", False, False),
+])
+def test_which_reasons_are_final_and_which_skip_the_angle_classifier(reason, final, capture) -> None:
+    """Size rules are only the fallback until CLIP runs; only a name or PNG proves a screen capture."""
+    assert is_final(reason) is final and known_screen_capture(reason) is capture
+
+
+def test_clip_kind_compares_the_two_prompts() -> None:
+    s, p = np.array([[1.0, 0.0]]), np.array([[0.0, 1.0]])
+    assert clip_kind(np.array([0.8, 0.6]), s, p, 0.2) == ("screenshot", "clip:screenshot")  # leads by 0.2: inclusive
+    assert clip_kind(np.array([0.6, 0.8]), s, p, 0.0) == ("photo", "clip:photo")
+    assert clip_kind(np.array([0.8, 0.6]), s, p, 0.21) == ("photo", "clip:photo")

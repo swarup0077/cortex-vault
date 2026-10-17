@@ -113,6 +113,11 @@ class Config:
     clip_strong_cosine: float = 0.28
     visual_bm25_factor: float = 0.5
     visual_clip_factor: float = 2.0
+    # Screenshot vs photo for images no name, EXIF or PNG rule decides (SPEC §6.2): screenshot when the image's CLIP
+    # cosine to the screenshot prompt leads the photo prompt's by at least this. Provisional (bench/calibrate.py
+    # kind): on 56 generated screen captures and 42 photo-like pictures at forwarded sizes, 0.04 got 84% and 76%
+    # right, the best balance. Generated "photos" aren't photographs, so M6 checks it on the corpus's real ones.
+    clip_screenshot_margin: float = 0.04
     snippet_chars: int = 200
     max_results: int = 20
 

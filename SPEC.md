@@ -100,13 +100,14 @@ CREATE TABLE files (
   id INTEGER PRIMARY KEY,
   sha256 TEXT UNIQUE NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN ('pdf','doc','slides','screenshot','photo')),
-  kind_reason TEXT,                    -- e.g. 'ext:.pptx', 'filename:snipping-tool', 'exif:camera', 'png-no-exif', 'screen-size:1920x1080', 'tall-phone:1080x5000', 'default'
+  kind_reason TEXT,                    -- e.g. 'ext:.pptx', 'filename:snipping-tool', 'exif:camera', 'png-no-exif', 'clip:screenshot', 'clip:photo'; size fallbacks while CLIP can't run: 'screen-size:1920x1080', 'tall-phone:1080x5000', 'default'
   effective_date TEXT,                 -- ISO-8601
   date_source TEXT,                    -- 'exif' | 'filename' | 'doc_meta' | 'mtime'
   width INTEGER, height INTEGER,
   pages INTEGER,                       -- PDF pages or pptx slides
   gps_lat REAL, gps_lon REAL,
   thumb_path TEXT,                     -- relative to the data dir: thumbs/<sha256>.webp
+  ocr_cls INTEGER,                     -- images: 1 if their OCR ran the text-angle classifier, 0 if not (§6.2)
   status TEXT NOT NULL DEFAULT 'ok',   -- 'ok' | 'error' | 'skipped'
   error TEXT,
   indexed_at TEXT
@@ -172,9 +173,14 @@ A rule-based function in `classify.py` returns `(kind, kind_reason)`. Each rule 
      - generic `scr_`, `screencapture`
   2. EXIF has `Make`/`Model` → `photo`.
   3. A PNG with no camera EXIF → `screenshot`.
-  4. No EXIF and dimensions matching a common screen resolution (desktop and phone, either orientation; the list is in `classify.py`) → `screenshot`.
-  5. A phone-width image (720, 1080, 1170, 1179, 1242, 1284 or 1440 px wide) at least twice as tall as it is wide, with no camera EXIF → `screenshot` (a scrolling screenshot that lost its name). Camera EXIF always wins (rule 2), because some phones shoot 20:9 photos.
-  6. Otherwise → `photo`.
+  4. Anything else (a JPEG, WebP or HEIC with no camera EXIF): **CLIP decides**, from the image vector the file gets anyway (§6.5). If the image's cosine to "a screenshot of a computer or phone screen" leads its cosine to "a photograph" by at least `clip_screenshot_margin` (0.04, provisional; §19) → `screenshot` (`clip:screenshot`), otherwise `photo` (`clip:photo`). Size can't decide this: a forwarded photo has no camera EXIF and often a screen-like size (WhatsApp makes a 20:9 photo 720×1600), §19, 18 Oct.
+
+  **Fallback** while CLIP can't run (e.g. no model offline): the old size rules give a temporary kind, and the end of a later run decides with CLIP once the file has a vector.
+  - No EXIF and dimensions matching a common screen resolution (desktop and phone, either orientation; the list is in `classify.py`) → `screenshot`.
+  - A phone-width image (720, 1080, 1170, 1179, 1242, 1284 or 1440 px wide) at least twice as tall as it is wide → `screenshot`.
+  - Otherwise → `photo`.
+- **Text-angle classifier:** only screenshots found by rule 1 or 3 skip it, since on-screen text is never upside down. Every other image keeps it, because a CLIP or size-rule "screenshot" may be a forwarded photo. `files.ocr_cls` records the setting each image's OCR used.
+- **End of every run:** images no rule decided are relabelled from their stored CLIP vectors (nothing is decoded). An image whose stored `ocr_cls` differs from what its kind reason now calls for is OCR'd again, in one transaction. A kind change alone isn't, since the kind reaches OCR only through that setting.
 
 ### 6.3 Extract
 

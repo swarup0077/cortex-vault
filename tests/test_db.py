@@ -101,7 +101,23 @@ def test_migration_1_to_2_drops_path_chunk_vectors(cfg) -> None:
         db.set_meta(c, "schema_version", "1")
     c.close()
     c = db.connect(cfg.db_path)
-    assert db.get_meta(c, "schema_version") == "2"
+    assert db.get_meta(c, "schema_version") == db.SCHEMA_VERSION  # 1 -> 2 -> 3
     assert [r[0] for r in c.execute("SELECT c.source FROM text_vectors v JOIN chunks c ON c.id = v.chunk_id")] == ["doc_text"]
     assert c.execute("SELECT count(*) FROM chunks_fts WHERE chunks_fts MATCH 'todo'").fetchone()[0] == 1  # still keyword-searchable
+    c.close()
+
+
+def test_migration_2_to_3_records_the_angle_classifier_setting(cfg) -> None:
+    """Before v3 the classifier followed the kind: screenshots skipped it, photos ran it."""
+    c = db.connect(cfg.db_path)
+    with db.transaction(c):
+        for sha, kind, status in [("p", "photo", "ok"), ("s", "screenshot", "ok"), ("d", "pdf", "ok"),
+                                  ("e", "photo", "error")]:
+            c.execute("INSERT INTO files(sha256, kind, status) VALUES (?, ?, ?)", (sha, kind, status))
+        c.execute("ALTER TABLE files DROP COLUMN ocr_cls")
+        db.set_meta(c, "schema_version", "2")
+    c.close()
+    c = db.connect(cfg.db_path)
+    assert db.get_meta(c, "schema_version") == "3"
+    assert dict(c.execute("SELECT sha256, ocr_cls FROM files").fetchall()) == {"p": 1, "s": 0, "d": None, "e": None}
     c.close()

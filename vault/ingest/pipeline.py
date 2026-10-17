@@ -23,9 +23,10 @@ from PIL import Image
 from vault import db, models
 from vault.config import Config
 from vault.ingest.chunk import chunk_extracted, path_chunk_text
-from vault.ingest.classify import IMAGE_EXTS, classify, classify_image
+from vault.ingest.classify import (IMAGE_EXTS, PHOTO_PROMPTS, SCREENSHOT_PROMPTS, classify, classify_image, clip_kind,
+                                   is_final, known_screen_capture, prompt_vectors)
 from vault.ingest.discover import FoundFile, sha256_file, walk_roots
-from vault.ingest.extract_image import clip_input, extract_image, load_upright
+from vault.ingest.extract_image import clip_input, extract_image, load_upright, ocr_uses_cls
 from vault.ingest.extract_office import extract_docx, extract_pptx, extract_text
 from vault.ingest.extract_pdf import extract_pdf
 from vault.ingest.meta import effective_date, filename_date, read_image_meta
@@ -56,6 +57,8 @@ class IndexReport:
     ocr_empty: int = 0  # of those, how many gave no text (blank pages, photos without any)
     ocr_capped: list[str] = field(default_factory=list)  # PDFs that hit the OCR page cap
     backfilled: int = 0  # older files brought up to date: kind, date, thumbnail, CLIP vector (SPEC §19, item i)
+    reclassified: int = 0  # images whose kind CLIP decided after they were indexed (stored vector, no OCR)
+    reocr: int = 0  # images OCR'd again because their angle-classifier setting changed (SPEC §6.2)
     interrupted: bool = False
     started_at: str = ""
     finished_at: str = ""
@@ -71,12 +74,12 @@ def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
-def extract(path: Path, cfg: Config, kind: str | None = None, image: Image.Image | None = None) -> Extracted:
+def extract(path: Path, cfg: Config, screen_capture: bool = False, image: Image.Image | None = None) -> Extracted:
     ext = path.suffix.lower()
     if ext == ".pdf":
         return extract_pdf(path, cfg)
     if ext in IMAGE_EXTS:
-        return extract_image(path, cfg, kind=kind, image=image)
+        return extract_image(path, cfg, screen_capture=screen_capture, image=image)
     if ext == ".docx":
         return extract_docx(path, cfg)
     if ext == ".pptx":
@@ -92,6 +95,7 @@ class _Indexer:
         self.always_compact = compact
         self.report = IndexReport(started_at=_now())
         self.run_id = 0
+        self._prompts: tuple[np.ndarray, np.ndarray] | bool | None = None  # CLIP prompt vectors; False: unavailable
 
     @contextmanager
     def timed(self, stage: str) -> Iterator[None]:
@@ -141,12 +145,13 @@ class _Indexer:
         is_image = primary.path.suffix.lower() in IMAGE_EXTS
         meta = read_image_meta(primary.path) if is_image else None  # read once: kind, date and GPS
         kind, kind_reason = classify_image(primary.path.name, meta) if is_image else classify(primary.path)
+        screen = is_image and known_screen_capture(kind_reason)  # only these skip the angle classifier
         status, error, ex, chunks, img = "ok", None, None, [], None
         try:
             with self.timed("extract"):
-                if is_image:  # decoded once, for OCR and the thumbnail
+                if is_image:  # decoded once, for OCR, the thumbnail and CLIP
                     img = load_upright(primary.path)
-                ex = extract(primary.path, self.cfg, kind, img)
+                ex = extract(primary.path, self.cfg, screen, img)
                 chunks = chunk_extracted(ex, self.cfg)
             self.report.timings["extract"] -= ex.ocr_seconds  # report OCR as its own stage
             self.report.timings["ocr"] = self.report.timings.get("ocr", 0.0) + ex.ocr_seconds
@@ -164,6 +169,9 @@ class _Indexer:
 
         thumb_path = self.thumbnail(sha, primary.path, chunks[0].text if chunks else "", img) if status == "ok" else None
         clip_vecs = self.clip_embed([img]) if status == "ok" and img is not None else None
+        if clip_vecs is not None and not is_final(kind_reason):  # no name, EXIF or PNG rule: CLIP decides
+            kind, kind_reason = self.zero_shot(clip_vecs[0], (kind, kind_reason))
+        ocr_cls = int(ocr_uses_cls(self.cfg, screen)) if is_image and status == "ok" else None
         path_text = path_chunk_text(f.path for f in group)
         with self.timed("embed"):  # the path chunk is keyword-only: no vector (SPEC §5)
             vecs = self.embedder.embed_documents([c.text for c in chunks])
@@ -175,10 +183,10 @@ class _Indexer:
         with self.timed("write"), db.transaction(self.conn):
             file_id = self.conn.execute(
                 "INSERT INTO files(sha256, kind, kind_reason, effective_date, date_source, width, height, pages,"
-                " gps_lat, gps_lon, thumb_path, status, error, indexed_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " gps_lat, gps_lon, thumb_path, ocr_cls, status, error, indexed_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (sha, kind, kind_reason, date, date_source, ex.width if ex else None, ex.height if ex else None,
-                 ex.pages if ex else None, lat, lon, thumb_path, status, error, _now()),
+                 ex.pages if ex else None, lat, lon, thumb_path, ocr_cls, status, error, _now()),
             ).lastrowid
             if status == "ok":
                 db.insert_chunk(self.conn, file_id, None, 0, "path", path_text, None)
@@ -215,6 +223,84 @@ class _Indexer:
             except Exception as e:
                 log.warning("CLIP failed; %d image(s) wait for the next run: %s", len(images), e)
                 return None
+
+    def zero_shot(self, vec: np.ndarray, fallback: tuple[str, str]) -> tuple[str, str]:
+        """Screenshot or photo by CLIP (SPEC §6.2 rule 4); `fallback` (the size rules) if CLIP's text half can't
+        load, and the next run tries again."""
+        if self._prompts is None:
+            with self.timed("clip"):
+                try:
+                    text = models.clip_text(self.cfg)
+                    self._prompts = (prompt_vectors(text.embed_text, SCREENSHOT_PROMPTS),
+                                     prompt_vectors(text.embed_text, PHOTO_PROMPTS))
+                except Exception as e:
+                    log.warning("CLIP text model failed; images keep their size-rule kind until the next run: %s", e)
+                    self._prompts = False
+        if not self._prompts:
+            return fallback
+        return clip_kind(vec, *self._prompts, self.cfg.clip_screenshot_margin)
+
+    def reclassify(self, stop: threading.Event | None) -> None:
+        """Bring image kinds and OCR up to the CLIP rule (SPEC §6.2), touching nothing else.
+
+        1. Images no rule decided (size fallbacks, kinds from before the rule) get their kind from their stored CLIP
+           vector: nothing is decoded.
+        2. Images whose stored OCR used another angle-classifier setting than their kind reason calls for are OCR'd
+           again, one transaction each. A kind change alone needs no OCR: the kind reaches OCR only through that
+           setting.
+        """
+        rows = self.conn.execute(
+            "SELECT f.id, f.kind, f.kind_reason, iv.vec FROM files f JOIN image_vectors iv ON iv.file_id = f.id "
+            "WHERE f.status = 'ok' AND f.kind IN ('photo', 'screenshot')"
+        ).fetchall()
+        updates = []
+        for r in rows:
+            if not is_final(r["kind_reason"]):
+                kind, reason = self.zero_shot(db.blob_to_vec(r["vec"]), (r["kind"], r["kind_reason"]))
+                if (kind, reason) != (r["kind"], r["kind_reason"]):
+                    updates.append((kind, reason, r["id"]))
+        if updates:
+            with self.timed("write"), db.transaction(self.conn):
+                self.conn.executemany("UPDATE files SET kind = ?, kind_reason = ? WHERE id = ?", updates)
+            self.report.reclassified += len(updates)
+
+        stale = [r for r in self.conn.execute(
+            "SELECT f.id, f.kind_reason, f.ocr_cls, p.path FROM files f JOIN paths p ON p.path = "
+            "(SELECT path FROM paths WHERE file_id = f.id ORDER BY mtime DESC LIMIT 1) "
+            "WHERE f.status = 'ok' AND f.kind IN ('photo', 'screenshot')"
+        ) if r["ocr_cls"] != int(ocr_uses_cls(self.cfg, known_screen_capture(r["kind_reason"])))]
+        for r in stale:
+            if stop is not None and stop.is_set():
+                self.report.interrupted = True
+                return
+            self.reocr(r["id"], Path(r["path"]), known_screen_capture(r["kind_reason"]))
+
+    def reocr(self, file_id: int, path: Path, screen: bool) -> None:
+        """OCR one indexed image again and replace its content chunks, OCR lines and text vectors."""
+        if not path.is_file():  # e.g. under a root that's unplugged right now: a later run retries
+            return
+        try:
+            with self.timed("extract"):
+                ex = extract(path, self.cfg, screen, load_upright(path))
+                chunks = chunk_extracted(ex, self.cfg)
+        except Exception as e:
+            log.warning("re-OCR of %s failed: %s", path, e)
+            return
+        self.report.timings["extract"] -= ex.ocr_seconds
+        self.report.timings["ocr"] = self.report.timings.get("ocr", 0.0) + ex.ocr_seconds
+        self.report.ocr_images += ex.ocr_images
+        self.report.ocr_empty += ex.ocr_empty
+        with self.timed("embed"):
+            vecs = self.embedder.embed_documents([c.text for c in chunks])
+        with self.timed("write"), db.transaction(self.conn):
+            db.delete_content_chunks(self.conn, file_id)
+            for i, (c, v) in enumerate(zip(chunks, vecs), start=1):
+                chunk_id = db.insert_chunk(self.conn, file_id, c.page, i, c.source, c.text, v)
+                if c.lines:
+                    db.insert_ocr_lines(self.conn, chunk_id, c.lines)
+            self.conn.execute("UPDATE files SET ocr_cls = ?, indexed_at = ? WHERE id = ?",
+                              (int(ocr_uses_cls(self.cfg, screen)), _now(), file_id))
+        self.report.reocr += 1
 
     def backfill(self, stop: threading.Event | None) -> None:
         """Bring files indexed by older versions up to date without re-extracting their text (open item i).
@@ -404,6 +490,8 @@ class _Indexer:
         self.refresh_path_chunks()
         if not rep.interrupted:
             self.backfill(stop)
+        if not rep.interrupted:
+            self.reclassify(stop)
         with self.timed("thumbs"):
             thumbs.sweep(self.conn, self.cfg)  # thumbnails of content that left the index
         if self.always_compact or rep.files_deleted:
@@ -417,9 +505,9 @@ class _Indexer:
         db.set_meta(self.conn, "last_indexed", rep.finished_at)
         log.info(
             "indexed: %d added, %d linked, %d updated, %d deleted, %d unchanged, %d errors, %d OCR'd (%d no text), "
-            "%d backfilled%s",
+            "%d backfilled, %d reclassified, %d re-OCR'd%s",
             rep.added, rep.linked, rep.updated, rep.deleted, rep.unchanged, len(rep.errors), rep.ocr_images,
-            rep.ocr_empty, rep.backfilled,
+            rep.ocr_empty, rep.backfilled, rep.reclassified, rep.reocr,
             " (interrupted)" if rep.interrupted else "",
         )
         return rep

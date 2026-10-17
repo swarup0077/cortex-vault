@@ -13,7 +13,7 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "2"  # 2: path chunks are keyword-only (no vector)
+SCHEMA_VERSION = "3"  # 2: path chunks are keyword-only (no vector); 3: files.ocr_cls
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS files (
@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS files (
   pages INTEGER,
   gps_lat REAL, gps_lon REAL,
   thumb_path TEXT,
+  ocr_cls INTEGER,
   status TEXT NOT NULL DEFAULT 'ok',
   error TEXT,
   indexed_at TEXT
@@ -82,10 +83,18 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
     version = get_meta(conn, "schema_version")
     if version is None:
         set_meta(conn, "schema_version", SCHEMA_VERSION)
-    elif version == "1":
+    if version == "1":
         with transaction(conn):  # path chunks lost their vectors; their text is rewritten by the next index run
             conn.execute("DELETE FROM text_vectors WHERE chunk_id IN (SELECT id FROM chunks WHERE source = 'path')")
-            set_meta(conn, "schema_version", "2")
+            set_meta(conn, "schema_version", version := "2")
+    if version == "2":
+        with transaction(conn):  # which angle-classifier setting each image's OCR used; before v3 that followed the
+            # kind, with the default config: screenshots skipped the classifier, photos ran it
+            if "ocr_cls" not in {r[1] for r in conn.execute("PRAGMA table_info(files)")}:
+                conn.execute("ALTER TABLE files ADD COLUMN ocr_cls INTEGER")
+            conn.execute("UPDATE files SET ocr_cls = (kind = 'photo') WHERE kind IN ('photo', 'screenshot') "
+                         "AND status = 'ok'")
+            set_meta(conn, "schema_version", "3")
     return conn
 
 
@@ -212,6 +221,13 @@ def update_chunk_text(conn: sqlite3.Connection, chunk_id: int, text: str, vec: n
         "ON CONFLICT(chunk_id) DO UPDATE SET vec = excluded.vec",
         (chunk_id, vec_to_blob(vec)),
     )
+
+
+def delete_content_chunks(conn: sqlite3.Connection, file_id: int) -> None:
+    """Delete a file's content chunks (not its path chunk) with their FTS rows; OCR lines and vectors cascade."""
+    conn.execute("DELETE FROM chunks_fts WHERE rowid IN (SELECT id FROM chunks WHERE file_id = ? AND source != 'path')",
+                 (file_id,))
+    conn.execute("DELETE FROM chunks WHERE file_id = ? AND source != 'path'", (file_id,))
 
 
 def delete_file(conn: sqlite3.Connection, file_id: int) -> None:

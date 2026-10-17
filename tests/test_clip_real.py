@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from conftest import camera_exif, draw_checkerboard, draw_sunset_beach, draw_text_image, save_image
+from conftest import (camera_exif, draw_checkerboard, draw_desktop_ui, draw_sunset_beach, draw_text_image,
+                      save_image)
 from vault.ingest.pipeline import index_paths
 from vault.search.engine import search
 
@@ -71,3 +72,18 @@ def test_gate_keeps_clip_out_of_an_error_code(conn, cfg, fake_embedder, real_cli
     resp = search(conn, "error 0x80070005", cfg)
     assert resp.clip["gated"] and resp.clip["kept"] == 0 and resp.clip["weight"] == 0.5
     assert all(r.ranks["clip"] is None for r in resp.results)
+
+
+def test_clip_tells_forwarded_screens_from_photos(conn, cfg, fake_embedder, fake_ocr, real_clip, tmp_path) -> None:
+    """SPEC §6.2 rule 4: WhatsApp-style JPEGs with no EXIF at screen sizes, which the size rule called screenshots.
+    CLIP tells the app window from the photo, and every one keeps the angle classifier."""
+    root = tmp_path / "WhatsApp Images"
+    for i, (draw, size) in enumerate([(draw_sunset_beach, (1600, 900)), (draw_sunset_beach, (720, 1600)),
+                                      (draw_desktop_ui, (1600, 900)), (draw_desktop_ui, (720, 1600))], start=1):
+        save_image(draw(*size), root / f"IMG-20250312-WA000{i}.jpg")
+    index_paths(conn, [root], cfg)
+    got = dict(conn.execute("SELECT f.width || 'x' || f.height || ' ' || substr(p.path, -8), f.kind_reason "
+                            "FROM files f JOIN paths p ON p.file_id = f.id").fetchall())
+    assert got == {"1600x900 0001.jpg": "clip:photo", "720x1600 0002.jpg": "clip:photo",
+                   "1600x900 0003.jpg": "clip:screenshot", "720x1600 0004.jpg": "clip:screenshot"}
+    assert fake_ocr.use_cls == [None] * 4 and {r[0] for r in conn.execute("SELECT ocr_cls FROM files")} == {1}

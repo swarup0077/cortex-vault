@@ -8,6 +8,7 @@ import pytest
 from vault import db
 from vault.ingest import pipeline
 from vault.ingest.pipeline import index_paths, reindex
+from vault.search.engine import search
 
 TABLES = ("files", "paths", "chunks", "chunks_fts", "text_vectors")
 
@@ -304,7 +305,8 @@ def test_images_are_ocrd_and_lines_stored(conn, cfg, fake_embedder, shots) -> No
     assert (rep.added, rep.errors, rep.ocr_images, rep.ocr_empty) == (2, [], 2, 1) and "ocr" in rep.timings
     assert_consistent(conn)
     files = {r["kind"]: tuple(r) for r in conn.execute("SELECT kind, kind_reason, width, height FROM files")}
-    assert files == {"screenshot": ("screenshot", "filename:prtscn", 800, 200), "photo": ("photo", "default", 640, 480)}
+    # no name, EXIF or PNG rule for the photo: CLIP decides (the fake sees grey as a photograph)
+    assert files == {"screenshot": ("screenshot", "filename:prtscn", 800, 200), "photo": ("photo", "clip:photo", 640, 480)}
 
     [chunk] = conn.execute("SELECT id, text, page FROM chunks WHERE source = 'ocr'").fetchall()
     assert (chunk["text"], chunk["page"]) == ("ERROR 0x80070005 Access is denied", None)
@@ -380,3 +382,77 @@ def test_reindex_compacts_away_old_leftovers(conn, cfg, fake_embedder, corpus) -
     assert "compact" in rep.timings and SECRET not in cfg.db_path.read_bytes()
     assert counts(conn)["files"] == 4
     assert_consistent(conn)
+
+
+# ---------------------------------------------------------------- screenshot vs photo by CLIP (SPEC §6.2 rule 4)
+
+
+def kinds(conn) -> dict[str, tuple]:
+    return {Path(r[0]).name: tuple(r[1:]) for r in conn.execute(
+        "SELECT p.path, f.kind, f.kind_reason, f.ocr_cls FROM files f JOIN paths p ON p.file_id = f.id")}
+
+
+@pytest.fixture
+def forwarded(tmp_path: Path) -> Path:
+    """WhatsApp-style files: no camera EXIF, screen-like sizes. The fake CLIP sees grey as a photo, white as a
+    screen."""
+    root = tmp_path / "WhatsApp Images"
+    save_image(Image.new("RGB", (1600, 900), "gray"), root / "IMG-20250312-WA0001.jpg")  # a forwarded photo
+    save_image(Image.new("RGB", (720, 1600), "white"), root / "IMG-20250312-WA0002.jpg")  # a forwarded screenshot
+    save_image(Image.new("RGB", (800, 200), "white"), root / "diagram.png")
+    return root
+
+
+def test_forwarded_photo_at_a_screen_size_is_a_photo(conn, cfg, fake_embedder, fake_ocr, forwarded) -> None:
+    """The size rule called a 1600×900 forwarded photo a screenshot and skipped the angle classifier. Now CLIP
+    decides the kind, and only a filename or PNG screenshot skips the classifier."""
+    index_paths(conn, [forwarded], cfg)
+    assert kinds(conn) == {"IMG-20250312-WA0001.jpg": ("photo", "clip:photo", 1),
+                           "IMG-20250312-WA0002.jpg": ("screenshot", "clip:screenshot", 1),
+                           "diagram.png": ("screenshot", "png-no-exif", 0)}
+    assert dict(zip(fake_ocr.seen, fake_ocr.use_cls)) == {(1600, 900): None, (720, 1600): None, (800, 200): False}
+
+
+def test_without_clip_the_size_rule_holds_until_the_next_run(conn, cfg, fake_embedder, fake_ocr, fake_clip,
+                                                              forwarded, monkeypatch) -> None:
+    monkeypatch.setattr(fake_clip, "embed_images", lambda images: (_ for _ in ()).throw(RuntimeError("offline")))
+    index_paths(conn, [forwarded], cfg)
+    assert kinds(conn)["IMG-20250312-WA0001.jpg"] == ("screenshot", "screen-size:1600x900", 1)  # classifier still on
+    monkeypatch.undo()
+    ocr_calls = len(fake_ocr.seen)
+    rep = index_paths(conn, [forwarded], cfg)
+    assert kinds(conn)["IMG-20250312-WA0001.jpg"] == ("photo", "clip:photo", 1)
+    assert (rep.reclassified, rep.reocr, len(fake_ocr.seen)) == (2, 0, ocr_calls)  # relabelled, not OCR'd again
+
+
+def test_older_index_reocrs_only_where_the_angle_setting_changed(conn, cfg, fake_embedder, fake_ocr,
+                                                                  forwarded) -> None:
+    """An index from before the rule: the 1600×900 photo is a size-rule screenshot OCR'd without the classifier,
+    the 720×1600 screen a `default` photo OCR'd with it. Only the first needs OCR again."""
+    from vault.ingest.records import OcrLine
+
+    fake_ocr.lines_for = lambda img: [OcrLine("smeared sign" if fake_ocr.use_cls[-1] is False else "OPEN DAILY",
+                                              0.9, 10, 10, 200, 40)] if img.shape[1] == 1600 else []
+    index_paths(conn, [forwarded], cfg)
+    with db.transaction(conn):  # how the code before v3 left them (the migration filled ocr_cls by kind)
+        conn.execute("UPDATE files SET kind = 'screenshot', kind_reason = 'screen-size:1600x900', ocr_cls = 0 "
+                     "WHERE width = 1600")
+        conn.execute("UPDATE files SET kind = 'photo', kind_reason = 'default', ocr_cls = 1 WHERE width = 720")
+        conn.execute("UPDATE chunks SET text = 'smeared sign' WHERE source = 'ocr' AND file_id = "
+                     "(SELECT id FROM files WHERE width = 1600)")
+        conn.execute("UPDATE chunks_fts SET text = 'smeared sign' WHERE rowid = "
+                     "(SELECT c.id FROM chunks c JOIN files f ON f.id = c.file_id WHERE f.width = 1600 AND c.source = 'ocr')")
+    seen = len(fake_ocr.seen)
+
+    rep = index_paths(conn, [forwarded], cfg)
+    assert (rep.reclassified, rep.reocr) == (2, 1)
+    assert fake_ocr.seen[seen:] == [(1600, 900)] and fake_ocr.use_cls[seen:] == [None]  # classifier on this time
+    assert kinds(conn) == {"IMG-20250312-WA0001.jpg": ("photo", "clip:photo", 1),
+                           "IMG-20250312-WA0002.jpg": ("screenshot", "clip:screenshot", 1),
+                           "diagram.png": ("screenshot", "png-no-exif", 0)}
+    assert search(conn, "open daily", cfg).results[0].filename == "IMG-20250312-WA0001.jpg"
+    assert all(r.filename != "IMG-20250312-WA0001.jpg" for r in search(conn, "smeared", cfg).results)
+    assert_consistent(conn)
+
+    rep = index_paths(conn, [forwarded], cfg)
+    assert (rep.reclassified, rep.reocr, len(fake_ocr.seen)) == (0, 0, seen + 1)  # nothing left to do
