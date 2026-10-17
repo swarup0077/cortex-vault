@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import functools
 import time
 from pathlib import Path
 
@@ -10,17 +9,9 @@ from PIL import Image, ImageOps
 
 from vault import models
 from vault.config import Config
+from vault.ingest.meta import register_heif
 from vault.ingest.ocr import lines_text, ocr_image, reading_order
 from vault.ingest.records import Extracted, Segment
-
-
-@functools.cache
-def _register_heif() -> None:
-    try:
-        from pillow_heif import register_heif_opener
-    except ImportError:
-        return
-    register_heif_opener()
 
 
 def to_rgb(im: Image.Image) -> Image.Image:
@@ -35,7 +26,7 @@ def to_rgb(im: Image.Image) -> Image.Image:
 
 def load_upright(path: Path) -> Image.Image:
     """First frame, EXIF orientation applied, as RGB."""
-    _register_heif()
+    register_heif()
     with Image.open(path) as im:
         return to_rgb(ImageOps.exif_transpose(im))
 

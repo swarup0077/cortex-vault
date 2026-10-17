@@ -20,11 +20,12 @@ from pathlib import Path
 from vault import db, models
 from vault.config import Config
 from vault.ingest.chunk import chunk_extracted, path_chunk_text
-from vault.ingest.classify import IMAGE_EXTS, classify
+from vault.ingest.classify import IMAGE_EXTS, classify, classify_image
 from vault.ingest.discover import FoundFile, sha256_file, walk_roots
 from vault.ingest.extract_image import extract_image
 from vault.ingest.extract_office import extract_docx, extract_pptx, extract_text
 from vault.ingest.extract_pdf import extract_pdf
+from vault.ingest.meta import effective_date, read_image_meta
 from vault.ingest.records import Extracted, SkipFile
 
 log = logging.getLogger(__name__)
@@ -63,10 +64,6 @@ class IndexReport:
 
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
-
-
-def _iso_from_mtime(mtime: float) -> str:
-    return datetime.fromtimestamp(mtime).isoformat(timespec="seconds")
 
 
 def extract(path: Path, cfg: Config, kind: str | None = None) -> Extracted:
@@ -136,7 +133,9 @@ class _Indexer:
         """New content: extract, chunk and embed outside the transaction, then write it all in one."""
         t0 = time.perf_counter()
         primary = max(group, key=lambda f: f.mtime)
-        kind, kind_reason = classify(primary.path)
+        is_image = primary.path.suffix.lower() in IMAGE_EXTS
+        meta = read_image_meta(primary.path) if is_image else None  # read once: kind, date and GPS
+        kind, kind_reason = classify_image(primary.path.name, meta) if is_image else classify(primary.path)
         status, error, ex, chunks = "ok", None, None, []
         try:
             with self.timed("extract"):
@@ -160,17 +159,16 @@ class _Indexer:
         with self.timed("embed"):  # the path chunk is keyword-only: no vector (SPEC §5)
             vecs = self.embedder.embed_documents([c.text for c in chunks])
 
-        if ex is not None and ex.doc_date:
-            date, date_source = ex.doc_date, "doc_meta"
-        else:
-            date, date_source = _iso_from_mtime(primary.mtime), "mtime"
+        date, date_source = effective_date(primary.path.name, meta.taken if meta else None,
+                                           ex.doc_date if ex else None, primary.mtime)
+        lat, lon = meta.gps if meta and meta.gps else (None, None)
 
         with self.timed("write"), db.transaction(self.conn):
             file_id = self.conn.execute(
                 "INSERT INTO files(sha256, kind, kind_reason, effective_date, date_source, width, height, pages,"
-                " status, error, indexed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " gps_lat, gps_lon, status, error, indexed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (sha, kind, kind_reason, date, date_source, ex.width if ex else None, ex.height if ex else None,
-                 ex.pages if ex else None, status, error, _now()),
+                 ex.pages if ex else None, lat, lon, status, error, _now()),
             ).lastrowid
             if status == "ok":
                 db.insert_chunk(self.conn, file_id, None, 0, "path", path_text, None)

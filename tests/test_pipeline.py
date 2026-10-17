@@ -304,7 +304,7 @@ def test_images_are_ocrd_and_lines_stored(conn, cfg, fake_embedder, shots) -> No
     assert (rep.added, rep.errors, rep.ocr_images, rep.ocr_empty) == (2, [], 2, 1) and "ocr" in rep.timings
     assert_consistent(conn)
     files = {r["kind"]: tuple(r) for r in conn.execute("SELECT kind, kind_reason, width, height FROM files")}
-    assert files == {"screenshot": ("screenshot", "interim:ext", 800, 200), "photo": ("photo", "interim:ext", 640, 480)}
+    assert files == {"screenshot": ("screenshot", "filename:prtscn", 800, 200), "photo": ("photo", "default", 640, 480)}
 
     [chunk] = conn.execute("SELECT id, text, page FROM chunks WHERE source = 'ocr'").fetchall()
     assert (chunk["text"], chunk["page"]) == ("ERROR 0x80070005 Access is denied", None)

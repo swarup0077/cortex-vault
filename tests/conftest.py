@@ -8,6 +8,7 @@ import re
 import sqlite3
 import zipfile
 from collections.abc import Callable, Iterator, Sequence
+from datetime import datetime
 from pathlib import Path
 
 import docx
@@ -149,11 +150,26 @@ def draw_label_photo(size: tuple[int, int], label: tuple[int, int, int, int],
     return img.filter(ImageFilter.GaussianBlur(0.8))
 
 
-def camera_exif() -> Image.Exif:
-    """EXIF that marks a picture as a camera photo (Make/Model)."""
+GpsDms = tuple[tuple[float, float, float], str, tuple[float, float, float], str]
+
+
+def camera_exif(taken: str | None = None, gps: GpsDms | None = None, make: str | None = "TestCam",
+                model: str | None = "Model 1") -> Image.Exif:
+    """EXIF written by Pillow: Make/Model (a camera photo), optionally DateTimeOriginal (`2025:03:12 10:15:30`)
+    and GPS as ((d, m, s), "N"/"S", (d, m, s), "E"/"W")."""
+    from PIL.TiffImagePlugin import IFDRational
+
     exif = Image.Exif()
-    exif[0x010F] = "TestCam"
-    exif[0x0110] = "Model 1"
+    if make:
+        exif[0x010F] = make
+    if model:
+        exif[0x0110] = model
+    if taken:
+        exif.get_ifd(0x8769)[0x9003] = taken
+    if gps:
+        lat, lat_ref, lon, lon_ref = gps
+        exif.get_ifd(0x8825).update({1: lat_ref, 2: tuple(IFDRational(x) for x in lat),
+                                     3: lon_ref, 4: tuple(IFDRational(x) for x in lon)})
     return exif
 
 
@@ -234,9 +250,13 @@ def build_pdf(
     return path
 
 
-def build_docx(path: Path, paragraphs: Sequence[str], table: Sequence[Sequence[str]] = ()) -> Path:
+def build_docx(path: Path, paragraphs: Sequence[str], table: Sequence[Sequence[str]] = (),
+               created: datetime | None = None) -> Path:
+    """Set `created` explicitly in date tests: python-docx's template carries a 2013 creation date (open item c)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     d = docx.Document()
+    if created is not None:
+        d.core_properties.created = created
     for p in paragraphs:
         d.add_paragraph(p)
     if table:
@@ -248,10 +268,13 @@ def build_docx(path: Path, paragraphs: Sequence[str], table: Sequence[Sequence[s
     return path
 
 
-def build_pptx(path: Path, slides: Sequence[tuple[str, str, str]]) -> Path:
-    """`slides` are (title, body, speaker notes). Slide 1 is also given a 2×2 table."""
+def build_pptx(path: Path, slides: Sequence[tuple[str, str, str]], created: datetime | None = None) -> Path:
+    """`slides` are (title, body, speaker notes). Slide 1 is also given a 2×2 table. Set `created` explicitly in
+    date tests (open item c)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     prs = pptx.Presentation()
+    if created is not None:
+        prs.core_properties.created = created
     for i, (title, body, notes) in enumerate(slides):
         slide = prs.slides.add_slide(prs.slide_layouts[1])  # title + content
         slide.shapes.title.text = title

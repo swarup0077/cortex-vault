@@ -100,7 +100,7 @@ CREATE TABLE files (
   id INTEGER PRIMARY KEY,
   sha256 TEXT UNIQUE NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN ('pdf','doc','slides','screenshot','photo')),
-  kind_reason TEXT,                    -- e.g. 'ext:.pptx', 'filename:Screenshot*', 'exif:Make', 'png-no-exif'
+  kind_reason TEXT,                    -- e.g. 'ext:.pptx', 'filename:snipping-tool', 'exif:camera', 'png-no-exif', 'screen-size:1920x1080', 'tall-phone:1080x5000', 'default'
   effective_date TEXT,                 -- ISO-8601
   date_source TEXT,                    -- 'exif' | 'filename' | 'doc_meta' | 'mtime'
   width INTEGER, height INTEGER,
@@ -465,7 +465,7 @@ personal-search-vault/
     models.py                    # lazy singletons: text_embedder, clip_text, clip_vision, ocr, reranker
     vectors.py                   # VectorIndex
     platform.py                  # OS-specific bits: open file, default folders
-    ingest/  discover.py classify.py extract_pdf.py extract_office.py extract_image.py
+    ingest/  discover.py classify.py meta.py (EXIF, GPS, dates) extract_pdf.py extract_office.py extract_image.py
              ocr.py (tiling, reading order, blocks) chunk.py thumbs.py pipeline.py
     search/  parse.py retrievers.py gate.py fuse.py rerank.py snippet.py highlight.py engine.py
     session.py                   # demo-mode per-session index copy + TTL cleanup

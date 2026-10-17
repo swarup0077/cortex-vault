@@ -68,13 +68,3 @@ def test_classify_by_extension(name: str, kind: str) -> None:
 def test_classify_rejects_unknown() -> None:
     with pytest.raises(ValueError):
         classify(Path("a.xlsx"))
-
-
-@pytest.mark.parametrize(
-    "name,kind",
-    [("Screenshot (12).png", "screenshot"), ("a.PNG", "screenshot"), ("IMG_1.jpg", "photo"), ("a.jpeg", "photo"),
-     ("a.webp", "photo"), ("a.heic", "photo")],
-)
-def test_classify_images_interim(name: str, kind: str) -> None:
-    """Interim rule until M3 (SPEC §19, open item i)."""
-    assert classify(Path(name)) == (kind, "interim:ext")
