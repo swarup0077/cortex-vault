@@ -9,6 +9,11 @@ The source of truth is **SPEC.md**. Read it before starting any task. If a reque
 - When a design choice comes up that isn't in the spec, propose it in one or two lines and ask. Record agreed choices in SPEC §19 (Decisions log).
 - Don't start stretch goals unless asked.
 
+## Thresholds and weights
+- No threshold or weight is ever chosen from the owner's personal test files. Calibrate it on generated data, mark the value **provisional** (in `config.py` and in SPEC §19), and tune it only in M6, on the tuning half of the eval queries, reporting on the other, held-out half (SPEC §9).
+- Every fix targets a general cause and comes with a test on generated files. A real-file failure is a symptom to reproduce on generated data, not a value to fit.
+- Calibration scripts live in `bench/`, so every provisional value can be re-measured.
+
 ## Environment
 - Windows laptop, CPU only, Python **3.12**, venv at `.venv`.
   - Activate: `.venv\Scripts\activate`
