@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| VM | Ubuntu 24.04, `Standard_B2ls_v2` (2 vCPU, 4 GiB RAM), India South Central. At M4 it is replaced by a new `Standard_F4als_v6` with the same IP and DNS name (§9); everything is deleted after 30 Oct 2026 |
+| VM | Ubuntu 24.04, `Standard_B2ls_v2` (2 vCPU, 4 GiB RAM), India South Central. At M4 it is resized in place to `Standard_D4as_v4` (4 vCPU, 16 GB; same IP and URL; §9); everything is deleted after 30 Oct 2026 |
 | User | `azureuser`, key `C:\Users\swaru\.ssh\vault-key.pem` |
 | Address | `172.198.49.18` · `swarup-vault.indiasouthcentral.cloudapp.azure.com` |
 | Open ports | 22, 80, 443 (auto-shutdown off) |
@@ -148,55 +148,93 @@ sudo cp deploy/vault-probe.service /etc/systemd/system/ && sudo systemctl daemon
 sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
 ```
 
-## 9. M4: move to a 4-core VM (SPEC §19, open item h)
+## 9. M4: move to 4 vCPUs (SPEC §19, open item h)
 
-OCR takes seconds per image, and 2 burstable vCPUs can't index demo uploads in time. The plan:
+OCR takes seconds per image, and 2 burstable vCPUs can't index demo uploads in time.
 
-| When | VM size | Why |
+The Azure for Students quota in India South Central (checked by the owner, 17 Oct):
+- **FALSv6 family:** 0 vCPUs; the automatic increase was refused.
+- **DASv4 family:** 4 vCPUs.
+- **Total Regional vCPUs:** 6.
+
+| When | VM | Notes |
 |---|---|---|
-| M4 → 25 Oct | `Standard_F4als_v6` (4 dedicated AMD cores, NVMe disk) | Fast enough for demo uploads, inside the $100 credit |
-| 26 → 30 Oct | `Standard_F8als_v6`, only if the quota allows 8 vCPUs | Headroom around the 27 Oct submission and review |
-| after 30 Oct | delete the resource group | The VM isn't needed after that |
-
-v6 sizes only support the NVMe disk controller and the current VM uses SCSI, so this is a **new VM**, not a resize. It
-takes over the existing static public IP, and with it the DNS name `swarup-vault`. Fallback if the FALSv6 quota is 0:
-resize the current VM in place to `Standard_D4as_v5` (9e).
+| M4 → 30 Oct | **resize the current VM in place to `Standard_D4as_v4`** (4 vCPU, 16 GB, non-burstable) | Same IP and URL, no rebuild (9b) |
+| only if a support ticket raises the FALSv6 quota **before M4** | a new `Standard_F4als_v6` instead (9c) | NVMe disk controller, so a new VM that takes over the static IP |
+| 26 → 30 Oct, F4 path only | `Standard_F8als_v6`, if Total Regional reaches 8 (9d) | In-place resize, same family |
+| after 30 Oct 2026 | delete the resource group (9e) | The VM isn't needed after that |
 
 The commands run in PowerShell on the **laptop** with the Azure CLI (`winget install Microsoft.AzureCLI`, then
-`az login`). Check the credit balance in the Azure portal (Cost Management + Billing) before each size change, and daily
-from 26 Oct.
+`az login`). Check the credit balance in the Azure portal (Cost Management + Billing) before each size change.
 
-### 9a. Names, quota and availability
+### 9a. Names and quota
 
 ```powershell
 az vm list -d -o table                      # the current VM's name and resource group
 $RG  = "<resource group>"
 $OLD = "<current VM name>"
+az vm list-usage --location indiasouthcentral -o table | Select-String -Pattern "DASv4|FALSv6|Total Regional"
+```
+
+### 9b. Resize in place to D4as_v4 (the plan)
+
+The resize restarts the VM, so the site is down for a few minutes; don't do it while anyone is using it. The static IP,
+the DNS name, the disk and everything on it stay. The new total of 4 vCPUs fits both the DASv4 quota (4) and the
+regional one (6), because the 2 B-series vCPUs are released.
+
+```powershell
+az vm list-vm-resize-options -g $RG -n $OLD -o table | Select-String "Standard_D4as_v4"
+az vm resize -g $RG -n $OLD --size Standard_D4as_v4
+```
+
+If `Standard_D4as_v4` isn't in the list, the VM's current hardware cluster can't host it. Run
+`az vm deallocate -g $RG -n $OLD`, then the resize, then `az vm start -g $RG -n $OLD`. A static IP survives
+deallocation. If the size still isn't offered after deallocating, check the VM's security type (`az vm show -g $RG -n $OLD
+--query securityProfile`) against what the size supports.
+
+Check it, then benchmark with the app stopped, and record the results in SPEC §19 (open item h):
+
+```powershell
+ssh vault "nproc; free -h"                    # 4 CPUs; the 4 GB swap file (§3) can stay
+```
+
+```bash
+sudo systemctl stop vault-probe
+cd ~/personal-search-vault && source .venv/bin/activate
+python bench/compare_ocr.py                   # OCR before/after table; ocr_threads = min(8, CPUs) = 4
+python bench/make_bench_corpus.py
+VAULT_DATA_DIR=bench/generated/data1 python -m vault index bench/generated/corpus
+VAULT_DATA_DIR=bench/generated/data2 python -m vault index bench/generated/corpus
+python bench/bench_ocr.py workers=2 ocr_threads=2   # two files OCR'd in parallel
+sudo systemctl start vault-probe
+```
+
+Also re-run the embedding benchmark (method in SPEC §19). Then run §8 from the laptop.
+
+### 9c. Only if the FALSv6 quota is raised before M4: a new F4als_v6
+
+v6 sizes only support the NVMe disk controller and the current VM uses SCSI, so this is a new VM that takes over the
+static IP (and with it the DNS name). Use this path instead of 9b, never after it. During the cutover both VMs exist:
+2 + 4 = 6 vCPUs, exactly the regional quota.
+
+Names:
+
+```powershell
 $NEW = "vault-v6"
 az network public-ip list -g $RG -o table   # the static IP that carries the swarup-vault DNS label
 $IP  = "<static public IP name>"
-
 $OLDNIC   = (az vm show -g $RG -n $OLD --query "networkProfile.networkInterfaces[0].id" -o tsv).Split('/')[-1]
 $OLDIPCFG = az network nic ip-config list -g $RG --nic-name $OLDNIC --query "[0].name" -o tsv
 $SUBNETID = az network nic ip-config list -g $RG --nic-name $OLDNIC --query "[0].subnet.id" -o tsv
 $NSGID    = az network nic show -g $RG -n $OLDNIC --query "networkSecurityGroup.id" -o tsv  # empty if the NSG is on the subnet
 $OLDDISK  = az vm show -g $RG -n $OLD --query "storageProfile.osDisk.name" -o tsv
 $IPZONES  = az network public-ip show -g $RG -n $IP --query "zones" -o tsv                  # empty = not zonal
-
-# vCPU quota: the FALSv6 family needs >= 4 free (8 for F8 later); DASv5 is the fallback
-az vm list-usage --location indiasouthcentral -o table | Select-String -Pattern "FALSv6|DASv5|Total Regional"
-# Is the size offered to this subscription here, and in which zones? (an entry under Restrictions means no)
-az vm list-skus --location indiasouthcentral --size Standard_F4als_v6 -o table
-az vm list-sizes --location indiasouthcentral --query "[?name=='Standard_F4als_v6']" -o table  # cores and RAM
+az vm list-skus --location indiasouthcentral --size Standard_F4als_v6 -o table             # offered here? which zones?
 ```
 
-If the FALSv6 quota is 0, request more under **Quotas → Compute** in the portal, or go straight to the fallback (9e).
-
-### 9b. Create the new VM with a temporary IP
-
-`--subnet`, `--nsg` and `--zone` reuse what the old VM has:
-- **Zone:** a zonal static IP can only attach to a VM in the same zone. Pass `--zone` when `$IPZONES` is a single zone; leave it out when it's empty.
-- **Security group:** without `--nsg`, `az vm create` makes a new security group that only opens SSH. If `$NSGID` is empty (the NSG sits on the subnet), pass `--nsg '""'` instead.
+Create it with a temporary IP. `--subnet`, `--nsg` and `--zone` reuse what the old VM has:
+- **Zone:** a zonal static IP can only attach to a VM in the same zone. Pass `--zone` when `$IPZONES` is a single zone; drop that line when it's empty.
+- **Security group:** without `--nsg`, `az vm create` makes a new security group that only opens SSH. If `$NSGID` is empty, pass `--nsg '""'`.
 
 ```powershell
 ssh-keygen -y -f "$env:USERPROFILE\.ssh\vault-key.pem" | Out-File -Encoding ascii "$env:USERPROFILE\.ssh\vault-key.pub"
@@ -212,31 +250,12 @@ $TMPIP    = az network public-ip show -g $RG -n "$NEW-tmp-ip" --query ipAddress 
 
 If `az` doesn't know `--disk-controller-type`, run `az upgrade`.
 
-### 9c. Set it up and benchmark it before the cutover
+Set it up through the temporary IP (`ssh -i "$env:USERPROFILE\.ssh\vault-key.pem" azureuser@$TMPIP`):
+- **§2–§6:** as written.
+- **§4 (code):** push to it as a second remote, `git remote add vmnew "azureuser@${TMPIP}:vault.git"`, with the key in `GIT_SSH_COMMAND`.
+- **§7 (Caddy):** install it, but expect no certificate until the cutover.
 
-Do §2–§6 on the new VM through the temporary IP (`ssh -i "$env:USERPROFILE\.ssh\vault-key.pem" azureuser@$TMPIP`).
-- **§4 (code):** push to it as a second remote, `git remote add vmnew "azureuser@${TMPIP}:vault.git"`. Git needs the key, so set it in `GIT_SSH_COMMAND` or use an SSH alias.
-- **§3 (swap):** keep the 4 GB swap file.
-- **§7 (Caddy):** install it, but expect no certificate yet; the DNS name still points at the old VM.
-
-Benchmark with the app stopped, and record the results in SPEC §19 (open item h):
-
-```bash
-sudo systemctl stop vault-probe
-cd ~/personal-search-vault && source .venv/bin/activate
-nproc                                         # 4; ocr_threads defaults to min(8, CPUs)
-python bench/compare_ocr.py                   # OCR before/after table
-python bench/make_bench_corpus.py
-VAULT_DATA_DIR=bench/generated/data1 python -m vault index bench/generated/corpus
-VAULT_DATA_DIR=bench/generated/data2 python -m vault index bench/generated/corpus
-sudo systemctl start vault-probe
-```
-
-Also re-run the embedding benchmark (method in SPEC §19).
-
-### 9d. Cut over the IP and DNS name, then delete the old VM
-
-The DNS label lives on the public IP resource, so it moves with the IP. The site is down for the minute this takes.
+Benchmark as in 9b. Then cut over. The DNS label lives on the IP resource, so it moves with it:
 
 ```powershell
 az network nic ip-config update -g $RG --nic-name $OLDNIC -n $OLDIPCFG --remove publicIpAddress
@@ -249,10 +268,9 @@ ssh -o StrictHostKeyChecking=accept-new vault "nproc; uptime"
 
 Then finish the cutover:
 1. On the VM, run `sudo systemctl reload caddy` and check that the certificate is obtained (§7).
-2. Run §8 from the laptop.
-3. Remove the temporary remote with `git remote remove vmnew`. The `vm` git remote and the `vault` SSH alias keep working, because the name is the same.
-
-When the new VM works, delete the old one along with its disk and NIC. The NSG stays, since the new VM uses it.
+2. Run §8.
+3. Run `git remote remove vmnew`.
+4. Delete the old VM, disk and NIC. The NSG stays, since the new VM uses it.
 
 ```powershell
 az vm delete -g $RG -n $OLD --yes
@@ -260,36 +278,19 @@ az disk delete -g $RG -n $OLDDISK --yes
 az network nic delete -g $RG -n $OLDNIC
 ```
 
-### 9e. Fallback: resize the current VM in place to D4as_v5
+### 9d. 26 → 30 Oct, F4 path only: F8als_v6 if Total Regional reaches 8
 
-Use this only if the FALSv6 quota is 0. The static IP stays attached through a resize.
-
-```powershell
-az vm list-vm-resize-options -g $RG -n $OLD -o table | Select-String "Standard_D4as_v5"
-az vm resize -g $RG -n $OLD --size Standard_D4as_v5     # restarts the VM
-```
-
-If the size isn't in the list, run `az vm deallocate -g $RG -n $OLD`, then the resize, then `az vm start -g $RG -n $OLD`.
-Benchmark as in 9c.
-
-### 9f. 26 Oct: F8als_v6, if the quota allows 8 vCPUs
-
-The same family, so it's an in-place resize (it restarts the VM):
+F8 alone needs 8 regional vCPUs, and FALSv6 ≥ 8, with the old VM already deleted. It's the same family, so it's an
+in-place resize (it restarts the VM):
 
 ```powershell
-az vm list-usage --location indiasouthcentral -o table | Select-String "FALSv6"
+az vm list-usage --location indiasouthcentral -o table | Select-String -Pattern "FALSv6|Total Regional"
 az vm resize -g $RG -n $NEW --size Standard_F8als_v6
 ```
 
-Benchmark again (9c), plus two files OCR'd in parallel:
+Benchmark again as in 9b, with `workers=2 ocr_threads=4` for the parallel run. Use F8 only from 26 to 30 Oct.
 
-```bash
-python bench/bench_ocr.py workers=2 ocr_threads=4
-```
-
-Run F8 only from 26 to 30 Oct; before that, stay on F4.
-
-### 9g. After 30 Oct 2026: delete everything
+### 9e. After 30 Oct 2026: delete everything
 
 This removes the VM, disks, IP and DNS name for good. Check first that the group holds nothing else:
 
