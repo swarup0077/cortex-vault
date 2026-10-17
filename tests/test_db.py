@@ -60,3 +60,33 @@ def test_roots_merge(conn) -> None:
     db.add_roots(conn, ["C:/a", "C:/b"])
     db.add_roots(conn, ["C:/b", "D:/c d"])
     assert db.get_roots(conn) == ["C:/a", "C:/b", "D:/c d"]
+
+
+def test_deleted_text_is_wiped_from_the_db_file(conn, cfg) -> None:
+    """`secure_delete` zeroes deleted rows; FTS5's own secure-delete drops their terms from its index. The hard
+    case for FTS5 is a big, fully merged index with no writes after the delete (e.g. a demo session at rest)."""
+    secret = b"zqxjvplk"  # the porter stemmer leaves it alone, so the index holds the same bytes
+    with db.transaction(conn):
+        for i in range(2000):
+            fid = _add_file(conn, f"{i:064d}")
+            text = "invoice zqxjvplk for march" if i == 1000 else f"lecture notes part {i}"
+            cid = db.insert_chunk(conn, fid, None, 0, "ocr", text, np.ones(4, np.float32))
+            if i == 1000:
+                target = fid
+                conn.execute("INSERT INTO ocr_lines(chunk_id, line_no, block_no, text) VALUES (?, 0, 0, ?)", (cid, text))
+    conn.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('optimize')")
+    assert cfg.db_path.read_bytes().count(secret) == 4  # chunks, ocr_lines, FTS content, FTS index
+
+    with db.transaction(conn):
+        db.delete_file(conn, target)
+    assert secret not in cfg.db_path.read_bytes()
+
+
+def test_fts_secure_delete_is_written_once(cfg) -> None:
+    db.connect(cfg.db_path).close()
+    c = db.connect(cfg.db_path)
+    changes = c.total_changes
+    db._fts_secure_delete(c)
+    assert c.total_changes == changes  # already on: reopening the (read-only) demo index writes nothing
+    assert c.execute("PRAGMA secure_delete").fetchone()[0] == 1
+    c.close()

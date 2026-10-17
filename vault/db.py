@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
+
+log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = "1"
 
@@ -73,10 +76,26 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path), isolation_level=None)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA secure_delete = ON")  # deleted rows are zeroed, not left in free space (SPEC §19)
     conn.executescript(SCHEMA)
+    _fts_secure_delete(conn)
     if get_meta(conn, "schema_version") is None:
         set_meta(conn, "schema_version", SCHEMA_VERSION)
     return conn
+
+
+def _fts_secure_delete(conn: sqlite3.Connection) -> None:
+    """Make FTS5 remove a deleted row's terms from its index at once. Without this they stay in the index
+    blobs (as delete markers beside the old entries) until a segment merge, whatever `secure_delete` says.
+    The option is stored in the table, so it's written once, not on every open."""
+    row = conn.execute("SELECT v FROM chunks_fts_config WHERE k = 'secure-delete'").fetchone()
+    if row is not None and row[0]:
+        return
+    try:
+        conn.execute("INSERT INTO chunks_fts(chunks_fts, rank) VALUES('secure-delete', 1)")
+    except sqlite3.OperationalError:  # FTS5 secure-delete needs SQLite 3.44+
+        log.warning("SQLite %s can't purge deleted text from the FTS index until it merges; 3.44+ can",
+                    sqlite3.sqlite_version)
 
 
 @contextmanager
