@@ -134,7 +134,7 @@ CREATE TABLE ocr_lines (
   x0 REAL, y0 REAL, x1 REAL, y1 REAL   -- images: original-image pixels; PDFs: page points
 );
 CREATE VIRTUAL TABLE chunks_fts USING fts5(text, tokenize='porter unicode61');  -- rowid = chunks.id
-CREATE TABLE text_vectors  (chunk_id INTEGER PRIMARY KEY REFERENCES chunks(id) ON DELETE CASCADE, vec BLOB NOT NULL); -- float32[384], L2-normalised
+CREATE TABLE text_vectors  (chunk_id INTEGER PRIMARY KEY REFERENCES chunks(id) ON DELETE CASCADE, vec BLOB NOT NULL); -- float32[384], L2-normalised; content chunks only (path chunks have none)
 CREATE TABLE image_vectors (file_id  INTEGER PRIMARY KEY REFERENCES files(id)  ON DELETE CASCADE, vec BLOB NOT NULL); -- float32[512], L2-normalised
 CREATE TABLE runs (id INTEGER PRIMARY KEY, started_at TEXT, finished_at TEXT, report_json TEXT);
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);  -- schema_version, model names, last_indexed
@@ -142,7 +142,7 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);  -- schema_version, model 
 
 - **One transaction per file**, covering its files row, chunks, FTS rows, OCR lines and vectors. An interrupted run therefore loses at most the file in progress, and the next run resumes through the fast path. FTS5 has no foreign-key cascade, so FTS rows are deleted explicitly.
 - `meta` stores the embedding model names. If they don't match the configured models at startup, refuse to search and tell the user to run `vault reindex`.
-- Every file has one `source='path'` chunk listing the filenames and parent folder names of **all** its paths, e.g. `Goa trip 2025 / IMG_2041.jpg`. Folder names carry real signal, and this gives image-only files something for BM25 to match. Rebuild and re-embed this one chunk whenever the file's paths change.
+- Every file has one `source='path'` chunk listing the filenames (without the extension) and parent folder names of **all** its paths, e.g. `Goa trip 2025 / IMG_2041`. Folder names carry real signal, and this gives image-only files something for BM25 to match. The path chunk is **keyword-only**: it has an FTS row but no vector, so it never shows up as a weak dense match, and a rename, move or copy embeds nothing (§19, 17 Oct). Its text is rewritten at the end of any run that changed the file's paths.
 - When a file loses its last path, delete it with all its rows.
 
 ---
@@ -275,7 +275,7 @@ Example: `screenshot of the access denied error from last week` → kinds={scree
 |---|---|---|
 | BM25 | `bm25(chunks_fts)` over chunks; query = content tokens (OR; stopwords dropped while another token remains) plus required phrases (AND) | 100 chunks |
 | All terms | the same, but every content token is required (AND), so only chunks holding the whole query match. Counts as BM25 in the ablations (§9) | 100 chunks |
-| Dense text | cosine(bge(text), text_vectors) | 100 chunks |
+| Dense text | cosine(bge(text), text_vectors): content chunks only, never path chunks | 100 chunks |
 | CLIP | cosine(clip_text(text), image_vectors), then the gate (§7.3) | ≤ 50 files |
 
 `vectors.py` provides `VectorIndex`. It loads a vector table into a NumPy matrix with a row→id map, runs exact top-k by matmul with `argpartition`, and supports a filter mask. Rebuild it after indexing.

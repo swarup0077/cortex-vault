@@ -13,7 +13,7 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"  # 2: path chunks are keyword-only (no vector)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS files (
@@ -79,8 +79,13 @@ def connect(db_path: Path | str) -> sqlite3.Connection:
     conn.execute("PRAGMA secure_delete = ON")  # deleted rows are zeroed, not left in free space (SPEC §19)
     conn.executescript(SCHEMA)
     _fts_secure_delete(conn)
-    if get_meta(conn, "schema_version") is None:
+    version = get_meta(conn, "schema_version")
+    if version is None:
         set_meta(conn, "schema_version", SCHEMA_VERSION)
+    elif version == "1":
+        with transaction(conn):  # path chunks lost their vectors; their text is rewritten by the next index run
+            conn.execute("DELETE FROM text_vectors WHERE chunk_id IN (SELECT id FROM chunks WHERE source = 'path')")
+            set_meta(conn, "schema_version", "2")
     return conn
 
 
@@ -182,11 +187,14 @@ def insert_ocr_lines(conn: sqlite3.Connection, chunk_id: int, lines: Iterable) -
     )
 
 
-def update_chunk_text(conn: sqlite3.Connection, chunk_id: int, text: str, vec: np.ndarray) -> None:
-    """Replace a chunk's text, FTS row and vector, keeping its id."""
+def update_chunk_text(conn: sqlite3.Connection, chunk_id: int, text: str, vec: np.ndarray | None) -> None:
+    """Replace a chunk's text, FTS row and vector, keeping its id. `vec=None` leaves it with no vector."""
     conn.execute("UPDATE chunks SET text = ? WHERE id = ?", (text, chunk_id))
     conn.execute("DELETE FROM chunks_fts WHERE rowid = ?", (chunk_id,))
     conn.execute("INSERT INTO chunks_fts(rowid, text) VALUES (?, ?)", (chunk_id, text))
+    if vec is None:
+        conn.execute("DELETE FROM text_vectors WHERE chunk_id = ?", (chunk_id,))
+        return
     conn.execute(
         "INSERT INTO text_vectors(chunk_id, vec) VALUES (?, ?) "
         "ON CONFLICT(chunk_id) DO UPDATE SET vec = excluded.vec",

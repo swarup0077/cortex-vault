@@ -140,3 +140,20 @@ def test_all_terms_list_beats_a_long_loosely_matching_doc(conn, fake_embedder, f
     assert [r.filename for r in results] == ["Screenshot (5).png", "lecture transcript.docx"]
     assert results[0].ranks["all_terms"] == 1
     assert "<mark>gradient</mark> <mark>clipping</mark> <mark>threshold</mark>" in results[0].snippet_html
+
+
+def test_path_chunks_are_keyword_only(conn, cfg, fake_embedder, tmp_path) -> None:
+    """Owner's pattern (b): a photo with no text used to be a weak dense hit for every query through its
+    "folder / filename" vector. Now its name is found by BM25 only."""
+    from PIL import Image
+
+    from conftest import save_image
+
+    root = tmp_path / "c"
+    save_image(Image.new("RGB", (640, 480), "gray"), root / "Goa trip 2025" / "IMG_2041.jpg")
+    (root / "bills.txt").write_text("The electricity invoice is due on the fifth.", encoding="utf-8")
+    index_paths(conn, [root], cfg)
+    assert [r.filename for r in search(conn, "electricity invoice", cfg).results] == ["bills.txt"]
+    r = search(conn, "goa trip", cfg).results[0]  # (dense still lists bills.txt: it always returns its top k)
+    assert r.filename == "IMG_2041.jpg" and r.ranks["bm25"] == 1 and r.ranks["dense"] is None
+    assert all(r.ranks["bm25"] is None for r in search(conn, "jpg", cfg).results)  # the extension isn't indexed

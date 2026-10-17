@@ -90,3 +90,18 @@ def test_fts_secure_delete_is_written_once(cfg) -> None:
     assert c.total_changes == changes  # already on: reopening the (read-only) demo index writes nothing
     assert c.execute("PRAGMA secure_delete").fetchone()[0] == 1
     c.close()
+
+
+def test_migration_1_to_2_drops_path_chunk_vectors(cfg) -> None:
+    c = db.connect(cfg.db_path)
+    with db.transaction(c):
+        fid = _add_file(c)
+        db.insert_chunk(c, fid, None, 0, "path", "notes / todo.txt", np.ones(4, np.float32))
+        db.insert_chunk(c, fid, None, 1, "doc_text", "buy milk", np.ones(4, np.float32))
+        db.set_meta(c, "schema_version", "1")
+    c.close()
+    c = db.connect(cfg.db_path)
+    assert db.get_meta(c, "schema_version") == "2"
+    assert [r[0] for r in c.execute("SELECT c.source FROM text_vectors v JOIN chunks c ON c.id = v.chunk_id")] == ["doc_text"]
+    assert c.execute("SELECT count(*) FROM chunks_fts WHERE chunks_fts MATCH 'todo'").fetchone()[0] == 1  # still keyword-searchable
+    c.close()

@@ -1,7 +1,7 @@
 """Incremental, content-addressed indexing (SPEC §6.1).
 
 One `files` row per unique sha256; any number of `paths` point at it. Renames, moves and duplicates
-only touch `paths` and the file's one `path` chunk, never the content chunks.
+only touch `paths` and the file's one keyword-only `path` chunk: nothing is re-embedded.
 """
 
 from __future__ import annotations
@@ -157,9 +157,8 @@ class _Indexer:
             self.report.errors.append({"path": str(primary.path), "status": status, "error": error or ""})
 
         path_text = path_chunk_text(f.path for f in group)
-        texts = [c.text for c in chunks] + [path_text] if status == "ok" else []
-        with self.timed("embed"):
-            vecs = self.embedder.embed_documents(texts)
+        with self.timed("embed"):  # the path chunk is keyword-only: no vector (SPEC §5)
+            vecs = self.embedder.embed_documents([c.text for c in chunks])
 
         if ex is not None and ex.doc_date:
             date, date_source = ex.doc_date, "doc_meta"
@@ -174,7 +173,7 @@ class _Indexer:
                  ex.pages if ex else None, status, error, _now()),
             ).lastrowid
             if status == "ok":
-                db.insert_chunk(self.conn, file_id, None, 0, "path", path_text, vecs[-1])
+                db.insert_chunk(self.conn, file_id, None, 0, "path", path_text, None)
                 for i, (c, v) in enumerate(zip(chunks, vecs), start=1):
                     chunk_id = db.insert_chunk(self.conn, file_id, c.page, i, c.source, c.text, v)
                     if c.lines:
@@ -213,10 +212,10 @@ class _Indexer:
                     self.report.deleted += len(paths)
 
     def refresh_path_chunks(self) -> None:
-        """Re-embed path chunks whose text no longer matches the file's paths.
+        """Rewrite path chunks whose text no longer matches the file's paths (FTS only; they have no vector).
 
-        Runs once at the end of every run, so a rename (new path linked, old one swept) embeds once,
-        and a crash between the two heals on the next run.
+        Runs once at the end of every run, so a rename (new path linked, old one swept) is written once, and a
+        crash between the two heals on the next run.
         """
         groups: dict[int, list[Path]] = {}
         for r in self.conn.execute(
@@ -227,11 +226,9 @@ class _Indexer:
         stale = [(cid, text) for cid, paths in groups.items() if (text := path_chunk_text(paths)) != current[cid]]
         if not stale:
             return
-        with self.timed("embed"):
-            vecs = self.embedder.embed_documents([t for _, t in stale])
         with self.timed("write"), db.transaction(self.conn):
-            for (cid, text), vec in zip(stale, vecs):
-                db.update_chunk_text(self.conn, cid, text, vec)
+            for cid, text in stale:
+                db.update_chunk_text(self.conn, cid, text, None)
 
     def compact(self) -> None:
         with self.timed("compact"):

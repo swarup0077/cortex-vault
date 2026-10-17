@@ -77,8 +77,9 @@ def test_docx_chunks_have_no_page() -> None:
 
 def test_path_chunk_text() -> None:
     paths = [Path("C:/Users/me/Goa trip 2025/IMG_2041.jpg"), Path("D:/backup/Goa trip 2025/IMG_2041.jpg")]
-    assert path_chunk_text(paths) == "Goa trip 2025 / IMG_2041.jpg"
-    assert path_chunk_text([Path("/a/b.txt"), Path("/c/d.txt")]) == "a / b.txt\nc / d.txt"
+    assert path_chunk_text(paths) == "Goa trip 2025 / IMG_2041"  # no extension: "pdf" mustn't match every PDF
+    assert path_chunk_text([Path("/a/b.txt"), Path("/c/d.txt")]) == "a / b\nc / d"
+    assert path_chunk_text([Path("/a/b.txt"), Path("/a/b.md")]) == "a / b"
 
 
 # ---------------------------------------------------------------- OCR chunks (block-aware, SPEC §6.4)

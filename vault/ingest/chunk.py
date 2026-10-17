@@ -154,6 +154,7 @@ def chunk_extracted(ex: Extracted, cfg: Config) -> list[Chunk]:
 
 
 def path_chunk_text(paths: Iterable[Path]) -> str:
-    """`Parent folder / filename` for every path of a file, one per line (SPEC §5)."""
-    lines = {f"{p.parent.name} / {p.name}" if p.parent.name else p.name for p in paths}
+    """`Parent folder / filename` for every path of a file, one per line, without the extension (SPEC §5): a
+    query containing "pdf" shouldn't match every PDF's name."""
+    lines = {f"{p.parent.name} / {p.stem}" if p.parent.name else p.stem for p in paths}
     return "\n".join(sorted(lines))

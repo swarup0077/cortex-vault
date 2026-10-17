@@ -29,9 +29,13 @@ def fts_hits(conn, term: str) -> int:
 
 
 def assert_consistent(conn) -> None:
-    """Every chunk has exactly one FTS row and one vector; nothing dangles."""
+    """Every chunk has exactly one FTS row, every content chunk one vector, path chunks none; nothing dangles."""
     c = counts(conn)
-    assert c["chunks"] == c["chunks_fts"] == c["text_vectors"]
+    content = conn.execute("SELECT count(*) FROM chunks WHERE source != 'path'").fetchone()[0]
+    assert c["chunks"] == c["chunks_fts"] and c["text_vectors"] == content
+    assert conn.execute(
+        "SELECT count(*) FROM text_vectors v JOIN chunks c ON c.id = v.chunk_id WHERE c.source = 'path'"
+    ).fetchone()[0] == 0
     assert conn.execute("SELECT count(*) FROM chunks_fts WHERE rowid NOT IN (SELECT id FROM chunks)").fetchone()[0] == 0
     assert conn.execute("SELECT count(*) FROM files WHERE id NOT IN (SELECT file_id FROM paths)").fetchone()[0] == 0
 
@@ -89,12 +93,14 @@ def test_copy_adds_path_but_no_chunks(conn, cfg, fake_embedder, corpus) -> None:
     assert after["paths"] == before["paths"] + 1
     assert after["files"] == before["files"] and after["chunks"] == before["chunks"]
     assert content_chunks(conn) == chunks_before
-    # only the path chunk was re-embedded, now listing both copies
-    assert fake_embedder.embedded == ["backup copy / la.pdf\npapers / linear algebra.pdf"]
+    # nothing was embedded; the keyword-only path chunk now lists both copies
+    assert fake_embedder.embedded == []
+    assert conn.execute("SELECT text FROM chunks WHERE source = 'path' AND text LIKE '%la%'").fetchone()[0] == (
+        "backup copy / la\npapers / linear algebra")
     assert_consistent(conn)
 
 
-def test_rename_reembeds_only_the_path_chunk(conn, cfg, fake_embedder, corpus) -> None:
+def test_rename_embeds_nothing(conn, cfg, fake_embedder, corpus) -> None:
     index_paths(conn, [corpus], cfg)
     before, chunks_before = counts(conn), content_chunks(conn)
     fake_embedder.embedded.clear()
@@ -104,7 +110,7 @@ def test_rename_reembeds_only_the_path_chunk(conn, cfg, fake_embedder, corpus) -
     assert (rep.linked, rep.deleted, rep.added, rep.files_deleted) == (1, 1, 0, 0)
     assert counts(conn) == before
     assert content_chunks(conn) == chunks_before  # same ids, texts and vectors
-    assert fake_embedder.embedded == ["decks / machine learning lecture.pptx"]
+    assert fake_embedder.embedded == []  # the path chunk is keyword-only (SPEC §5, §19)
     assert fts_hits(conn, "lecture") == 1 and fts_hits(conn, "ml") == 0
     assert_consistent(conn)
 
@@ -135,7 +141,7 @@ def test_deleting_one_copy_keeps_content(conn, cfg, fake_embedder, corpus) -> No
     rep = index_paths(conn, [corpus], cfg)
     assert (rep.deleted, rep.files_deleted) == (1, 0)
     assert fts_hits(conn, "plumber") == 1
-    assert conn.execute("SELECT text FROM chunks WHERE source = 'path' AND text LIKE '%todo%'").fetchone()[0] == "dup / todo.txt"
+    assert conn.execute("SELECT text FROM chunks WHERE source = 'path' AND text LIKE '%todo%'").fetchone()[0] == "dup / todo"
     assert_consistent(conn)
 
 
@@ -269,7 +275,7 @@ def test_stale_path_chunk_heals_next_run(conn, cfg, fake_embedder, corpus, monke
     monkeypatch.undo()
     fake_embedder.embedded.clear()
     index_paths(conn, [corpus], cfg)
-    assert fts_hits(conn, "chores") == 1 and fake_embedder.embedded == ["notes / chores.txt"]
+    assert fts_hits(conn, "chores") == 1 and fake_embedder.embedded == []
 
 
 # ---------------------------------------------------------------- images and OCR (M2), fake OCR engine
