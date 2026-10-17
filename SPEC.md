@@ -242,6 +242,8 @@ WhatsApp strips EXIF, but its filenames keep the date. Files with neither (for e
 ### 7.1 Query parsing (`search/parse.py`, rule-based, deterministic)
 Input: the raw query and `now` (injectable, for tests). Output: `ParsedQuery(text, kinds, date_from, date_to, phrases)`.
 
+**Build order (§19, 17 Oct):** M4 builds only the kind words *screenshot(s)*, *photo(s)/picture(s)*, *pdf*, *slides/deck/ppt* and *doc/notes*, with the mappings in the table below, sharing code with the UI's kind chips. The rest of the table, dates, glue-word stripping and removable parsed-filter chips are Later (§14).
+
 - **Kind words** become hard filters and are removed from the text that gets embedded:
 
   | Words | Kinds |
@@ -285,7 +287,7 @@ Example: `screenshot of the access denied error from last week` → kinds={scree
 
 **The gate:**
 - Compute z = (score − mean) / std over all filter-passing candidate images, and keep only hits with **z ≥ 2.0** (configurable), at most 50.
-- If there are fewer than 20 candidates, keep the top 5 instead.
+- If there are fewer than 20 candidates, keep the top 5 instead, but only those with cosine ≥ `clip_min_cosine` (0.26, provisional; §19). Without it, a small collection lifted up to 5 unrelated images into every query.
 - If the query contains a quoted phrase or a code-like token, multiply CLIP's RRF weight by 0.5 (configurable). A code-like token is either a hex value like `0x80070005`, a run of 6 or more digits, or a token of 4 or more characters mixing letters and digits.
 - The gate logic is unit-tested on synthetic score arrays. The eval compares gated vs ungated (§9).
 
@@ -331,7 +333,7 @@ Example: `screenshot of the access denied error from last week` → kinds={scree
 - Empty state: example queries as clickable chips.
 
 **Index tab (local only)**
-- Add or remove folders, and an "Index now" button with a progress bar.
+- Add or remove folders, and a manual "Index now" button with a progress bar. Automatic re-indexing (a file watcher or periodic scan) is Later (§14). Demo mode has no folder indexing at all, only uploads.
 - Last run report, counts by kind, and an error list.
 
 **Upload tab (demo only)**
@@ -362,7 +364,7 @@ Thumbnails and previews are served only by file id or session id. Gradio's `allo
   - `exact`: codes, IDs, rare strings;
   - `semantic`: a paraphrase of the content;
   - `visual`: the target has no text;
-  - `filtered`: kind or date words;
+  - `filtered`: kind words (M4); date words are Later (§14), so date-based queries are written now but marked Later and skipped until the date parser is picked;
   - `mixed`.
 - **At least 40 queries, at least 6 per category.** The set must also include:
   - ≥ 6 queries whose targets are `.docx` / `.pptx` files;
@@ -370,7 +372,7 @@ Thumbnails and previews are served only by file id or session id. Gradio's `allo
   - ≥ 3 targeting text inside images on PDF pages.
 
   Write the queries *before* looking at results.
-- Relative-date queries run with a **fixed `now`** set in the eval config, so results don't drift with the calendar.
+- Relative-date queries (Later, with the date parser) run with a **fixed `now`** set in the eval config, so results don't drift with the calendar.
 - **Metrics:** Recall@1, Recall@5, Recall@10 and MRR@10, overall and per category. Also query latency p50/p95.
 - **Ablations** (one row each). "BM25" includes the all-terms list (§19, 17 Oct):
   1. BM25 only
@@ -393,6 +395,15 @@ Thumbnails and previews are served only by file id or session id. Gradio's `allo
 ---
 
 ## 10. Demo corpus (`corpus/`, committed, non-personal only)
+
+**The 7 demo scenarios.** The corpus covers each one with public or self-made files, never personal ones:
+1. **Which deck had that example?** Several versions of a lecture deck; a query finds the right slide.
+2. **That paper about…** PDFs with meaningless names (arXiv numbers); a query worded differently from the paper finds the right page.
+3. **The error screenshot.** Error dialogs and tracebacks; an exact code or message finds the right one.
+4. **The photographed notice.** Phone photos of printed notices and whiteboards, one of them upside down; OCR finds them.
+5. **Tickets and receipts.** Exact times, dates or amounts find them.
+6. **Photos by what's in them.** Photos with no text; CLIP finds them ("dice on a table", "a cat on a sofa").
+7. **Scanned books and notes.** Image-only scanned pages, plus a book whose contents page competes with the section page (open item n).
 
 Aim for about 200 files:
 - **~30 PDFs:** arXiv papers (check the licence; many are CC-BY) and public documents.
@@ -440,7 +451,7 @@ Requirements:
 | `whiteboard with equations` | whiteboard photo (CLIP or OCR) |
 | `<a phrase near the bottom of a tall scrolling screenshot>` | that screenshot, with the line boxed |
 | `<text that only appears inside an image on a slide-style PDF page>` | that PDF and page |
-| `screenshots from last week` (fixed `now`) | only screenshots in that date range, newest first |
+| `screenshots from last week` (fixed `now`; **Later**, needs the date parser; skipped until then) | only screenshots in that date range, newest first |
 | `"<an exact sentence copied from one corpus PDF>"` | that PDF and page (exact-phrase path) |
 
 `tests/test_smoke.py` runs these against the demo index. It's skipped if the index is missing.
@@ -491,7 +502,7 @@ The plan has one Claude Code session per milestone, with a commit at the end of 
 | M1 | Sat 17 Oct | **Text pipeline** | Content-addressed discover (fast path, hashing, linking renames and duplicates, newest-first, sweep, resumable). PDF native text; docx/pptx/txt/md with the zip guard; chunking; FTS5 + bge; RRF over 2 lists; CLI `index`, `search`, `stats`. **Tests:** a PDF fixture returns the right **page**, and a pptx fixture the right **slide**. A docx fixture is found by paraphrase. Copying a file adds a path but no chunks. A rename re-embeds no content chunks (only the file's one `path` chunk, §5). Deleting the last path removes all rows. |
 | M2 | Sun 18 Oct | **OCR** | RapidOCR on all images: tiling, reading order, blocks, block-aware chunks, `ocr_lines`. PDF scanned-page and image-region OCR. **Tests:** a Pillow-drawn `ERROR 0x80070005` is the top hit for `0x80070005`. Text in the bottom strip of a 1080×6000 fixture is found, and its box is in the right place. A two-column fixture gives two blocks rather than interleaved lines. Text drawn inside an embedded image on a PDF page is found. **Measured** files/sec per kind recorded in §19. |
 | M3 | Mon 19 Oct | **Photos, CLIP, metadata** | CLIP vision/text as the 3rd list, with the gate (unit-tested on synthetic scores). Classifier with a test per rule, including Snipping Tool names. Date extraction with a test per source. Thumbnails for all five kinds. |
-| M4 | Tue 20 Oct | **UI + first deploy (submission-safe checkpoint)** | Search tab with a ranked list (top 20 cards + "Show more" up to 50; CLI default `-n 10`; the gate and filters never cut the list to one result), thumbnails, snippets, kind chips. Index tab. Cross-platform "Open file". `VAULT_MODE=demo` with a read-only demo index built from a ~50-file first slice of the corpus. Multi-file upload into a session copy of the index, with a scope toggle (*My uploads* / *Sample files* / *Both*); upload limits enforced in code; the 30-minute expiry. VM resized in place to `Standard_D4as_v4` and benchmarked (open item h). Deployed, and the URL works from a phone. **After M4 plus transcripts, the submission is complete.** |
+| M4 | Tue 20 Oct | **UI + first deploy (submission-safe checkpoint)** | Search tab with a ranked list (top 20 cards + "Show more" up to 50; CLI default `-n 10`; the gate and filters never cut the list to one result), thumbnails, snippets, kind chips, and the kind words in the query (§7.1 subset, sharing code with the chips). Index tab with a manual "Index now" (local mode only). Cross-platform "Open file". `VAULT_MODE=demo` with a read-only demo index built from a ~50-file first slice of the corpus. Multi-file upload into a session copy of the index, with a scope toggle (*My uploads* / *Sample files* / *Both*); upload limits enforced in code; the 30-minute expiry. VM resized in place to `Standard_D4as_v4` and benchmarked (open item h). Deployed, and the URL works from a phone. **After M4 plus transcripts, the submission is complete.** |
 
 ### Demo first (target dates are flexible; the other viva projects may come first)
 
@@ -505,11 +516,11 @@ The plan has one Claude Code session per milestone, with a commit at the end of 
 | — | **Tue 27 Oct, before 2 PM** | Submit | URL + transcript HTML on MS Teams. |
 
 **Later** (optional, decided at the time; M7 is the earliest slot):
-- the natural-language query parser (§7.1) with date filters and parsed-filter chips;
+- the rest of the query parser (§7.1): date filters, the other kind words, parsed-filter chips;
 - rerank (§7.5);
 - the "+N copies" duplicate badge;
 - folder upload;
-- auto-scan / a file watcher (`watchdog`, ~2 s debounce, because the OS fires several events per save), with an "Index now" button;
+- automatic re-indexing: a file watcher (`watchdog`, ~2 s debounce, because the OS fires several events per save) or a periodic scan. The manual "Index now" button is in M4;
 - `setup.bat` / `setup.sh`, with the install tested on a different computer.
 
 **Cut order if behind** (drop from the top):
@@ -674,6 +685,8 @@ The plan has one Claude Code session per milestone, with a commit at the end of 
 | 17 Oct | **Backfill pass** at the end of every run (open item i): files indexed by older versions are brought up to date without OCR or text embedding. Interim kinds are reclassified and re-dated from the image header, mtime/doc_meta dates pick up a filename date, and missing thumbnails and CLIP vectors are made, 16 files per transaction | The fast path skips unchanged files, so without it an M2 index would need a full `reindex` (hours of OCR on a large folder) to get M3's kinds, dates, thumbnails and CLIP |
 | 17 Oct | **Real CLIP on generated scenes** (24 images: a drawn sunset beach, a green field, a checkerboard, 21 text screenshots): each target was the top CLIP hit at z ≈ 4.5–4.8 ("sunset at the beach" 0.296 vs next 0.151), the only image the gate kept; "error 0x80070005" kept none (max z 0.52) and halved CLIP's weight. Embedding the 24 took 0.73 s; the first model download took ~60 s | Basis for `tests/test_clip_real.py`; the z = 2.0 threshold has a wide margin on clear visual queries |
 | 17 Oct | **Ingest speed after M3** (same synthetic set, method and laptop as the M2 rows; now with classifier, dates, thumbnails and CLIP). Two runs, files/sec: **screenshot 0.23 / 0.24, photo 0.41 / 0.43, pdf 0.13 / 0.11**. Stage time: OCR 184 / 189 s, embed 16 / 18 s, **CLIP 8.0 / 7.3 s for 37 images (≈ 0.2 s each), thumbnails 2.0 / 1.9 s for 47 files**, everything else < 5 s. The CLI's first query loads bge (0.9 s) and CLIP-text (1.1 s) | Lower than this morning's 0.30 / 0.62 / 0.14, but not all of it is M3: the embed stage also rose from 9–11 s to 16–18 s although M3 embeds less (no path-chunk vectors), so the laptop was in its slower state (the drift noted in the embedding benchmark). The directly timed M3 stages (CLIP + thumbnails) add ≈ 10 s per 47 files. Re-measure interleaved, and on the VM (open item h) |
+| 17 Oct | **`clip_min_cosine` = 0.26 (provisional)** for the gate's small-collection fallback (fewer than 20 candidates): a top-5 hit is kept only at cosine ≥ 0.26 (open item r). Calibrated with the real CLIP on 15 generated images (9 scenes, 6 text screenshots) and 17 queries: the 9 matching pairs scored 0.265–0.326 (lowest: green field); of 246 non-matching pairs the highest were 0.275 ("singular value decomposition" vs the dice picture), 0.258 and 0.252 (an error-code query vs text screenshots); "electricity invoice" stayed below 0.252. 0.26 keeps every match and passes 1 of the 246; the midpoint 0.27 would pass the same pair and lose the green field. Tune with the eval in M6 (open item o) | Without it a text-free photo came up for "electricity invoice" in a small collection, which the demo's *My uploads* scope will usually be. The ranges overlap, so no value is clean |
+| 17 Oct | Owner's answers: (p) M4 builds the kind words only (*screenshot(s)*, *photo(s)/picture(s)*, *pdf*, *slides/deck/ppt*, *doc/notes*), sharing code with the kind chips; date words, the date-based eval queries and the "last week" smoke test are Later. (q) The 7 demo scenarios are listed in §10. The M4 Index tab keeps a manual "Index now" button in local mode; "Later" means automatic re-indexing; demo mode has no folder indexing, only uploads | Demo first: kind words make filtered queries work with little code; dates can wait |
 
 ### Open items
 
@@ -695,10 +708,11 @@ Status is `open`, `done` (with the commit), or `moved to Mx` (with the reason). 
 | l | Ranking patterns from the owner's real-file test (43 queries): **(a)** a short screenshot whose OCR text has a rare exact query word ranks below a long lecture-transcript `.docx` that matches only loosely through dense retrieval (3 times; the transcript is #2 for ~15 of the 43 queries); **(b)** path-only chunks ("folder / filename") show up as weak dense matches for unrelated queries; **(c)** a book's table-of-contents page (dot leaders) ranked #1 while the real section pages weren't in the top 3; **(d)** common-word queries put the right screenshot only at #3. Agreed 17 Oct (§19): (d), (a), (b) with (e) in M3, in that order, each with a fixture test; (c) moved to M6 as item n | M3 | done: (d) 0292950, (a) f93f830, (b)+(e) 60ea1dd; (c) is item n |
 | m | The stray-CJK cleanup works within a line, so an icon detected as its own one-character line (e.g. `品` alone) is kept. If such lines still show up in snippets, drop a lone one-character CJK line when the rest of the image is Latin | M6 | done: b180a6f |
 | n | Table-of-contents pages (pattern c in item l). Flag pages with ≥ 5 "dot leader + page number" entries as `pdf_toc` (before stripping), strip leader runs from chunk text, leave TOC chunks out of dense, and let a TOC chunk stand for its file only when none of the file's other chunks is in that list. Stored text is enough to re-flag existing PDFs without re-extracting. Test: a fixture PDF with a contents page and a section page shows the section page. The owner checks the threshold on their real books. First in M6, before item o | M6 | open |
-| o | Tune the RRF weights and k with the eval, after item n. Weight changes alone can't fix pattern (a) of item l (see §19), so this is tuning on top of the M3 fixes, not instead of them | M6 | open |
-| p | The query parser is now Later (§14), but §9's `filtered` category (≥ 6 queries with kind or date words), the fixed-`now` relative-date queries, and the §12 smoke test "screenshots from last week" all need it. Decide before M6: build the kind words (and maybe dates) anyway, or drop or skip those queries until the parser is picked | M6 | open |
-| q | M6 says the corpus covers "the 7 demo scenarios"; the spec doesn't list them yet. The owner names them (§10 and §12 are the closest lists) | M6 | open |
-| r | The gate's small-library rule (§7.3: fewer than 20 candidate images → keep the top 5) means that in a small collection every text query lifts up to 5 images through CLIP, relevant or not: with the fake CLIP, a text-free photo came up for "electricity invoice". The demo's *My uploads* scope will usually have fewer than 20 images. Owner to decide: keep it, or e.g. keep the top 5 only above the candidates' mean, or at reduced weight | M4 | open |
+| o | Tune the RRF weights and k, and `clip_min_cosine` (provisional 0.26, item r), with the eval, after item n. Weight changes alone can't fix pattern (a) of item l (see §19), so this is tuning on top of the M3 fixes, not instead of them | M6 | open |
+| p | The query parser is now Later (§14), but §9's `filtered` category (≥ 6 queries with kind or date words), the fixed-`now` relative-date queries, and the §12 smoke test "screenshots from last week" all need it. Decide before M6: build the kind words (and maybe dates) anyway, or drop or skip those queries until the parser is picked | M4 | moved to M4: kind words only; date-based eval queries and the "last week" smoke test are Later (§9, §12) |
+| q | M6 says the corpus covers "the 7 demo scenarios"; the spec doesn't list them yet. The owner names them (§10 and §12 are the closest lists) | M6 | done: listed in §10 |
+| r | The gate's small-library rule (§7.3: fewer than 20 candidate images → keep the top 5) means that in a small collection every text query lifts up to 5 images through CLIP, relevant or not: with the fake CLIP, a text-free photo came up for "electricity invoice". The demo's *My uploads* scope will usually have fewer than 20 images. Owner to decide: keep it, or e.g. keep the top 5 only above the candidates' mean, or at reduced weight | M4 | done: e5c45ae (`clip_min_cosine`, provisional 0.26) |
+| s | Dense always returns its top k whatever the similarity, so in a small collection the only text file is dense #1 for *any* query: with the real CLIP, "sunset at the beach" put the sunset photo (CLIP #1) in a tie with an unrelated `bills.txt` (dense #1). The same small-collection effect as item r, on the text side; the demo's *My uploads* scope will show it. Consider a minimum cosine for dense hits too, measured with the eval | M6 | open |
 
 ---
 
