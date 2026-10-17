@@ -121,6 +121,7 @@ def search(
 
     embedder = embedder or models.text_embedder(cfg)
     db.check_text_model(conn, embedder.name)
+    sw.lap("load_model")  # ~0 once warm; the first query pays the model load
     bm25_hits = retrievers.bm25(conn, pq, cfg.top_k)
     sw.lap("bm25")
     if text_index is None:
