@@ -33,6 +33,21 @@ def test_visual_query_finds_the_picture(conn, cfg, fake_embedder, real_clip, sce
     assert search(conn, "a chessboard", cfg).results[0].filename == "IMG_0102.jpg"
 
 
+def test_small_collection_keeps_only_similar_images(conn, cfg, fake_embedder, real_clip, tmp_path) -> None:
+    """Fewer than 20 images: no z-score, so a hit needs cosine >= clip_min_cosine (open item r)."""
+    root = tmp_path / "few"
+    save_image(draw_sunset_beach(), root / "IMG_0101.jpg", exif=camera_exif())
+    save_image(draw_text_image((800, 400), [(30, 30, "Settings saved")], 24), root / "Screenshot (1).png")
+    (root / "bills.txt").write_text("The electricity invoice is due on the fifth.", encoding="utf-8")
+    index_paths(conn, [root], cfg)
+    resp = search(conn, "electricity invoice", cfg)
+    assert resp.clip["kept"] == 0 and [r.filename for r in resp.results] == ["bills.txt"]
+    resp = search(conn, "sunset at the beach", cfg)
+    [sunset] = [r for r in resp.results if r.filename == "IMG_0101.jpg"]
+    assert not resp.clip["gated"] and resp.clip["kept"] == 1 and sunset.ranks["clip"] == 1
+    # (bills.txt ties it: dense always returns its top k, so the only text file is dense #1 here; open item s)
+
+
 def test_gate_keeps_clip_out_of_an_error_code(conn, cfg, fake_embedder, real_clip, scenes) -> None:
     index_paths(conn, [scenes], cfg)
     resp = search(conn, "error 0x80070005", cfg)

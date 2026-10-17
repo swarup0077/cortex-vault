@@ -66,7 +66,19 @@ def test_visual_match_has_no_snippet_and_a_badge(conn, cfg, fake_embedder, tmp_p
     r = resp.results[0]
     assert r.filename == "IMG_1.jpg" and r.ranks["clip"] == 1 and r.ranks["bm25"] is None
     assert r.badges == ["visual match"] and r.snippet_html == "" and r.thumb_url.startswith("thumbs/")
-    assert resp.clip == {"candidates": 3, "kept": 3, "gated": False, "weight": 1.0}  # < 20 images: top 5 kept
+    # < 20 images: the top 5, but only those at least clip_min_cosine similar (green and blue score 0)
+    assert resp.clip == {"candidates": 3, "kept": 1, "gated": False, "weight": 1.0}
+
+
+def test_text_free_photo_stays_out_of_a_text_query(conn, cfg, fake_embedder, tmp_path) -> None:
+    """Open item r: in a small collection the fallback used to lift any photo into every query."""
+    root = tmp_path / "c"
+    photo(root, "IMG_2041.jpg", "gray")
+    (root / "bills.txt").write_text("The electricity invoice is due on the fifth.", encoding="utf-8")
+    index_paths(conn, [root], cfg)
+    resp = search(conn, "electricity invoice", cfg)
+    assert [r.filename for r in resp.results] == ["bills.txt"]
+    assert resp.clip == {"candidates": 1, "kept": 0, "gated": False, "weight": 1.0}
 
 
 def many_images(root: Path, n_gray: int = 24) -> None:

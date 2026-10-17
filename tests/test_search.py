@@ -122,7 +122,6 @@ def test_all_terms_list_beats_a_long_loosely_matching_doc(conn, fake_embedder, f
     from vault.ingest.records import OcrLine
 
     cfg = Config(data_dir=tmp_path / "data", top_k=20)
-    cfg = replace(cfg, weights={**cfg.weights, "clip": 0.0})  # about BM25 vs dense; CLIP would lift the lone image
     root = tmp_path / "c"
     save_image(draw_text_image((800, 200), []), root / "Screenshot (5).png")
     fake_ocr.lines_for = lambda img: [OcrLine(t, 0.95, 10, 10 + 40 * i, 500, 40 + 40 * i) for i, t in enumerate([
@@ -146,13 +145,9 @@ def test_all_terms_list_beats_a_long_loosely_matching_doc(conn, fake_embedder, f
 def test_path_chunks_are_keyword_only(conn, cfg, fake_embedder, tmp_path) -> None:
     """Owner's pattern (b): a photo with no text used to be a weak dense hit for every query through its
     "folder / filename" vector. Now its name is found by BM25 only."""
-    from dataclasses import replace
-
     from PIL import Image
 
     from conftest import save_image
-
-    cfg = replace(cfg, weights={**cfg.weights, "clip": 0.0})  # about text retrieval; CLIP is tested on its own
     root = tmp_path / "c"
     save_image(Image.new("RGB", (640, 480), "gray"), root / "Goa trip 2025" / "IMG_2041.jpg")
     (root / "bills.txt").write_text("The electricity invoice is due on the fifth.", encoding="utf-8")

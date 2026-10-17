@@ -42,8 +42,8 @@ def gate(ids: np.ndarray, scores: np.ndarray, pq: ParsedQuery, cfg: Config) -> G
     factor = cfg.clip_code_weight if (pq.phrases or is_code_like(pq.text)) else 1.0
     n = len(scores)
     order = np.argsort(-scores, kind="stable")  # ties keep the given (file id) order
-    if n < cfg.clip_gate_min_candidates:
-        keep = order[: cfg.clip_gate_fallback_top]
+    if n < cfg.clip_gate_min_candidates:  # too few for a z-score: the top few, if similar enough at all
+        keep = [i for i in order[: cfg.clip_gate_fallback_top] if scores[i] >= cfg.clip_min_cosine]
         return Gated([(int(ids[i]), float(scores[i])) for i in keep], False, factor, n)
     std = float(scores.std())
     if std == 0.0:  # every image scores the same: none stands out

@@ -51,14 +51,22 @@ def test_z_threshold_is_inclusive_and_configurable() -> None:
 
 @pytest.mark.parametrize("n", [1, 5, 19])
 def test_few_candidates_keep_the_top_five_ungated(n: int) -> None:
-    scores = np.linspace(0.1, 0.3, n)
+    scores = np.linspace(0.27, 0.35, n)  # all similar enough
     g = gate(ids(n), scores, Q, CFG)
     assert not g.gated and g.candidates == n
     assert [f for f, _ in g.hits] == list(ids(n)[::-1][:5])
 
 
+def test_few_candidates_keep_only_hits_above_the_min_cosine() -> None:
+    """Open item r: with < 20 images the top 5 used to enter fusion for any query, relevant or not."""
+    scores = np.array([0.30, 0.25, 0.20, 0.26])
+    assert [f for f, _ in gate(ids(4), scores, Q, CFG).hits] == [100, 103]  # 0.26 is inclusive
+    assert gate(ids(4), scores, Q, Config(clip_min_cosine=0.31)).hits == []
+    assert len(gate(ids(4), scores, Q, Config(clip_min_cosine=0.0)).hits) == 4
+
+
 def test_ties_keep_file_id_order() -> None:
-    g = gate(ids(3), np.array([0.2, 0.3, 0.3]), Q, CFG)
+    g = gate(ids(3), np.array([0.27, 0.3, 0.3]), Q, CFG)
     assert [f for f, _ in g.hits] == [101, 102, 100]
 
 

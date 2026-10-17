@@ -90,6 +90,9 @@ class Config:
     clip_gate_max: int = 50
     clip_gate_min_candidates: int = 20  # fewer candidates than this: z is meaningless, keep the top few instead
     clip_gate_fallback_top: int = 5
+    # ...and of those, only hits at least this similar. Provisional, from generated scenes (SPEC §19): matching
+    # pairs scored 0.265-0.326, non-matching ones up to 0.258 bar one at 0.275. Tune with the eval in M6.
+    clip_min_cosine: float = 0.26
     clip_code_weight: float = 0.5  # CLIP's RRF weight is multiplied by this for quoted or code-like queries
     snippet_chars: int = 200
     max_results: int = 20
