@@ -160,6 +160,21 @@ def build_pdf_with_image(path: Path, title: str, image: Image.Image,
     return path
 
 
+def build_slides_pdf(path: Path, slides: Sequence[tuple[str, Image.Image | None]],
+                     rect: tuple[float, float, float, float] = (50, 150, 550, 450)) -> Path:
+    """One page per slide: native title text, plus an optional picture body at `rect`."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    doc = pymupdf.open()
+    for title, image in slides:
+        page = doc.new_page()
+        page.insert_text((50, 80), title, fontsize=18)
+        if image is not None:
+            page.insert_image(pymupdf.Rect(*rect), stream=png_bytes(image), keep_proportion=False)
+    doc.save(path)
+    doc.close()
+    return path
+
+
 def build_scanned_pdf(path: Path, images: Sequence[Image.Image]) -> Path:
     """Pages that are only a full-page picture: no text layer."""
     path.parent.mkdir(parents=True, exist_ok=True)
