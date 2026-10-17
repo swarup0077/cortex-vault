@@ -277,7 +277,7 @@ Example: `screenshot of the access denied error from last week` → kinds={scree
 |---|---|---|
 | BM25 | `bm25(chunks_fts)` over chunks; query = content tokens (OR; stopwords dropped while another token remains) plus required phrases (AND) | 100 chunks |
 | All terms | the same, but every content token is required (AND), so only chunks holding the whole query match. Counts as BM25 in the ablations (§9) | 100 chunks |
-| Dense text | cosine(bge(text), text_vectors): content chunks only, never path chunks | 100 chunks |
+| Dense text | cosine(bge(text), text_vectors): content chunks only, never path chunks. Chunks below `dense_min_cosine` (0.42, provisional; §19) are dropped at any collection size | ≤ 100 chunks |
 | CLIP | cosine(clip_text(text), image_vectors), then the gate (§7.3) | ≤ 50 files |
 
 `vectors.py` provides `VectorIndex`. It loads a vector table into a NumPy matrix with a row→id map, runs exact top-k by matmul with `argpartition`, and supports a filter mask. Rebuild it after indexing.

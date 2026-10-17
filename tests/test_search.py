@@ -95,6 +95,23 @@ def test_docx_found_by_paraphrase(bge_index) -> None:
     assert r.ranks == {"bm25": None, "all_terms": None, "dense": 1, "clip": None}  # no shared words: found by meaning alone
 
 
+def test_dense_floor_is_inclusive(conn, cfg, fake_embedder, tmp_path) -> None:
+    """Dense keeps a chunk exactly at dense_min_cosine and drops one just below it (open item s)."""
+    from dataclasses import replace
+
+    root = tmp_path / "c"
+    root.mkdir()
+    text = "alpha gamma delta epsilon"
+    (root / "a.txt").write_text(text, encoding="utf-8")
+    index_paths(conn, [root], cfg)
+    cos = float(fake_embedder.embed_query(text) @ fake_embedder.embed_query("alpha beta"))
+    assert 0 < cos < 1
+    at = search(conn, "alpha beta", replace(cfg, dense_min_cosine=cos)).results
+    assert at[0].ranks["dense"] == 1
+    above = search(conn, "alpha beta", replace(cfg, dense_min_cosine=cos + 1e-6)).results
+    assert above[0].ranks["dense"] is None and above[0].ranks["bm25"] == 1  # still found by its word
+
+
 def test_common_words_dont_outrank_the_screenshot(conn, cfg, fake_embedder, fake_ocr, tmp_path) -> None:
     """Owner's pattern (d): docs full of "where is the" used to beat the screenshot holding the content words,
     because BM25 matched them on the stopwords and dense liked the same words."""
@@ -121,7 +138,8 @@ def test_all_terms_list_beats_a_long_loosely_matching_doc(conn, fake_embedder, f
     from conftest import build_docx, draw_text_image, save_image
     from vault.ingest.records import OcrLine
 
-    cfg = Config(data_dir=tmp_path / "data", top_k=20)
+    # dense_min_cosine is on bge's scale; the fake embedder scores the transcript ~0.37, so no floor here
+    cfg = Config(data_dir=tmp_path / "data", top_k=20, dense_min_cosine=0.0)
     root = tmp_path / "c"
     save_image(draw_text_image((800, 200), []), root / "Screenshot (5).png")
     fake_ocr.lines_for = lambda img: [OcrLine(t, 0.95, 10, 10 + 40 * i, 500, 40 + 40 * i) for i, t in enumerate([
@@ -153,6 +171,6 @@ def test_path_chunks_are_keyword_only(conn, cfg, fake_embedder, tmp_path) -> Non
     (root / "bills.txt").write_text("The electricity invoice is due on the fifth.", encoding="utf-8")
     index_paths(conn, [root], cfg)
     assert [r.filename for r in search(conn, "electricity invoice", cfg).results] == ["bills.txt"]
-    r = search(conn, "goa trip", cfg).results[0]  # (dense still lists bills.txt: it always returns its top k)
+    [r] = search(conn, "goa trip", cfg).results  # bills.txt shares no word: below the dense floor (open item s)
     assert r.filename == "IMG_2041.jpg" and r.ranks["bm25"] == 1 and r.ranks["dense"] is None
     assert all(r.ranks["bm25"] is None for r in search(conn, "jpg", cfg).results)  # the extension isn't indexed

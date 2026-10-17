@@ -93,11 +93,13 @@ def dense(
     embedder: TextEmbedder,
     index: VectorIndex,
     allowed: set[int] | None,
+    min_cosine: float = -1.0,
 ) -> list[Hit]:
+    """Top-k chunks by cosine, dropping any less similar than `min_cosine` (SPEC §7.2)."""
     if not pq.text or not len(index):
         return []
     mask = index.mask_groups(allowed) if allowed is not None else None
-    top = index.search(embedder.embed_query(pq.text), k, mask)
+    top = [(cid, s) for cid, s in index.search(embedder.embed_query(pq.text), k, mask) if s >= min_cosine]
     if not top:
         return []
     ids = [cid for cid, _ in top]

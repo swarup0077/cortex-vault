@@ -80,6 +80,12 @@ class Config:
 
     # Search (SPEC §7)
     top_k: int = 100
+    # Dense hits less similar than this are dropped, at any collection size: dense always returns its top k, so
+    # without a floor the only text file in a small collection was dense #1 for any query (open item s).
+    # Provisional, on bge-small-en-v1.5's scale (bench/calibrate.py dense): 35 generated matching pairs, 24 of them
+    # hard paraphrases, scored 0.539-0.832; the floor sits 2 std of the hard-pair scores (0.113) below the lowest,
+    # rounded down. A floor too high costs paraphrase recall, so it errs low: it cuts 55% of unrelated pairs.
+    dense_min_cosine: float = 0.42
     rrf_k: int = 60
     # RRF weight per ranked list; 0 leaves a list out (the ablations do). "all_terms" is BM25 restricted to chunks
     # holding every content term (SPEC §7.2, §19)

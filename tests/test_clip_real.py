@@ -45,7 +45,7 @@ def test_small_collection_keeps_only_similar_images(conn, cfg, fake_embedder, re
     resp = search(conn, "sunset at the beach", cfg)
     [sunset] = [r for r in resp.results if r.filename == "IMG_0101.jpg"]
     assert not resp.clip["gated"] and resp.clip["kept"] == 1 and sunset.ranks["clip"] == 1
-    # (bills.txt ties it: dense always returns its top k, so the only text file is dense #1 here; open item s)
+    # bills.txt is still dense #1 here: bge scores it 0.44 against "sunset at the beach", above the 0.42 floor
 
 
 def test_gate_keeps_clip_out_of_an_error_code(conn, cfg, fake_embedder, real_clip, scenes) -> None:

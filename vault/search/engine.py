@@ -141,7 +141,7 @@ def search(
     if text_index is None:
         text_index = retrievers.load_text_index(conn, embedder.dim)
         sw.lap("load_vectors")
-    dense_hits = retrievers.dense(conn, pq, cfg.top_k, embedder, text_index, allowed)
+    dense_hits = retrievers.dense(conn, pq, cfg.top_k, embedder, text_index, allowed, cfg.dense_min_cosine)
     sw.lap("dense")
 
     gated = Gated([], False, 1.0, 0)

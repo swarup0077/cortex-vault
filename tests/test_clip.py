@@ -81,6 +81,16 @@ def test_text_free_photo_stays_out_of_a_text_query(conn, cfg, fake_embedder, tmp
     assert resp.clip == {"candidates": 1, "kept": 0, "gated": False, "weight": 1.0}
 
 
+def test_unrelated_text_file_stays_out_of_a_visual_query(conn, cfg, fake_embedder, tmp_path) -> None:
+    """Open item s: dense returned its top k whatever the similarity, so the only text file was dense #1 for any
+    query and tied the photo CLIP found. It shares no word with the query: below the dense floor."""
+    root = tmp_path / "c"
+    photo(root, "IMG_2041.jpg", "red")
+    (root / "bills.txt").write_text("The electricity invoice is due on the fifth.", encoding="utf-8")
+    index_paths(conn, [root], cfg)
+    assert [r.filename for r in search(conn, "red", cfg).results] == ["IMG_2041.jpg"]
+
+
 def many_images(root: Path, n_gray: int = 24) -> None:
     photo(root, "IMG_red.jpg", "red")
     for i in range(n_gray):
