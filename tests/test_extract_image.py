@@ -34,7 +34,7 @@ def test_ocr_segment_and_size(tmp_path: Path, fake_ocr) -> None:
                                       OcrLine("ERROR Ox80070005", 0.95, 10, 5, 320, 35)]
     path = save_image(draw_text_image((800, 100), []), tmp_path / "err.png")
     ex = extract_image(path, CFG)
-    assert (ex.width, ex.height, ex.ocr_images) == (800, 100, 1)
+    assert (ex.width, ex.height, ex.ocr_images, ex.ocr_empty) == (800, 100, 1, 0)
     [seg] = ex.segments
     assert (seg.source, seg.page, seg.text) == ("ocr", None, "ERROR 0x80070005 Access is denied")
     assert [l.text for l in seg.lines] == ["ERROR 0x80070005", "Access is denied"]
@@ -54,3 +54,4 @@ def test_tall_image_is_read_in_strips(tmp_path: Path, fake_ocr) -> None:
     ex = extract_image(path, CFG)
     assert fake_ocr.seen == [(1080, 1600)] * 5
     assert ex.segments == [] and (ex.width, ex.height) == (1080, 6000)
+    assert (ex.ocr_images, ex.ocr_empty) == (1, 1)

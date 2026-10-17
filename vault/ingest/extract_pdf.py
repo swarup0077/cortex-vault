@@ -104,4 +104,6 @@ def extract_pdf(path: Path, cfg: Config | None = None, engine: models.OcrEngine 
             ex.ocr_images += 1
             if lines:
                 ex.segments.append(Segment(lines_text(lines), page.number + 1, "ocr", tuple(lines)))
+            else:
+                ex.ocr_empty += 1
         return ex

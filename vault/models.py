@@ -111,7 +111,7 @@ class RapidOcrEngine:
         self._use_cls = cfg.ocr_use_cls
         log.info("loading OCR models %s", self.name)
         self._ocr = RapidOCR(params={
-            "Global.log_level": "warning",
+            "Global.log_level": "error",  # an image with no text is normal; the index report counts them
             "Global.text_score": cfg.ocr_min_conf,
             "Global.use_cls": cfg.ocr_use_cls,
             "Global.max_side_len": cfg.ocr_max_side,  # tiles are already sized; don't shrink them again

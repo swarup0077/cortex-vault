@@ -49,4 +49,5 @@ def extract_image(path: Path, cfg: Config, engine: models.OcrEngine | None = Non
     lines = reading_order(ocr_image(img, engine or models.ocr_engine(cfg), cfg, use_cls=use_cls), cfg)
     seconds = time.perf_counter() - t0
     segments = [Segment(lines_text(lines), None, "ocr", tuple(lines))] if lines else []
-    return Extracted(segments=segments, width=img.width, height=img.height, ocr_seconds=seconds, ocr_images=1)
+    return Extracted(segments=segments, width=img.width, height=img.height, ocr_seconds=seconds, ocr_images=1,
+                     ocr_empty=0 if lines else 1)

@@ -48,6 +48,7 @@ class IndexReport:
     timings: dict[str, float] = field(default_factory=dict)  # seconds per stage
     per_kind: dict[str, dict[str, float]] = field(default_factory=dict)  # kind -> {files, seconds}
     ocr_images: int = 0  # images and PDF pages sent to OCR
+    ocr_empty: int = 0  # of those, how many gave no text (blank pages, photos without any)
     ocr_capped: list[str] = field(default_factory=list)  # PDFs that hit the OCR page cap
     interrupted: bool = False
     started_at: str = ""
@@ -143,6 +144,7 @@ class _Indexer:
             self.report.timings["extract"] -= ex.ocr_seconds  # report OCR as its own stage
             self.report.timings["ocr"] = self.report.timings.get("ocr", 0.0) + ex.ocr_seconds
             self.report.ocr_images += ex.ocr_images
+            self.report.ocr_empty += ex.ocr_empty
             if ex.ocr_capped:
                 self.report.ocr_capped.append(str(primary.path))
         except SkipFile as e:
@@ -302,8 +304,9 @@ class _Indexer:
         )
         db.set_meta(self.conn, "last_indexed", rep.finished_at)
         log.info(
-            "indexed: %d added, %d linked, %d updated, %d deleted, %d unchanged, %d errors, %d OCR'd%s",
+            "indexed: %d added, %d linked, %d updated, %d deleted, %d unchanged, %d errors, %d OCR'd (%d no text)%s",
             rep.added, rep.linked, rep.updated, rep.deleted, rep.unchanged, len(rep.errors), rep.ocr_images,
+            rep.ocr_empty,
             " (interrupted)" if rep.interrupted else "",
         )
         return rep

@@ -54,4 +54,5 @@ class Extracted:
     height: int | None = None
     ocr_seconds: float = 0.0
     ocr_images: int = 0  # images (or PDF pages) sent to OCR
+    ocr_empty: int = 0  # of those, how many gave no text
     ocr_capped: bool = False  # a PDF hit the OCR page cap

@@ -64,6 +64,7 @@ def _print_report(console: Console, rep: IndexReport) -> None:
         ("seen", rep.seen), ("unchanged", rep.unchanged), ("added", rep.added), ("linked", rep.linked),
         ("updated", rep.updated), ("deleted paths", rep.deleted), ("deleted files", rep.files_deleted),
         ("errors / skipped", len(rep.errors)), ("OCR'd images + PDF pages", rep.ocr_images),
+        ("  of which no text", rep.ocr_empty),
     ]:
         t.add_row(label, str(value))
     for stage, secs in rep.timings.items():

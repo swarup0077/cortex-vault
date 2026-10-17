@@ -78,6 +78,7 @@ def test_ocr_threads_reach_onnx_runtime(monkeypatch) -> None:
     monkeypatch.setattr(rapidocr, "RapidOCR", FakeRapidOCR)
     models.RapidOcrEngine(Config(ocr_threads=3))
     assert seen["EngineConfig.onnxruntime.intra_op_num_threads"] == 3
+    assert seen["Global.log_level"] == "error"  # no warning per text-free image; the report counts them
     models.RapidOcrEngine(Config(ocr_threads=0))
     assert seen["EngineConfig.onnxruntime.intra_op_num_threads"] == -1  # 0 → ONNX Runtime's own default
 
@@ -105,3 +106,21 @@ def test_ocr_classifier_override_does_not_stick(monkeypatch) -> None:
     engine.read(img, use_cls=False)  # screenshot
     engine.read(img)  # photo again
     assert engine._ocr.ran_with == [True, False, True]
+
+
+@pytest.mark.slow
+def test_rapidocr_is_quiet_on_an_image_without_text(real_ocr) -> None:
+    """RapidOCR used to warn "The text detection result is empty" for every such image. Its logger has its own
+    stderr handler and doesn't propagate, so listen on it directly."""
+    import logging
+
+    records: list[logging.LogRecord] = []
+    handler = logging.Handler()
+    handler.emit = records.append
+    rapid = logging.getLogger("RapidOCR")
+    rapid.addHandler(handler)
+    try:
+        assert real_ocr.read(np.full((300, 400, 3), 255, np.uint8)) == []
+    finally:
+        rapid.removeHandler(handler)
+    assert records == []

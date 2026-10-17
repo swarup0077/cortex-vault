@@ -85,6 +85,12 @@ def test_ocr_page_cap(tmp_path: Path, one_line) -> None:
     assert [s.page for s in ocr_segments(ex)] == [1, 2]
 
 
+def test_ocrd_pages_without_text_are_counted(tmp_path: Path, fake_ocr) -> None:
+    fake_ocr.lines_for = lambda img: [OcrLine("cover text", 0.9, 150, 300, 450, 330)] if len(fake_ocr.seen) == 1 else []
+    ex = extract_pdf(build_scanned_pdf(tmp_path / "scan.pdf", [blank()] * 3), CFG)
+    assert (ex.ocr_images, ex.ocr_empty) == (3, 2) and [s.page for s in ocr_segments(ex)] == [1]
+
+
 def test_rotated_page_is_read_as_shown_and_boxes_stay_unrotated(tmp_path: Path, one_line) -> None:
     rect = (100, 150, 500, 350)  # 400 × 200 pt, unrotated
     path = build_pdf_with_image(tmp_path / "rot.pdf", "A rotated page with a picture", blank(), rect=rect, rotate=90)

@@ -295,7 +295,7 @@ def shots(tmp_path: Path, fake_ocr) -> Path:
 
 def test_images_are_ocrd_and_lines_stored(conn, cfg, fake_embedder, shots) -> None:
     rep = index_paths(conn, [shots], cfg)
-    assert (rep.added, rep.errors, rep.ocr_images) == (2, [], 2) and "ocr" in rep.timings
+    assert (rep.added, rep.errors, rep.ocr_images, rep.ocr_empty) == (2, [], 2, 1) and "ocr" in rep.timings
     assert_consistent(conn)
     files = {r["kind"]: tuple(r) for r in conn.execute("SELECT kind, kind_reason, width, height FROM files")}
     assert files == {"screenshot": ("screenshot", "interim:ext", 800, 200), "photo": ("photo", "interim:ext", 640, 480)}
