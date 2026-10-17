@@ -1,11 +1,12 @@
-"""M2 done-when criteria (SPEC §14) with the real RapidOCR engine. The text embedder stays fake: these
+"""M2 done-when criteria (SPEC §14) and OCR regressions with the real RapidOCR engine. The text embedder stays fake: these
 tests are about what OCR puts in the index, and BM25 is what finds exact strings."""
 
+import os
 from pathlib import Path
 
 import pytest
 
-from conftest import build_slides_pdf, draw_text_image, save_image, text_bbox
+from conftest import build_slides_pdf, camera_exif, draw_label_photo, draw_text_image, save_image, text_bbox
 from vault.ingest.extract_image import extract_image
 from vault.ingest.ocr import blocks
 from vault.ingest.pipeline import index_paths
@@ -89,3 +90,26 @@ def test_text_inside_an_image_on_a_pdf_page_is_found(conn, cfg, fake_embedder, r
     r = search(conn, "northern region revenue", cfg).results[0]
     assert (r.filename, r.page) == ("board review.pdf", 2)
     assert "<mark>northern</mark> <mark>region</mark>" in r.snippet_html
+
+
+def test_upside_down_photo_is_read_after_a_screenshot(conn, cfg, fake_embedder, real_ocr, tmp_path: Path) -> None:
+    """A notebook cover photographed upside down. Screenshots skip the angle classifier; the photo indexed after
+    one must still get it (RapidOCR used to keep the screenshot's use_cls=False for every later call)."""
+    root = tmp_path / "phone"
+    cover = draw_label_photo((1600, 2000), (250, 600, 1350, 1150), [
+        (320, 650, "DATA STRUCTURES", 110), (320, 820, "Semester Three", 80), (320, 960, "Lecture notebook", 60),
+    ])
+    photo = save_image(cover.rotate(180), root / "IMG_4410.jpg", quality=88, exif=camera_exif())
+    shot = save_image(draw_text_image((900, 200), [(30, 60, "Build finished with 2 warnings")], 28),
+                      root / "Screenshot (3).png")
+    os.utime(photo, (1_760_000_000, 1_760_000_000))
+    os.utime(shot, (1_760_000_600, 1_760_000_600))  # newer, so it's OCR'd first
+    rep = index_paths(conn, [root], cfg)
+    assert rep.errors == [] and rep.ocr_images == 2
+
+    r = search(conn, "data structures notebook", cfg).results[0]
+    assert r.filename == "IMG_4410.jpg" and r.ranks["bm25"] == 1
+    got = [row[0] for row in conn.execute(
+        "SELECT l.text FROM ocr_lines l JOIN chunks c ON c.id = l.chunk_id JOIN paths p ON p.file_id = c.file_id "
+        "WHERE p.path = ? ORDER BY l.line_no", (str(photo.resolve()),))]
+    assert got == ["Lecture notebook", "Semester Three", "DATA STRUCTURES"]  # each line upright; image order is bottom-up

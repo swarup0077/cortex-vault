@@ -80,3 +80,28 @@ def test_ocr_threads_reach_onnx_runtime(monkeypatch) -> None:
     assert seen["EngineConfig.onnxruntime.intra_op_num_threads"] == 3
     models.RapidOcrEngine(Config(ocr_threads=0))
     assert seen["EngineConfig.onnxruntime.intra_op_num_threads"] == -1  # 0 → ONNX Runtime's own default
+
+
+def test_ocr_classifier_override_does_not_stick(monkeypatch) -> None:
+    """RapidOCR keeps a per-call use_cls on the instance and reads None as "keep the last one", so the engine
+    must pass a bool every time: a screenshot (classifier off) must not turn it off for the next photo."""
+    import rapidocr
+
+    class StickyRapidOCR:  # mimics RapidOCR.update_params: a non-None use_cls is stored on the instance
+        def __init__(self, params):
+            self.use_cls = params["Global.use_cls"]
+            self.ran_with: list[bool] = []
+
+        def __call__(self, img, use_cls=None):
+            if use_cls is not None:
+                self.use_cls = use_cls
+            self.ran_with.append(self.use_cls)
+            return type("Out", (), {"boxes": None, "txts": None})()
+
+    monkeypatch.setattr(rapidocr, "RapidOCR", StickyRapidOCR)
+    engine = models.RapidOcrEngine(Config())
+    img = np.zeros((10, 10, 3), np.uint8)
+    engine.read(img)  # photo
+    engine.read(img, use_cls=False)  # screenshot
+    engine.read(img)  # photo again
+    assert engine._ocr.ran_with == [True, False, True]

@@ -15,7 +15,7 @@ import numpy as np
 import pptx
 import pymupdf
 import pytest
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from pptx.util import Inches
 
 from vault import db, models
@@ -128,6 +128,33 @@ def draw_text_image(size: tuple[int, int], texts: Sequence[tuple[int, int, str]]
     for x, y, text in texts:
         d.text((x, y), text, fill="black", font=font(font_size))
     return img
+
+
+def draw_label_photo(size: tuple[int, int], label: tuple[int, int, int, int],
+                     texts: Sequence[tuple[int, int, str, int]], seed: int = 0) -> Image.Image:
+    """A photo-like picture: a noisy, shaded cover with a light `label` box holding big (x, y, text, size) text,
+    slightly blurred, like a notebook cover shot on a phone."""
+    w, h = size
+    rng = np.random.default_rng(seed)
+    base = np.empty((h, w, 3), np.float32)
+    base[..., 0] = 30 + 40 * np.linspace(0, 1, w)[None, :]
+    base[..., 1] = 50 + 30 * np.linspace(0, 1, h)[:, None]
+    base[..., 2] = 120
+    base += rng.normal(0, 12, base.shape)
+    img = Image.fromarray(np.clip(base, 0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle(label, 30, fill=(235, 232, 220))
+    for x, y, text, font_size in texts:
+        d.text((x, y), text, fill=(20, 20, 20), font=font(font_size))
+    return img.filter(ImageFilter.GaussianBlur(0.8))
+
+
+def camera_exif() -> Image.Exif:
+    """EXIF that marks a picture as a camera photo (Make/Model)."""
+    exif = Image.Exif()
+    exif[0x010F] = "TestCam"
+    exif[0x0110] = "Model 1"
+    return exif
 
 
 def text_bbox(xy: tuple[int, int], text: str, font_size: int = 32) -> tuple[float, float, float, float]:

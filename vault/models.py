@@ -108,6 +108,7 @@ class RapidOcrEngine:
         if missing:
             raise FileNotFoundError(f"bundled OCR models not found (rapidocr version changed?): {missing}")
         self.name = f"rapidocr:{cfg.ocr_det_model}+{cfg.ocr_rec_model}"
+        self._use_cls = cfg.ocr_use_cls
         log.info("loading OCR models %s", self.name)
         self._ocr = RapidOCR(params={
             "Global.log_level": "warning",
@@ -125,6 +126,9 @@ class RapidOcrEngine:
         self.last_elapse: list[float | None] = []  # det / cls / rec seconds of the last call (profiling)
 
     def read(self, image: np.ndarray, *, use_cls: bool | None = None) -> list[OcrLine]:
+        # Always pass a bool: RapidOCR stores a per-call use_cls on the instance and reads None as "keep the
+        # last one", so one screenshot (use_cls=False) would switch the classifier off for every later photo.
+        use_cls = self._use_cls if use_cls is None else use_cls
         out = self._ocr(np.ascontiguousarray(image[:, :, ::-1]), use_cls=use_cls)  # RapidOCR takes BGR arrays
         self.last_elapse = list(getattr(out, "elapse_list", []))
         if getattr(out, "boxes", None) is None or getattr(out, "txts", None) is None:
