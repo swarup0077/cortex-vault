@@ -270,3 +270,62 @@ def test_stale_path_chunk_heals_next_run(conn, cfg, fake_embedder, corpus, monke
     fake_embedder.embedded.clear()
     index_paths(conn, [corpus], cfg)
     assert fts_hits(conn, "chores") == 1 and fake_embedder.embedded == ["notes / chores.txt"]
+
+
+# ---------------------------------------------------------------- images and OCR (M2), fake OCR engine
+
+from PIL import Image  # noqa: E402
+
+from conftest import draw_text_image, save_image  # noqa: E402
+from vault.ingest.records import OcrLine  # noqa: E402
+
+
+@pytest.fixture
+def shots(tmp_path: Path, fake_ocr) -> Path:
+    root = tmp_path / "Pictures"
+    save_image(draw_text_image((800, 200), []), root / "Screenshot (3).png")
+    save_image(Image.new("RGB", (640, 480), "gray"), root / "trip" / "IMG_0001.jpg")
+    fake_ocr.lines_for = lambda img: [
+        OcrLine("Access is denied", 0.90, 10, 50, 280, 80),
+        OcrLine("ERROR Ox80070005", 0.95, 10, 10, 300, 40),
+        OcrLine("smudge", 0.20, 10, 120, 80, 140),
+    ] if img.shape[1] == 800 else []
+    return root
+
+
+def test_images_are_ocrd_and_lines_stored(conn, cfg, fake_embedder, shots) -> None:
+    rep = index_paths(conn, [shots], cfg)
+    assert (rep.added, rep.errors, rep.ocr_images) == (2, [], 2) and "ocr" in rep.timings
+    assert_consistent(conn)
+    files = {r["kind"]: tuple(r) for r in conn.execute("SELECT kind, kind_reason, width, height FROM files")}
+    assert files == {"screenshot": ("screenshot", "interim:ext", 800, 200), "photo": ("photo", "interim:ext", 640, 480)}
+
+    [chunk] = conn.execute("SELECT id, text, page FROM chunks WHERE source = 'ocr'").fetchall()
+    assert (chunk["text"], chunk["page"]) == ("ERROR 0x80070005 Access is denied", None)
+    lines = conn.execute(
+        "SELECT line_no, block_no, text, conf, x0, y0, x1, y1 FROM ocr_lines WHERE chunk_id = ? ORDER BY line_no",
+        (chunk["id"],),
+    ).fetchall()
+    assert " ".join(r["text"] for r in lines) == chunk["text"]  # corrected text, same as the chunk
+    assert tuple(lines[0])[2:] == ("ERROR 0x80070005", 0.95, 10, 10, 300, 40)
+    assert fts_hits(conn, '"0x80070005"') == 1
+    # the photo with no text is still indexed, with just its path chunk
+    assert conn.execute(
+        "SELECT group_concat(c.source) FROM chunks c JOIN files f ON f.id = c.file_id WHERE f.kind = 'photo'"
+    ).fetchone()[0] == "path"
+
+
+def test_deleting_an_image_removes_its_ocr_lines(conn, cfg, fake_embedder, shots) -> None:
+    index_paths(conn, [shots], cfg)
+    assert conn.execute("SELECT count(*) FROM ocr_lines").fetchone()[0] == 2
+    (shots / "Screenshot (3).png").unlink()
+    index_paths(conn, [shots], cfg)
+    assert conn.execute("SELECT count(*) FROM ocr_lines").fetchone()[0] == 0
+    assert_consistent(conn)
+
+
+def test_corrupt_image_is_recorded_and_run_continues(conn, cfg, fake_embedder, shots) -> None:
+    (shots / "broken.jpg").write_bytes(b"not a jpeg")
+    rep = index_paths(conn, [shots], cfg)
+    assert rep.added == 3 and [e["status"] for e in rep.errors] == ["error"]
+    assert "broken.jpg" in rep.errors[0]["path"]

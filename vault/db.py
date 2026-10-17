@@ -155,6 +155,14 @@ def insert_chunk(
     return chunk_id
 
 
+def insert_ocr_lines(conn: sqlite3.Connection, chunk_id: int, lines: Iterable) -> None:
+    """Store an OCR chunk's lines with their boxes (`OcrLine` records)."""
+    conn.executemany(
+        "INSERT INTO ocr_lines(chunk_id, line_no, block_no, text, conf, x0, y0, x1, y1) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [(chunk_id, l.line, l.block, l.text, l.conf, l.x0, l.y0, l.x1, l.y1) for l in lines],
+    )
+
+
 def update_chunk_text(conn: sqlite3.Connection, chunk_id: int, text: str, vec: np.ndarray) -> None:
     """Replace a chunk's text, FTS row and vector, keeping its id."""
     conn.execute("UPDATE chunks SET text = ? WHERE id = ?", (text, chunk_id))

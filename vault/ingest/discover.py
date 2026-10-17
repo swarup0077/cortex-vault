@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import logging
 import os
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
+from vault.ingest.classify import EXT_KINDS, IMAGE_EXTS
 from vault.platform import SYSTEM_DIR_NAMES, is_hidden
 
 log = logging.getLogger(__name__)
 
-# M1 indexes text formats only; image extensions join when OCR lands (SPEC §19, 17 Oct).
-TEXT_EXTS = frozenset({".pdf", ".docx", ".pptx", ".txt", ".md"})
+TEXT_EXTS = frozenset(EXT_KINDS)
+# HEIC only when pillow-heif is installed (SPEC §6.1); it's optional and not in requirements.txt.
+_HEIF = importlib.util.find_spec("pillow_heif") is not None
+INDEX_EXTS = TEXT_EXTS | (IMAGE_EXTS if _HEIF else IMAGE_EXTS - {".heic"})
 
 
 @dataclass(frozen=True)
@@ -34,7 +38,7 @@ def _skip_dir(path: Path) -> bool:
         return True
 
 
-def walk(root: Path, exts: frozenset[str] = TEXT_EXTS) -> Iterator[FoundFile]:
+def walk(root: Path, exts: frozenset[str] = INDEX_EXTS) -> Iterator[FoundFile]:
     """Yield allowed files under `root`, skipping hidden/system folders and Office lock files."""
     root = Path(root).resolve()
 
@@ -58,7 +62,7 @@ def walk(root: Path, exts: frozenset[str] = TEXT_EXTS) -> Iterator[FoundFile]:
             yield FoundFile(path=path, root=root, size=st.st_size, mtime=st.st_mtime)
 
 
-def walk_roots(roots: Iterable[Path], exts: frozenset[str] = TEXT_EXTS) -> list[FoundFile]:
+def walk_roots(roots: Iterable[Path], exts: frozenset[str] = INDEX_EXTS) -> list[FoundFile]:
     """Walk several roots. A path reachable from two roots is listed once, under the first."""
     seen: dict[Path, FoundFile] = {}
     for root in roots:

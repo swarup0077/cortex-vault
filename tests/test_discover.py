@@ -20,17 +20,29 @@ def test_walk_filters(tmp_path: Path) -> None:
         _touch(root / "paper.pdf"),
         _touch(root / "readme.md"),
         _touch(root / "letter.docx"),
+        _touch(root / "photo.JPG"),
+        _touch(root / "Screenshot (12).png"),
+        _touch(root / "pics" / "a.jpeg"),
+        _touch(root / "pics" / "b.webp"),
     ]
     _touch(root / "~$letter.docx")  # Office lock file
     _touch(root / ".hidden" / "secret.txt")
     _touch(root / "__pycache__" / "x.txt")
     _touch(root / ".dotfile.txt")
-    _touch(root / "photo.jpg")  # images join in M2
     _touch(root / "sheet.xlsx")
+    _touch(root / "anim.gif")
 
     found = {f.path for f in walk(root)}
     assert found == {p.resolve() for p in keep}
     assert all(f.root == root.resolve() for f in walk(root))
+
+
+def test_heic_only_with_pillow_heif(tmp_path: Path) -> None:
+    import importlib.util
+
+    _touch(tmp_path / "IMG_0001.HEIC")
+    found = [f.path.name for f in walk(tmp_path)]
+    assert found == (["IMG_0001.HEIC"] if importlib.util.find_spec("pillow_heif") else [])
 
 
 def test_walk_roots_dedupes_nested(tmp_path: Path) -> None:
@@ -56,3 +68,13 @@ def test_classify_by_extension(name: str, kind: str) -> None:
 def test_classify_rejects_unknown() -> None:
     with pytest.raises(ValueError):
         classify(Path("a.xlsx"))
+
+
+@pytest.mark.parametrize(
+    "name,kind",
+    [("Screenshot (12).png", "screenshot"), ("a.PNG", "screenshot"), ("IMG_1.jpg", "photo"), ("a.jpeg", "photo"),
+     ("a.webp", "photo"), ("a.heic", "photo")],
+)
+def test_classify_images_interim(name: str, kind: str) -> None:
+    """Interim rule until M3 (SPEC §19, open item i)."""
+    assert classify(Path(name)) == (kind, "interim:ext")

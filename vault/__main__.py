@@ -63,7 +63,7 @@ def _print_report(console: Console, rep: IndexReport) -> None:
     for label, value in [
         ("seen", rep.seen), ("unchanged", rep.unchanged), ("added", rep.added), ("linked", rep.linked),
         ("updated", rep.updated), ("deleted paths", rep.deleted), ("deleted files", rep.files_deleted),
-        ("errors / skipped", len(rep.errors)),
+        ("errors / skipped", len(rep.errors)), ("OCR'd images + PDF pages", rep.ocr_images),
     ]:
         t.add_row(label, str(value))
     for stage, secs in rep.timings.items():
@@ -71,6 +71,8 @@ def _print_report(console: Console, rep: IndexReport) -> None:
     for kind, fps in sorted(rep.files_per_sec().items()):
         t.add_row(f"files/sec: {kind}", f"{fps:.2f}")
     console.print(t)
+    for path in rep.ocr_capped:
+        console.print(f"[yellow]OCR page cap hit (later pages keep native text only): {escape(path)}")
     for root in rep.missing_roots:
         console.print(f"[yellow]Root not found (not swept): {escape(root)}")
     for e in rep.errors[:20]:

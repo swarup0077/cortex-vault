@@ -20,8 +20,9 @@ from pathlib import Path
 from vault import db, models
 from vault.config import Config
 from vault.ingest.chunk import chunk_extracted, path_chunk_text
-from vault.ingest.classify import classify
+from vault.ingest.classify import IMAGE_EXTS, classify
 from vault.ingest.discover import FoundFile, sha256_file, walk_roots
+from vault.ingest.extract_image import extract_image
 from vault.ingest.extract_office import extract_docx, extract_pptx, extract_text
 from vault.ingest.extract_pdf import extract_pdf
 from vault.ingest.records import Extracted, SkipFile
@@ -46,6 +47,8 @@ class IndexReport:
     errors: list[dict[str, str]] = field(default_factory=list)  # {path, status, error}
     timings: dict[str, float] = field(default_factory=dict)  # seconds per stage
     per_kind: dict[str, dict[str, float]] = field(default_factory=dict)  # kind -> {files, seconds}
+    ocr_images: int = 0  # images and PDF pages sent to OCR
+    ocr_capped: list[str] = field(default_factory=list)  # PDFs that hit the OCR page cap
     interrupted: bool = False
     started_at: str = ""
     finished_at: str = ""
@@ -68,7 +71,9 @@ def _iso_from_mtime(mtime: float) -> str:
 def extract(path: Path, cfg: Config) -> Extracted:
     ext = path.suffix.lower()
     if ext == ".pdf":
-        return extract_pdf(path)
+        return extract_pdf(path, cfg)
+    if ext in IMAGE_EXTS:
+        return extract_image(path, cfg)
     if ext == ".docx":
         return extract_docx(path, cfg)
     if ext == ".pptx":
@@ -135,6 +140,11 @@ class _Indexer:
             with self.timed("extract"):
                 ex = extract(primary.path, self.cfg)
                 chunks = chunk_extracted(ex, self.cfg)
+            self.report.timings["extract"] -= ex.ocr_seconds  # report OCR as its own stage
+            self.report.timings["ocr"] = self.report.timings.get("ocr", 0.0) + ex.ocr_seconds
+            self.report.ocr_images += ex.ocr_images
+            if ex.ocr_capped:
+                self.report.ocr_capped.append(str(primary.path))
         except SkipFile as e:
             status, error = "skipped", str(e)
         except Exception as e:  # corrupt or undecodable: record it and keep going
@@ -155,14 +165,17 @@ class _Indexer:
 
         with self.timed("write"), db.transaction(self.conn):
             file_id = self.conn.execute(
-                "INSERT INTO files(sha256, kind, kind_reason, effective_date, date_source, pages, status, error,"
-                " indexed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (sha, kind, kind_reason, date, date_source, ex.pages if ex else None, status, error, _now()),
+                "INSERT INTO files(sha256, kind, kind_reason, effective_date, date_source, width, height, pages,"
+                " status, error, indexed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (sha, kind, kind_reason, date, date_source, ex.width if ex else None, ex.height if ex else None,
+                 ex.pages if ex else None, status, error, _now()),
             ).lastrowid
             if status == "ok":
                 db.insert_chunk(self.conn, file_id, None, 0, "path", path_text, vecs[-1])
                 for i, (c, v) in enumerate(zip(chunks, vecs), start=1):
-                    db.insert_chunk(self.conn, file_id, c.page, i, c.source, c.text, v)
+                    chunk_id = db.insert_chunk(self.conn, file_id, c.page, i, c.source, c.text, v)
+                    if c.lines:
+                        db.insert_ocr_lines(self.conn, chunk_id, c.lines)
             olds = set()
             for n, f in enumerate(group):
                 old = self._upsert_path(f, file_id)
@@ -289,8 +302,8 @@ class _Indexer:
         )
         db.set_meta(self.conn, "last_indexed", rep.finished_at)
         log.info(
-            "indexed: %d added, %d linked, %d updated, %d deleted, %d unchanged, %d errors%s",
-            rep.added, rep.linked, rep.updated, rep.deleted, rep.unchanged, len(rep.errors),
+            "indexed: %d added, %d linked, %d updated, %d deleted, %d unchanged, %d errors, %d OCR'd%s",
+            rep.added, rep.linked, rep.updated, rep.deleted, rep.unchanged, len(rep.errors), rep.ocr_images,
             " (interrupted)" if rep.interrupted else "",
         )
         return rep

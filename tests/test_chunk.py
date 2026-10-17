@@ -79,3 +79,51 @@ def test_path_chunk_text() -> None:
     paths = [Path("C:/Users/me/Goa trip 2025/IMG_2041.jpg"), Path("D:/backup/Goa trip 2025/IMG_2041.jpg")]
     assert path_chunk_text(paths) == "Goa trip 2025 / IMG_2041.jpg"
     assert path_chunk_text([Path("/a/b.txt"), Path("/c/d.txt")]) == "a / b.txt\nc / d.txt"
+
+
+# ---------------------------------------------------------------- OCR chunks (block-aware, SPEC §6.4)
+
+from vault.ingest.chunk import chunk_ocr  # noqa: E402
+from vault.ingest.records import OcrLine  # noqa: E402
+
+
+def ocr_block(block: int, n_lines: int, chars: int, start: int = 0) -> list[OcrLine]:
+    """`n_lines` lines of ~`chars` characters each, all in `block`."""
+    return [
+        OcrLine(f"b{block}l{i} " + "x" * (chars - 6), 0.9, 0, 30 * (start + i), 500, 30 * (start + i) + 20,
+                block=block, line=start + i)
+        for i in range(n_lines)
+    ]
+
+
+def test_screenshot_sized_text_is_one_chunk() -> None:
+    lines = ocr_block(0, 5, 60) + ocr_block(1, 4, 60, start=5)
+    [c] = chunk_ocr(lines, None, CFG)
+    assert c.source == "ocr" and c.lines == tuple(lines)
+    assert c.text == " ".join(l.text for l in lines)
+
+
+def test_blocks_are_never_split_below_chunk_max() -> None:
+    a, b, c = ocr_block(0, 10, 60), ocr_block(1, 15, 60, start=10), ocr_block(2, 3, 60, start=25)
+    chunks = chunk_ocr(a + b + c, 4, CFG)  # b alone is ~915 chars: over the target, under the max
+    assert [[l.block for l in ch.lines] for ch in chunks] == [[0] * 10, [1] * 15, [2] * 3]
+    assert {ch.page for ch in chunks} == {4}
+
+
+def test_huge_block_is_split_on_lines_with_overlap() -> None:
+    lines = ocr_block(0, 40, 60)  # ~2,440 chars
+    chunks = chunk_ocr(lines, None, CFG)
+    assert len(chunks) >= 3
+    assert all(len(ch.text) <= CFG.chunk_target for ch in chunks)
+    assert chunks[0].lines[-1] in chunks[1].lines  # overlap repeats trailing lines
+    covered = {l.line for ch in chunks for l in ch.lines}
+    assert covered == set(range(40))
+
+
+def test_extracted_ocr_segments_follow_their_page() -> None:
+    ex = Extracted(segments=[
+        Segment("Slide title here", 1, "pdf_text"),
+        Segment("ocr words", 1, "ocr", tuple(ocr_block(0, 1, 20))),
+        Segment("Next page text", 2, "pdf_text"),
+    ])
+    assert [(c.page, c.source) for c in chunk_extracted(ex, CFG)] == [(1, "pdf_text"), (1, "ocr"), (2, "pdf_text")]

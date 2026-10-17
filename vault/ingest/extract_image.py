@@ -1,0 +1,49 @@
+"""Image text via OCR (SPEC §6.3)."""
+
+from __future__ import annotations
+
+import functools
+import time
+from pathlib import Path
+
+from PIL import Image, ImageOps
+
+from vault import models
+from vault.config import Config
+from vault.ingest.ocr import lines_text, ocr_image, reading_order
+from vault.ingest.records import Extracted, Segment
+
+
+@functools.cache
+def _register_heif() -> None:
+    try:
+        from pillow_heif import register_heif_opener
+    except ImportError:
+        return
+    register_heif_opener()
+
+
+def to_rgb(im: Image.Image) -> Image.Image:
+    """RGB with any transparency flattened onto white (dark text on a transparent PNG must stay readable)."""
+    if im.mode in ("RGBA", "LA", "PA") or (im.mode == "P" and "transparency" in im.info):
+        im = im.convert("RGBA")
+        bg = Image.new("RGB", im.size, "white")
+        bg.paste(im, mask=im.getchannel("A"))
+        return bg
+    return im.convert("RGB")
+
+
+def load_upright(path: Path) -> Image.Image:
+    """First frame, EXIF orientation applied, as RGB."""
+    _register_heif()
+    with Image.open(path) as im:
+        return to_rgb(ImageOps.exif_transpose(im))
+
+
+def extract_image(path: Path, cfg: Config, engine: models.OcrEngine | None = None) -> Extracted:
+    img = load_upright(path)
+    t0 = time.perf_counter()
+    lines = reading_order(ocr_image(img, engine or models.ocr_engine(cfg), cfg), cfg)
+    seconds = time.perf_counter() - t0
+    segments = [Segment(lines_text(lines), None, "ocr", tuple(lines))] if lines else []
+    return Extracted(segments=segments, width=img.width, height=img.height, ocr_seconds=seconds, ocr_images=1)

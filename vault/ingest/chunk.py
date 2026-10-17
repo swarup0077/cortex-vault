@@ -8,7 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from vault.config import Config
-from vault.ingest.records import Extracted, Segment
+from vault.ingest.ocr import blocks, lines_text
+from vault.ingest.records import Extracted, OcrLine, Segment
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,7 @@ class Chunk:
     text: str
     page: int | None
     source: str
+    lines: tuple[OcrLine, ...] = ()  # OCR chunks: their lines, whose texts joined by spaces are `text`
 
 
 def normalise(text: str) -> str:
@@ -94,10 +96,57 @@ def chunk_pages(segments: Iterable[Segment], cfg: Config) -> list[Chunk]:
     return out
 
 
+def _split_lines(lines: Sequence[OcrLine], target: int, overlap: int) -> list[list[OcrLine]]:
+    """Whole-line windows of ~`target` chars; each repeats trailing lines of the last, up to ~`overlap` chars."""
+    parts: list[list[OcrLine]] = []
+    cur: list[OcrLine] = []
+    for ln in lines:
+        if cur and len(lines_text([*cur, ln])) > target:
+            parts.append(cur)
+            tail: list[OcrLine] = []
+            for prev in reversed(cur):
+                if len(lines_text([prev, *tail])) > overlap:
+                    break
+                tail.insert(0, prev)
+            cur = tail
+        cur.append(ln)
+    parts.append(cur)
+    return parts
+
+
+def chunk_ocr(lines: Sequence[OcrLine], page: int | None, cfg: Config) -> list[Chunk]:
+    """Chunks of whole layout blocks up to ~`chunk_target` chars; a block is split only past `chunk_max`."""
+    out: list[Chunk] = []
+
+    def emit(ls: Sequence[OcrLine]) -> None:
+        out.append(Chunk(lines_text(ls), page, "ocr", tuple(ls)))
+
+    cur: list[OcrLine] = []
+    for block in blocks(lines):
+        if len(lines_text(block)) > cfg.chunk_max:
+            if cur:
+                emit(cur)
+                cur = []
+            for part in _split_lines(block, cfg.chunk_target, cfg.chunk_overlap):
+                emit(part)
+            continue
+        if cur and len(lines_text([*cur, *block])) > cfg.chunk_target:
+            emit(cur)
+            cur = []
+        cur += block
+    if cur:
+        emit(cur)
+    return out
+
+
 def chunk_extracted(ex: Extracted, cfg: Config) -> list[Chunk]:
-    paged = [s for s in ex.segments if s.page is not None]
-    flowing = [s for s in ex.segments if s.page is None]
-    chunks = chunk_pages(paged, cfg)
+    chunks: list[Chunk] = []
+    for seg in ex.segments:  # page order; a page's OCR chunks follow its native text
+        if seg.source == "ocr":
+            chunks += chunk_ocr(seg.lines, seg.page, cfg)
+        elif seg.page is not None:
+            chunks += chunk_pages([seg], cfg)
+    flowing = [s for s in ex.segments if s.page is None and s.source != "ocr"]
     if flowing:
         texts = chunk_paragraphs((s.text for s in flowing), cfg.chunk_target, cfg.chunk_overlap, cfg.chunk_max)
         chunks += [Chunk(t, None, flowing[0].source) for t in texts]
