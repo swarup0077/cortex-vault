@@ -180,7 +180,7 @@ A rule-based function in `classify.py` returns `(kind, kind_reason)`. Each rule 
 **PDF**
 - Native text per page via PyMuPDF.
 - **Scanned pages:** if a page has fewer than 20 characters of text, render the whole page at 150 DPI and OCR it.
-- **Image regions:** for each embedded image whose bounding box covers ≥ 15% of the page area, render just that region (`get_pixmap(clip=bbox, dpi=150)`) and OCR it. This catches slides exported to PDF where the title is text but the body is a picture.
+- **Image regions:** for each embedded image whose bounding box covers ≥ 15% of the page area, render just that region (`get_pixmap(clip=bbox, dpi=150)`) and OCR it. This catches slides exported to PDF where the title is text but the body is a picture. Skip a region that already has ≥ 20 characters of native text inside it (a scan with a text layer is already searchable).
 - OCR at most 30 pages per PDF (configurable), and log when the cap is hit.
 - Store OCR line boxes in page points. Encrypted PDFs → `skipped`.
 
@@ -194,12 +194,17 @@ A rule-based function in `classify.py` returns `(kind, kind_reason)`. Each rule 
 - OCR **every** image, photos included, because whiteboards and signs matter.
 - **Tile, don't shrink:**
   - If the width is over 2048 px, scale it down to 2048 px wide.
-  - If the height is then still over 2048 px, cut the image into 1,600 px strips with 200 px overlap (at most 15 strips).
-  - OCR each strip, map the boxes back to original-image pixels, and drop duplicate lines from the overlaps (same normalised text, vertical centres within half a line height).
+  - If the height is then still over 2048 px, cut the image into 1,600 px strips with 200 px overlap (at most 15 strips; a taller image is scaled down until it fits in 15).
+  - OCR each strip, map the boxes back to original-image pixels, and drop duplicate lines from the overlaps (same normalised text, vertical centres within half a line height). A line touching a strip's inner cut edge is dropped too; the overlap guarantees the neighbouring strip has it whole.
 
   This is why a 1080×6000 scrolling screenshot stays readable.
+- Apply the EXIF orientation first; boxes are in the upright image's pixels.
 - Drop OCR lines with confidence below 0.5.
-- **Reading order:** sort lines by vertical centre. Lines that overlap vertically by ≥ 50% form one row, sorted left to right. Start a new block when the gap to the previous row exceeds 1.5× the median line height.
+- **Digit fixes (OCR text only, never native PDF/Office text):** `O`/`o` + `x` + ≥ 4 hex digits becomes `0x…`, and an `O` between digits becomes `0`. `ocr_lines` stores the same corrected text as the chunk.
+- **Reading order:**
+  1. Split the lines into regions with a recursive XY-cut. Cut at a vertical gutter (empty across the whole region, with at least two rows on each side) if there is one; otherwise at horizontal whitespace bands wider than 1.5× the median line height. Adjacent bands that share a column gutter are rejoined first, so paragraph breaks that line up across columns don't interleave them.
+  2. Inside each region, sort lines by vertical centre. Lines that overlap vertically by ≥ 50% form one row, sorted left to right.
+  3. Each region starts a new block, and so does a gap to the previous row of more than 1.5× the median line height.
 - Store every line in `ocr_lines` with its box, `block_no` and confidence.
 
 **Effective date** (first source that works, stored in `date_source`)
@@ -626,6 +631,14 @@ The plan has one Claude Code session per milestone, with a commit at the end of 
 | 17 Oct | `.docx` text is also read straight from `word/document.xml` (body paragraphs, then table rows), matching python-docx's text rules: tabs, text-wrapping breaks, hyperlinks, cells merged across or down repeating their text | Same reason as `.pptx`: python-docx loads all media into memory. Identical output to python-docx on the test fixtures and on both real test docx files (824 and 10 segments). Like python-docx, text in content controls (`w:sdt`) and text boxes is not read |
 | 17 Oct | Embedding defaults unchanged: fastembed's quantized `Qdrant/bge-small-en-v1.5-onnx-Q`, ONNX Runtime's default thread count, batch 32 | No configuration was a clear win; see the benchmark below. The first real-world run did not re-download the model (cache dated before the run); its 83 s for 812 chunks (9.8 chunks/s) was all embedding |
 | 17 Oct | **Embedding benchmark** (laptop: i5-1340P, 4 P-cores + 8 E-cores, 16 threads, Balanced power plan, on AC). 128 chunks of ~700 chars from SPEC.md, model cached, warm-up batch first, median of 3 runs, one process per config, nothing else running. Chunks/sec: **quantized, default threads, batch 32:** 15.8 / 17.4 / 10.4 / 9.1 / 9.7 / 15.9 / 10.0 across separate runs. **Threads** (quantized, batch 32; best of 2): 1 → 1.6, 2 → 11.3, 4 → 7.9, 6 → 10.7, 8 → 12.3, 12 → 10.6, 16 → 10.3. **P-cores only** (affinity to CPUs 0–7), quantized: 4 threads 11.8, 8 threads 14.0; with Windows power throttling (EcoQoS) turned off for the process: 13.4 and 14.9. **Full-precision** `BAAI/bge-small-en-v1.5` `onnx/model.onnx`: default 11.4 / 18.1 / 11.5; throttling off 17.9; P-cores 4/8 threads 10.5 / 13.6; P-cores + throttling off 14.3 / 16.4. **Batch** (quantized, default threads): 8 → 18.8 / 8.9 / 8.6 / 8.6 (interleaved with batch 32 → 9.7 / 15.9 / 10.0); 128 → 9.3 | Every config falls in the same ~9–18 band; repeated runs of one config swing between a ~9 and a ~17 chunks/s state, so laptop power/thermal state matters more than any setting tested. Embedding is compute-bound (~7 GFLOP per 160-token chunk on bge-small), so the fix for slow first indexes is two-phase indexing (open item g), not tuning |
+| 17 Oct | Reading order splits lines into regions with a recursive XY-cut before §6.3's row and gap rules (vertical gutters first, then horizontal bands > 1.5× line height; bands sharing a gutter are rejoined) | §6.3 as first written grouped any vertically overlapping lines into one row, so two columns with aligned lines always interleaved and the M2 two-column test couldn't pass. Trade-off: a form with labels left and values right reads as two columns, which is harmless for search since a screenshot is usually one chunk |
+| 17 Oct | OCR digit fixes: `O`/`o` + `x` + ≥ 4 hex digits → `0x`, `O` between digits → `0`. Applied to OCR text only, never to native PDF/Office text; `ocr_lines.text` matches the chunk text | Probe: RapidOCR read `0x80070005` as `Ox80070005` with Pillow's default font (16 and 24 px) and Segoe UI, the Windows dialog font (24 and 36 px), so the §12 error-code query would miss real screenshots |
+| 17 Oct | A PDF image region with ≥ 20 characters of native text inside it is not OCR'd | Scans that already have a text layer would otherwise be OCR'd a second time (seconds per page) and index their text twice |
+| 17 Oct | An image needing more than 15 strips is scaled down until it fits in 15 (whole image covered) rather than truncated | §6.3 set the cap but not what happens past it |
+| 17 Oct | Until M3, images get an interim kind (PNG → `screenshot`, else `photo`; `kind_reason='interim:ext'`) and the mtime date. Width and height are stored now | The real classifier and EXIF/filename dates are M3; open item (i) fixes these rows without re-running OCR |
+| 17 Oct | OCR uses the model files bundled in the `rapidocr` wheel, passed by explicit path | Other RapidOCR models download from ModelScope; CLAUDE.md allows only HF Hub downloads |
+| 17 Oct | Images are OCR'd upright (EXIF orientation applied); stored boxes are in the upright image's pixels | Phone photos are often stored sideways with an orientation tag; the preview shows them upright |
+| 17 Oct | M2 ingest speed is measured on a generated, reproducible set and labelled synthetic; the owner's real run on their test folder is added when reported | No corpus yet (§10); synthetic numbers are reproducible, real ones show real-world mix |
 | | Measured ingest speed (files/sec per kind) | _fill in at M2_ |
 
 ### Open items
@@ -640,8 +653,9 @@ Status is `open`, `done` (with the commit), or `moved to Mx` (with the reason). 
 | d | 3 of the owner's real test PDFs have no text layer (scanned/handwritten): use them as real-world cases for scanned-page OCR | M2 | open |
 | e | The path chunk includes the file extension, so a query containing "pdf" (as in probability density) matched every PDF filename. Consider dropping the extension from the path-chunk text | M6 | open |
 | f | Dense top-100 chunks can be crowded out by one long document (in the real-world test only one book appeared in the dense list). Consider retrieving more chunks before collapsing to files; measure in the eval | M6 | open |
-| g | Two-phase indexing: commit text + FTS per file first, then compute embeddings in a background pass; dense search skips chunks without vectors; the UI shows "searchable / meaning-ready" progress. Matters most for demo uploads. Due by M7 at the latest | M7 | open |
+| g | Two-phase indexing. **Phase 1** (per file, fast): list the file with its filename/path chunk (FTS) and thumbnail. **Phase 2** (background): OCR plus all embeddings. Images aren't keyword-searchable until OCR runs and OCR costs seconds per image, so OCR belongs in phase 2 with the embeddings. Dense search skips chunks without vectors; the UI shows "listed / searchable / meaning-ready" progress. Matters most for demo uploads. Due by M7 at the latest | M7 | open |
 | h | Re-run the embedding benchmark on the Azure VM (different CPU, 2 vCPU; demo uploads are indexed there) and set its thread/batch defaults separately if needed. Same method as the laptop benchmark above: model cached, 128 × ~700-char chunks, warm-up batch, median of 3, one process per config | M4 | open |
+| i | Images indexed in M2 carry an interim kind (`kind_reason='interim:ext'`) and the mtime date. M3 must reclassify and re-date them in place (EXIF, filename, dimensions only), without re-running OCR or re-embedding | M3 | open |
 
 ---
 
