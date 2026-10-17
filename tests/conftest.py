@@ -150,3 +150,46 @@ def make_pptx() -> Callable[..., Path]:
 @pytest.fixture
 def make_zip_bomb() -> Callable[..., Path]:
     return build_zip_bomb
+
+
+# ---------------------------------------------------------------- a small mixed corpus for search tests
+
+
+def build_search_corpus(root: Path) -> Path:
+    """Targets for the M1 search criteria plus distractors. No query word appears in the docx target."""
+    build_pdf(
+        root / "papers" / "linear algebra notes.pdf",
+        [
+            "Course overview: vectors, matrices and linear maps between vector spaces.",
+            "Definition. The singular value decomposition of a matrix A factors it as U Sigma V transpose, "
+            "where U and V are orthogonal and Sigma is diagonal with non-negative entries.",
+            "Exercises: compute the eigenvalues of the following matrices by hand.",
+        ],
+    )
+    build_pdf(
+        root / "papers" / "diffusion.pdf",
+        ["Denoising diffusion probabilistic models generate images by reversing a noising process."],
+    )
+    build_pptx(
+        root / "decks" / "ml lecture.pptx",
+        [
+            ("Welcome", "Agenda for today", ""),
+            ("Loss functions", "Mean squared error and cross entropy", ""),
+            ("Gradient descent", "Update the weights by stepping against the gradient", "learning rate sets the step"),
+            ("Questions", "Thank you", ""),
+        ],
+    )
+    build_docx(
+        root / "home" / "household.docx",
+        ["The electricity invoice from the utility company must be settled by the fifth of every month."],
+    )
+    build_docx(root / "home" / "travel.docx", ["Train to Goa leaves at 6 am; pack sunscreen and a hat."])
+    (root / "home" / "recipe.txt").write_text(
+        "Sourdough: mix flour, water and starter, then proof overnight.", encoding="utf-8"
+    )
+    return root
+
+
+@pytest.fixture(scope="session")
+def make_search_corpus() -> Callable[[Path], Path]:
+    return build_search_corpus

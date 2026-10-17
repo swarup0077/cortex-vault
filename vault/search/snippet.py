@@ -1,0 +1,63 @@
+"""~200-char snippet around the query terms, with <mark> highlights (SPEC §7.4)."""
+
+from __future__ import annotations
+
+import html
+import re
+
+STOPWORDS = frozenset(
+    "a an and are as at be by for from how i in is it my of on or that the this to was what when where which who"
+    " why with about".split()
+)
+_SUFFIXES = ("ations", "ation", "ings", "ing", "ies", "ied", "es", "ed", "s")
+
+
+def _stem(term: str) -> str:
+    for suf in _SUFFIXES:
+        if term.endswith(suf) and len(term) - len(suf) >= 3:
+            return term[: -len(suf)]
+    return term
+
+
+def term_pattern(query: str) -> re.Pattern[str] | None:
+    """Words of the query (minus stopwords), crudely stemmed, matching at word starts."""
+    terms = {_stem(t) for t in re.findall(r"\w+", query.lower()) if t not in STOPWORDS and len(t) > 1}
+    if not terms:
+        return None
+    alts = "|".join(re.escape(t) for t in sorted(terms, key=len, reverse=True))
+    return re.compile(rf"\b(?:{alts})\w*", re.IGNORECASE)
+
+
+def _best_start(matches: list[re.Match[str]], width: int) -> int:
+    """Window start (a quarter-width before some match) that covers the most matches; earliest wins ties."""
+    best_start, best_count = 0, 0
+    for m in matches:
+        s = max(0, m.start() - width // 4)
+        count = sum(1 for n in matches if n.start() >= s and n.end() <= s + width)
+        if count > best_count:
+            best_start, best_count = s, count
+    return best_start
+
+
+def make_snippet(text: str, query: str, width: int = 200) -> str:
+    """HTML-escaped window of `text` covering the most query-term matches, matches wrapped in <mark>."""
+    pat = term_pattern(query)
+    matches = list(pat.finditer(text)) if pat else []
+    start = _best_start(matches, width) if len(text) > width else 0
+    end = min(len(text), start + width)
+    if start > 0:
+        space = text.find(" ", start, start + 30)
+        start = space + 1 if space != -1 else start
+    if end < len(text):
+        space = text.rfind(" ", end - 30, end)
+        end = space if space > start else end
+
+    out, pos = [], start
+    for m in matches:
+        if m.start() < start or m.end() > end:
+            continue
+        out.append(html.escape(text[pos : m.start()]))
+        out.append(f"<mark>{html.escape(m.group())}</mark>")
+        pos = m.end()
+    out.append(html.escape(text[pos:end]))
+    return ("…" if start > 0 else "") + "".join(out) + ("…" if end < len(text) else "")
