@@ -10,7 +10,6 @@ from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 
-import docx
 
 from vault.config import Config
 from vault.ingest.records import Extracted, Segment, SkipFile
@@ -50,31 +49,19 @@ def _iso(dt: datetime | None) -> str | None:
     return dt.replace(tzinfo=None).isoformat(timespec="seconds") if dt else None
 
 
-def extract_docx(path: Path, cfg: Config) -> Extracted:
-    """Paragraphs in order, then table cells row by row. Word stores no page numbers."""
-    _guard(path, cfg)
-    d = docx.Document(str(path))
-    segments = [Segment(p.text, None, "doc_text") for p in d.paragraphs if p.text.strip()]
-    for table in d.tables:
-        for row in table.rows:
-            cells = list(dict.fromkeys(c.text.strip() for c in row.cells if c.text.strip()))  # merged cells repeat
-            if cells:
-                segments.append(Segment(" | ".join(cells), None, "doc_text"))
-    return Extracted(segments=segments, doc_date=_iso(d.core_properties.created))
-
-
-# ---------------------------------------------------------------- pptx, read straight from the zip
-# python-pptx loads every part, media included, into memory. Decks with video run to hundreds of MB,
-# so we parse only the presentation, slide, notes and core-properties XML.
+# ---------------------------------------------------------------- Office XML read straight from the zip
+# python-docx and python-pptx load every part, media included, into memory; files with photos or
+# video run to hundreds of MB. We parse only the document, slide, notes and core-properties XML.
 
 _NS = {
+    "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
     "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
     "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
     "rel": "http://schemas.openxmlformats.org/package/2006/relationships",
     "dcterms": "http://purl.org/dc/terms/",
 }
-_P, _A, _R = (f"{{{_NS[k]}}}" for k in ("p", "a", "r"))
+_W, _P, _A, _R = (f"{{{_NS[k]}}}" for k in ("w", "p", "a", "r"))
 _TITLE_TYPES = ("title", "ctrTitle")
 
 
@@ -171,6 +158,71 @@ def extract_pptx(path: Path, cfg: Config) -> Extracted:
             if text:
                 segments.append(Segment(text, n, "slide_text"))
         return Extracted(segments=segments, pages=len(slide_parts), doc_date=_core_created(zf))
+
+
+# Run children with a text equivalent, as python-docx renders them. A w:br is a newline only for
+# text wrapping (its default type); page and column breaks have no text.
+_RUN_TEXT = {f"{_W}tab": "\t", f"{_W}ptab": "\t", f"{_W}cr": "\n", f"{_W}noBreakHyphen": "-"}
+
+
+def _w_run_text(r: ET.Element) -> str:
+    out = []
+    for el in r:
+        if el.tag == f"{_W}t":
+            out.append(el.text or "")
+        elif el.tag == f"{_W}br":
+            out.append("\n" if el.get(f"{_W}type", "textWrapping") == "textWrapping" else "")
+        else:
+            out.append(_RUN_TEXT.get(el.tag, ""))
+    return "".join(out)
+
+
+def _w_para_text(p: ET.Element) -> str:
+    """Runs directly in the paragraph and inside hyperlinks, like python-docx `Paragraph.text`."""
+    out = []
+    for el in p:
+        if el.tag == f"{_W}r":
+            out.append(_w_run_text(el))
+        elif el.tag == f"{_W}hyperlink":
+            out += [_w_run_text(r) for r in el.findall("w:r", _NS)]
+    return "".join(out)
+
+
+def _w_table_rows(tbl: ET.Element) -> Iterator[str]:
+    """One ' | '-joined line per row. Cells merged across columns or down rows repeat their text
+    (as python-docx `row.cells` does), and repeats within a row collapse to one."""
+    above: dict[int, str] = {}  # grid column → text of the cell that starts a vertical merge there
+    for tr in tbl.findall("w:tr", _NS):
+        before = tr.find("w:trPr/w:gridBefore", _NS)
+        col = int(before.get(f"{_W}val", "0")) if before is not None else 0
+        texts = []
+        for tc in tr.findall("w:tc", _NS):
+            span_el = tc.find("w:tcPr/w:gridSpan", _NS)
+            span = int(span_el.get(f"{_W}val", "1")) if span_el is not None else 1
+            vmerge = tc.find("w:tcPr/w:vMerge", _NS)
+            if vmerge is not None and vmerge.get(f"{_W}val", "continue") == "continue":
+                text = above.get(col, "")
+            else:
+                text = "\n".join(_w_para_text(p) for p in tc.findall("w:p", _NS))
+                above[col] = text
+            texts += [text] * span
+            col += span
+        cells = list(dict.fromkeys(t.strip() for t in texts if t.strip()))
+        if cells:
+            yield " | ".join(cells)
+
+
+def extract_docx(path: Path, cfg: Config) -> Extracted:
+    """Body paragraphs in order, then table rows. Word stores no page numbers."""
+    _guard(path, cfg)
+    with zipfile.ZipFile(path) as zf:
+        doc_part = next(t for typ, t in _rels(zf, "").values() if typ.endswith("/officeDocument"))
+        body = ET.fromstring(zf.read(doc_part)).find("w:body", _NS)
+        paras = [_w_para_text(p) for p in body.findall("w:p", _NS)] if body is not None else []
+        rows = [row for tbl in body.findall("w:tbl", _NS) for row in _w_table_rows(tbl)] if body is not None else []
+        segments = [Segment(t, None, "doc_text") for t in paras if t.strip()]
+        segments += [Segment(r, None, "doc_text") for r in rows]
+        return Extracted(segments=segments, doc_date=_core_created(zf))
 
 
 def extract_text(path: Path) -> Extracted:
