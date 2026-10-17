@@ -23,3 +23,12 @@ def test_rrf_weights_and_ties() -> None:
     assert [f.file_id for f in fused] == [2, 1]
     tie = rrf({"bm25": [(5, 50)], "dense": [(4, 40)]}, k=60)
     assert [f.file_id for f in tie] == [4, 5]  # equal score and rank: lower id first, deterministic
+
+
+def test_all_terms_list_lifts_the_exact_match() -> None:
+    """Owner's pattern (a): screenshot S is BM25 #1 but missing from dense; transcript T is BM25 #2 and dense #1."""
+    lists = {"bm25": [(1, 10), (2, 20)], "dense": [(2, 21)]}
+    assert [f.file_id for f in rrf(lists, k=60)] == [2, 1]  # 1/62 + 1/61 beats 1/61
+    with_all = rrf({**lists, "all_terms": [(1, 10)]}, k=60)
+    assert [f.file_id for f in with_all] == [1, 2]  # 2/61 beats 1/62 + 1/61
+    assert with_all[0].ranks == {"bm25": 1, "all_terms": 1}

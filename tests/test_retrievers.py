@@ -1,7 +1,7 @@
 import pytest
 
 from vault.search.parse import ParsedQuery, parse
-from vault.search.retrievers import filter_sql, fts_query
+from vault.search.retrievers import filter_sql, fts_all_query, fts_query
 
 
 def test_parse_passes_text_through() -> None:
@@ -30,6 +30,16 @@ def test_fts_query_is_quoted(text, expected) -> None:
 def test_fts_query_phrases_are_required() -> None:
     q = fts_query(ParsedQuery(text="error", phrases=('access "denied"',)))
     assert q == '("error") AND "access ""denied"""'
+
+
+@pytest.mark.parametrize("pq, expected", [
+    (ParsedQuery(text="where is the gradient clipping threshold"), '"gradient" AND "clipping" AND "threshold"'),
+    (ParsedQuery(text="error", phrases=("access denied",)), '"error" AND "access denied"'),
+    (ParsedQuery(text="", phrases=("access denied",)), None),  # phrase-only: the BM25 list already requires it
+    (ParsedQuery(text="!!!"), None),
+])
+def test_fts_all_query(pq, expected) -> None:
+    assert fts_all_query(pq) == expected
 
 
 def test_filter_sql() -> None:

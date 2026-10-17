@@ -55,8 +55,17 @@ def fts_query(pq: ParsedQuery) -> str | None:
     return any_of or all_of or None
 
 
-def bm25(conn: sqlite3.Connection, pq: ParsedQuery, k: int) -> list[Hit]:
-    q = fts_query(pq)
+def fts_all_query(pq: ParsedQuery) -> str | None:
+    """Every content term AND'ed, plus the required phrases: chunks that hold the whole query (SPEC §7.2)."""
+    terms = content_terms(pq.text)
+    if not terms:
+        return None
+    return " AND ".join([_quote(t) for t in terms] + [_quote(p) for p in pq.phrases])
+
+
+def bm25(conn: sqlite3.Connection, pq: ParsedQuery, k: int, *, all_terms: bool = False) -> list[Hit]:
+    """BM25 over chunks. With `all_terms`, only chunks containing every content term (the all-terms list)."""
+    q = fts_all_query(pq) if all_terms else fts_query(pq)
     if q is None:
         return []
     where, params = filter_sql(pq)

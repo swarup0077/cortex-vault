@@ -92,7 +92,7 @@ def test_docx_found_by_paraphrase(bge_index) -> None:
     conn, cfg = bge_index
     r = top(search(conn, "power bill payment deadline", cfg))
     assert r.filename == "household.docx"
-    assert r.ranks == {"bm25": None, "dense": 1}  # no shared words: found by meaning alone
+    assert r.ranks == {"bm25": None, "all_terms": None, "dense": 1}  # no shared words: found by meaning alone
 
 
 def test_common_words_dont_outrank_the_screenshot(conn, cfg, fake_embedder, fake_ocr, tmp_path) -> None:
@@ -111,3 +111,32 @@ def test_common_words_dont_outrank_the_screenshot(conn, cfg, fake_embedder, fake
     results = search(conn, "where is the wifi password", cfg).results
     assert results[0].filename == "Screenshot (4).png" and results[0].ranks["bm25"] == 1
     assert all(r.ranks["bm25"] is None for r in results[1:])  # stopwords alone no longer match
+
+
+def test_all_terms_list_beats_a_long_loosely_matching_doc(conn, fake_embedder, fake_ocr, tmp_path) -> None:
+    """Owner's pattern (a): a long transcript's 30 chunks fill dense's top k, crowding out the short screenshot
+    that holds every query word, and BM25 alone can't outvote dense #1 + BM25 #2 in RRF."""
+    from dataclasses import replace
+
+    from conftest import build_docx, draw_text_image, save_image
+    from vault.ingest.records import OcrLine
+
+    cfg = Config(data_dir=tmp_path / "data", top_k=20)
+    root = tmp_path / "c"
+    save_image(draw_text_image((800, 200), []), root / "Screenshot (5).png")
+    fake_ocr.lines_for = lambda img: [OcrLine(t, 0.95, 10, 10 + 40 * i, 500, 40 + 40 * i) for i, t in enumerate([
+        "Trainer warning at step 4000", "gradient clipping threshold exceeded", "loss nan lr 3e-4 batch 64",
+        "File Edit View Run Terminal Help", "epoch 12 of 40 eta 03:12"])]
+    build_docx(root / "lecture transcript.docx",
+               [f"Part {i}. " + "The gradient moves and the threshold holds; " * 20 for i in range(30)])
+    index_paths(conn, [root], cfg)
+
+    query = "gradient clipping threshold"
+    without = search(conn, query, replace(cfg, weights={**cfg.weights, "all_terms": 0.0})).results
+    assert [r.filename for r in without] == ["lecture transcript.docx", "Screenshot (5).png"]
+    assert without[1].ranks == {"bm25": 1, "all_terms": None, "dense": None}
+
+    results = search(conn, query, cfg).results
+    assert [r.filename for r in results] == ["Screenshot (5).png", "lecture transcript.docx"]
+    assert results[0].ranks["all_terms"] == 1
+    assert "<mark>gradient</mark> <mark>clipping</mark> <mark>threshold</mark>" in results[0].snippet_html

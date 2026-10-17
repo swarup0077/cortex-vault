@@ -273,7 +273,8 @@ Example: `screenshot of the access denied error from last week` → kinds={scree
 
 | Retriever | Scores | Top-k |
 |---|---|---|
-| BM25 | `bm25(chunks_fts)` over chunks; query = text tokens (OR) plus required phrases (AND) | 100 chunks |
+| BM25 | `bm25(chunks_fts)` over chunks; query = content tokens (OR; stopwords dropped while another token remains) plus required phrases (AND) | 100 chunks |
+| All terms | the same, but every content token is required (AND), so only chunks holding the whole query match. Counts as BM25 in the ablations (§9) | 100 chunks |
 | Dense text | cosine(bge(text), text_vectors) | 100 chunks |
 | CLIP | cosine(clip_text(text), image_vectors), then the gate (§7.3) | ≤ 50 files |
 
@@ -290,8 +291,8 @@ Example: `screenshot of the access denied error from last week` → kinds={scree
 
 ### 7.4 Fusion
 1. **Collapse to file:** for each retriever, keep each file's best-ranked chunk. That rank is the file's rank in that list, and the chunk is remembered as the snippet candidate.
-2. **Reciprocal Rank Fusion:** `score(f) = Σ_r w_r / (k + rank_r(f))`, with `k = 60` and `w_r = 1.0` by default, adjusted by the gate. A file missing from a list contributes 0 for that list.
-3. **Snippet:** the best chunk from BM25 if present, else from dense. Query terms are highlighted with `<mark>` in a ~200-char window. Image-only hits get no snippet and a "visual match" badge.
+2. **Reciprocal Rank Fusion:** `score(f) = Σ_r w_r / (k + rank_r(f))`, with `k = 60` and `w_r = 1.0` by default, adjusted by the gate. A file missing from a list contributes 0 for that list. A weight of 0 leaves a list out. The all-terms list exists because ranks alone can't separate a file that holds the rare exact word (BM25 #1, crowded out of dense) from a long document that both lists like a little (BM25 #2 + dense #1): see §19, 17 Oct.
+3. **Snippet:** the best chunk from the all-terms list if present, else from BM25, else from dense. Query terms are highlighted with `<mark>` in a ~200-char window. Image-only hits get no snippet and a "visual match" badge.
 
 ### 7.5 Rerank (togglable, on by default)
 - Take the top 30 after RRF. Only results with text (OCR, PDF, doc or slide chunks) can be reranked, because the cross-encoder needs text.

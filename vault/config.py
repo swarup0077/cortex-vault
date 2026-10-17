@@ -76,7 +76,9 @@ class Config:
     # Search (SPEC §7)
     top_k: int = 100
     rrf_k: int = 60
-    weights: dict[str, float] = field(default_factory=lambda: {"bm25": 1.0, "dense": 1.0})
+    # RRF weight per ranked list; 0 leaves a list out (the ablations do). "all_terms" is BM25 restricted to chunks
+    # holding every content term (SPEC §7.2, §19)
+    weights: dict[str, float] = field(default_factory=lambda: {"bm25": 1.0, "all_terms": 1.0, "dense": 1.0})
     snippet_chars: int = 200
     max_results: int = 20
 

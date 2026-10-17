@@ -16,6 +16,8 @@ from vault.search.parse import ParsedQuery, parse
 from vault.search.snippet import make_snippet
 from vault.vectors import VectorIndex
 
+SNIPPET_ORDER = ("all_terms", "bm25", "dense")
+
 
 @dataclass
 class SearchResult:
@@ -124,17 +126,21 @@ def search(
     sw.lap("load_model")  # ~0 once warm; the first query pays the model load
     bm25_hits = retrievers.bm25(conn, pq, cfg.top_k)
     sw.lap("bm25")
+    all_hits = retrievers.bm25(conn, pq, cfg.top_k, all_terms=True)
+    sw.lap("all_terms")
     if text_index is None:
         text_index = retrievers.load_text_index(conn, embedder.dim)
         sw.lap("load_vectors")
     dense_hits = retrievers.dense(conn, pq, cfg.top_k, embedder, text_index, allowed)
     sw.lap("dense")
 
-    fused = rrf({"bm25": collapse(bm25_hits), "dense": collapse(dense_hits)}, cfg.rrf_k, cfg.weights)[:limit]
+    lists = {"bm25": collapse(bm25_hits), "all_terms": collapse(all_hits), "dense": collapse(dense_hits)}
+    lists = {name: ranked for name, ranked in lists.items() if cfg.weights.get(name, 1.0) > 0}
+    fused = rrf(lists, cfg.rrf_k, cfg.weights)[:limit]
     sw.lap("fuse")
 
-    # Snippet chunk: BM25's best chunk for the file if it has one, else dense's.
-    best_chunk = {f.file_id: f.chunks.get("bm25", f.chunks.get("dense")) for f in fused}
+    # Snippet chunk: the one holding every term if any, else BM25's best for the file, else dense's.
+    best_chunk = {f.file_id: next((f.chunks[n] for n in SNIPPET_ORDER if n in f.chunks), None) for f in fused}
     chunk_ids = [c for c in best_chunk.values() if c is not None]
     chunks = {
         r["id"]: r
