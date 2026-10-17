@@ -31,6 +31,16 @@ def load_upright(path: Path) -> Image.Image:
         return to_rgb(ImageOps.exif_transpose(im))
 
 
+def clip_input(img: Image.Image, side: int) -> Image.Image:
+    """A copy small enough for CLIP: short side at most `side` px (CLIP centre-crops 224 px anyway), so a batch
+    of full-size photos doesn't sit in memory."""
+    scale = side / min(img.size)
+    if scale >= 1:
+        return img
+    return img.resize((max(1, round(img.width * scale)), max(1, round(img.height * scale))),
+                      Image.Resampling.BICUBIC)
+
+
 def extract_image(path: Path, cfg: Config, engine: models.OcrEngine | None = None, *, kind: str | None = None,
                   image: Image.Image | None = None) -> Extracted:
     """OCR an image (pass `image` if it's already loaded upright). Screenshots skip the text-angle classifier

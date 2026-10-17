@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
 from vault import db, models
@@ -24,10 +25,10 @@ from vault.config import Config
 from vault.ingest.chunk import chunk_extracted, path_chunk_text
 from vault.ingest.classify import IMAGE_EXTS, classify, classify_image
 from vault.ingest.discover import FoundFile, sha256_file, walk_roots
-from vault.ingest.extract_image import extract_image, load_upright
+from vault.ingest.extract_image import clip_input, extract_image, load_upright
 from vault.ingest.extract_office import extract_docx, extract_pptx, extract_text
 from vault.ingest.extract_pdf import extract_pdf
-from vault.ingest.meta import effective_date, read_image_meta
+from vault.ingest.meta import effective_date, filename_date, read_image_meta
 from vault.ingest import thumbs
 from vault.ingest.records import Extracted, SkipFile
 
@@ -54,6 +55,7 @@ class IndexReport:
     ocr_images: int = 0  # images and PDF pages sent to OCR
     ocr_empty: int = 0  # of those, how many gave no text (blank pages, photos without any)
     ocr_capped: list[str] = field(default_factory=list)  # PDFs that hit the OCR page cap
+    backfilled: int = 0  # older files brought up to date: kind, date, thumbnail, CLIP vector (SPEC §19, item i)
     interrupted: bool = False
     started_at: str = ""
     finished_at: str = ""
@@ -161,6 +163,7 @@ class _Indexer:
             self.report.errors.append({"path": str(primary.path), "status": status, "error": error or ""})
 
         thumb_path = self.thumbnail(sha, primary.path, chunks[0].text if chunks else "", img) if status == "ok" else None
+        clip_vecs = self.clip_embed([img]) if status == "ok" and img is not None else None
         path_text = path_chunk_text(f.path for f in group)
         with self.timed("embed"):  # the path chunk is keyword-only: no vector (SPEC §5)
             vecs = self.embedder.embed_documents([c.text for c in chunks])
@@ -183,6 +186,8 @@ class _Indexer:
                     chunk_id = db.insert_chunk(self.conn, file_id, c.page, i, c.source, c.text, v)
                     if c.lines:
                         db.insert_ocr_lines(self.conn, chunk_id, c.lines)
+                if clip_vecs is not None:
+                    db.set_image_vector(self.conn, file_id, clip_vecs[0])
             olds = set()
             for n, f in enumerate(group):
                 old = self._upsert_path(f, file_id)
@@ -199,6 +204,87 @@ class _Indexer:
         stats = self.report.per_kind.setdefault(kind, {"files": 0, "seconds": 0.0})
         stats["files"] += 1
         stats["seconds"] += time.perf_counter() - t0
+
+    def clip_embed(self, images: list[Image.Image]) -> np.ndarray | None:
+        """CLIP vectors for upright images; None if CLIP can't run (e.g. no model offline): the files stay
+        searchable by text, and the next run's backfill tries again."""
+        with self.timed("clip"):
+            try:
+                vision = models.clip_vision(self.cfg)
+                return vision.embed_images([clip_input(im, self.cfg.clip_side) for im in images])
+            except Exception as e:
+                log.warning("CLIP failed; %d image(s) wait for the next run: %s", len(images), e)
+                return None
+
+    def backfill(self, stop: threading.Event | None) -> None:
+        """Bring files indexed by older versions up to date without re-extracting their text (open item i).
+
+        Images with an interim kind are reclassified and re-dated from their header, files dated by mtime or
+        document metadata pick up a filename date, and missing thumbnails and CLIP vectors are made, a batch of
+        `clip_batch` files at a time (one transaction each).
+        """
+        rows = self.conn.execute(
+            "SELECT f.id, f.sha256, f.kind, f.kind_reason, f.date_source, f.thumb_path, "
+            "iv.file_id IS NOT NULL AS has_clip, p.path, p.mtime "
+            "FROM files f JOIN paths p ON p.path = "
+            "(SELECT path FROM paths WHERE file_id = f.id ORDER BY mtime DESC LIMIT 1) "
+            "LEFT JOIN image_vectors iv ON iv.file_id = f.id "
+            "WHERE f.status = 'ok' AND (f.kind_reason LIKE 'interim:%' OR f.thumb_path IS NULL "
+            "OR f.date_source IN ('mtime', 'doc_meta') OR (f.kind IN ('photo', 'screenshot') AND iv.file_id IS NULL))"
+        ).fetchall()
+        step = max(1, self.cfg.clip_batch)
+        for start in range(0, len(rows), step):
+            if stop is not None and stop.is_set():
+                self.report.interrupted = True
+                return
+            updates: list[tuple[int, dict]] = []
+            images: list[tuple[int, Image.Image]] = []
+            for r in rows[start:start + step]:
+                cols, img = self._refresh(r)
+                if cols:
+                    updates.append((r["id"], cols))
+                if img is not None:
+                    images.append((r["id"], img))
+            vecs = self.clip_embed([im for _, im in images]) if images else None
+            with self.timed("write"), db.transaction(self.conn):
+                for file_id, cols in updates:
+                    sets = ", ".join(f"{c} = ?" for c in cols)
+                    self.conn.execute(f"UPDATE files SET {sets} WHERE id = ?", [*cols.values(), file_id])
+                for (file_id, _), vec in zip(images, vecs if vecs is not None else []):
+                    db.set_image_vector(self.conn, file_id, vec)
+            done = {f for f, _ in updates} | ({f for f, _ in images} if vecs is not None else set())
+            self.report.backfilled += len(done)
+
+    def _refresh(self, r: sqlite3.Row) -> tuple[dict, Image.Image | None]:
+        """One backfill row: the columns to update, and the upright image if it still needs a CLIP vector."""
+        path = Path(r["path"])
+        if not path.is_file():  # e.g. under a root that's unplugged right now
+            return {}, None
+        cols: dict[str, object] = {}
+        if r["kind_reason"].startswith("interim:"):
+            meta = read_image_meta(path)
+            kind, reason = classify_image(path.name, meta)
+            date, source = effective_date(path.name, meta.taken if meta else None, None, r["mtime"])
+            lat, lon = meta.gps if meta and meta.gps else (None, None)
+            cols.update(kind=kind, kind_reason=reason, effective_date=date, date_source=source, gps_lat=lat, gps_lon=lon)
+        elif r["date_source"] in ("mtime", "doc_meta") and (from_name := filename_date(path.name)):
+            cols.update(effective_date=from_name, date_source="filename")
+        is_image = r["kind"] in ("photo", "screenshot")
+        need_thumb, need_clip = r["thumb_path"] is None, is_image and not r["has_clip"]
+        img = None
+        if is_image and (need_thumb or need_clip):
+            try:
+                img = load_upright(path)
+            except Exception as e:
+                log.warning("backfill: can't read %s: %s", path, e)
+                return cols, None
+        if need_thumb:
+            first = self.conn.execute(
+                "SELECT text FROM chunks WHERE file_id = ? AND source != 'path' ORDER BY ord LIMIT 1", (r["id"],)
+            ).fetchone()
+            if thumb_path := self.thumbnail(r["sha256"], path, first[0] if first else "", img):
+                cols["thumb_path"] = thumb_path
+        return cols, img if need_clip else None
 
     def thumbnail(self, sha: str, path: Path, title: str, image: Image.Image | None) -> str | None:
         """Write the file's thumbnail; a failure costs the thumbnail, never the file."""
@@ -254,6 +340,7 @@ class _Indexer:
     def run(self, roots: Iterable[Path | str], stop: threading.Event | None, progress: ProgressFn | None) -> IndexReport:
         rep = self.report
         db.check_text_model(self.conn, self.embedder.name, claim=True)
+        db.check_model(self.conn, "clip_model", models.clip_vision_name(self.cfg), claim=True)
         live_roots = []
         for r in roots:
             p = Path(r).resolve()
@@ -315,6 +402,8 @@ class _Indexer:
         if not rep.interrupted:  # unprocessed changes would look like deletions
             self.sweep(live_roots)
         self.refresh_path_chunks()
+        if not rep.interrupted:
+            self.backfill(stop)
         with self.timed("thumbs"):
             thumbs.sweep(self.conn, self.cfg)  # thumbnails of content that left the index
         if self.always_compact or rep.files_deleted:
@@ -327,9 +416,10 @@ class _Indexer:
         )
         db.set_meta(self.conn, "last_indexed", rep.finished_at)
         log.info(
-            "indexed: %d added, %d linked, %d updated, %d deleted, %d unchanged, %d errors, %d OCR'd (%d no text)%s",
+            "indexed: %d added, %d linked, %d updated, %d deleted, %d unchanged, %d errors, %d OCR'd (%d no text), "
+            "%d backfilled%s",
             rep.added, rep.linked, rep.updated, rep.deleted, rep.unchanged, len(rep.errors), rep.ocr_images,
-            rep.ocr_empty,
+            rep.ocr_empty, rep.backfilled,
             " (interrupted)" if rep.interrupted else "",
         )
         return rep

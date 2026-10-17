@@ -12,6 +12,7 @@ from vault import db, models
 from vault.config import Config
 from vault.search import retrievers
 from vault.search.fuse import Fused, collapse, rrf
+from vault.search.gate import Gated, gate
 from vault.search.parse import ParsedQuery, parse
 from vault.search.snippet import make_snippet
 from vault.vectors import VectorIndex
@@ -48,6 +49,7 @@ class SearchResponse:
     parsed: ParsedQuery
     results: list[SearchResult]
     timings_ms: dict[str, float]
+    clip: dict[str, object] = field(default_factory=dict)  # candidates, kept, gated, weight (for --debug)
 
 
 class _Stopwatch:
@@ -72,8 +74,10 @@ def _file_rows(conn: sqlite3.Connection, file_ids: list[int]) -> tuple[dict[int,
     return files, paths
 
 
-def _result(file: sqlite3.Row, paths: list[str], fused: Fused | None, chunk: sqlite3.Row | None, query: str, cfg: Config) -> SearchResult:
+def _result(file: sqlite3.Row, paths: list[str], fused: Fused | None, chunk: sqlite3.Row | None, query: str, cfg: Config,
+            clip_gated: bool = False) -> SearchResult:
     primary = Path(paths[0]) if paths else Path("")
+    visual_only = fused is not None and set(fused.ranks) == {"clip"}  # found by CLIP alone: no text to show
     return SearchResult(
         file_id=file["id"],
         kind=file["kind"],
@@ -87,6 +91,9 @@ def _result(file: sqlite3.Row, paths: list[str], fused: Fused | None, chunk: sql
         snippet_html=make_snippet(chunk["text"], query, cfg.snippet_chars) if chunk else "",
         ranks={name: fused.ranks.get(name) for name in cfg.weights} if fused else {},
         rrf_score=fused.score if fused else 0.0,
+        badges=["visual match"] if visual_only else [],
+        thumb_url=file["thumb_path"],
+        clip_gated=clip_gated,
     )
 
 
@@ -97,12 +104,15 @@ def search(
     *,
     embedder: models.TextEmbedder | None = None,
     text_index: VectorIndex | None = None,
+    clip: models.ClipText | None = None,
+    image_index: VectorIndex | None = None,
     now: datetime | None = None,
     limit: int | None = None,
 ) -> SearchResponse:
-    """Parse → BM25 + dense → collapse to file → RRF → snippet.
+    """Parse → BM25 + all-terms + dense + gated CLIP → collapse to file → RRF → snippet.
 
-    Pass a prebuilt `text_index` to avoid reloading vectors on every query (the UI does; the CLI needn't).
+    Pass prebuilt `text_index` / `image_index` to avoid reloading vectors on every query (the UI does; the CLI
+    needn't). The CLIP text model loads only when the index holds image vectors.
     """
     cfg = cfg or Config()
     limit = limit or cfg.max_results
@@ -134,9 +144,22 @@ def search(
     dense_hits = retrievers.dense(conn, pq, cfg.top_k, embedder, text_index, allowed)
     sw.lap("dense")
 
-    lists = {"bm25": collapse(bm25_hits), "all_terms": collapse(all_hits), "dense": collapse(dense_hits)}
+    gated = Gated([], False, 1.0, 0)
+    if cfg.weights.get("clip", 1.0) > 0:
+        if image_index is None:
+            image_index = retrievers.load_image_index(conn)
+            sw.lap("load_images")
+        if len(image_index):
+            clip = clip or models.clip_text(cfg)
+            db.check_model(conn, "clip_model", clip.name)
+            gated = gate(*retrievers.clip_scores(pq, clip, image_index, allowed), pq, cfg)
+            sw.lap("clip")
+
+    lists = {"bm25": collapse(bm25_hits), "all_terms": collapse(all_hits), "dense": collapse(dense_hits),
+             "clip": [(file_id, None) for file_id, _ in gated.hits]}
     lists = {name: ranked for name, ranked in lists.items() if cfg.weights.get(name, 1.0) > 0}
-    fused = rrf(lists, cfg.rrf_k, cfg.weights)[:limit]
+    weights = {**cfg.weights, "clip": cfg.weights.get("clip", 1.0) * gated.weight_factor}
+    fused = rrf(lists, cfg.rrf_k, weights)[:limit]
     sw.lap("fuse")
 
     # Snippet chunk: the one holding every term if any, else BM25's best for the file, else dense's.
@@ -150,8 +173,11 @@ def search(
     } if chunk_ids else {}
     files, paths = _file_rows(conn, [f.file_id for f in fused])
     results = [
-        _result(files[f.file_id], paths.get(f.file_id, []), f, chunks.get(best_chunk[f.file_id]), pq.text, cfg)
+        _result(files[f.file_id], paths.get(f.file_id, []), f, chunks.get(best_chunk[f.file_id]), pq.text, cfg,
+                gated.gated)
         for f in fused
     ]
     sw.lap("hydrate")
-    return SearchResponse(query, pq, results, sw.ms)
+    clip_info = {"candidates": gated.candidates, "kept": len(gated.hits), "gated": gated.gated,
+                 "weight": weights["clip"]}
+    return SearchResponse(query, pq, results, sw.ms, clip_info)

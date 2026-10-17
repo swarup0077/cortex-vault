@@ -1,6 +1,7 @@
 """Lazy model singletons (SPEC §7.8). Nothing loads at import time.
 
-Tests swap in fakes with `set_text_embedder()` / `set_ocr_engine()` so only the slow tests load real weights.
+Tests swap in fakes with `set_text_embedder()` / `set_clip()` / `set_ocr_engine()` so only the slow tests load
+real weights.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from pathlib import Path
 from typing import Protocol
 
 import numpy as np
+from PIL import Image
 
 from vault.config import Config
 from vault.ingest.records import OcrLine
@@ -75,6 +77,95 @@ def set_text_embedder(embedder: TextEmbedder | None) -> None:
     global _text
     with _lock:
         _text = embedder
+
+
+# ---------------------------------------------------------------- CLIP (SPEC §4): images and queries in one space
+
+
+class ClipVision(Protocol):
+    name: str
+    dim: int
+
+    def embed_images(self, images: Sequence[Image.Image]) -> np.ndarray:
+        """(n, dim) float32, L2-normalised. Images are RGB and upright."""
+        ...
+
+
+class ClipText(Protocol):
+    name: str
+    dim: int
+
+    def embed_text(self, text: str) -> np.ndarray:
+        """(dim,) float32, L2-normalised."""
+        ...
+
+
+def clip_model_name(cfg: Config) -> str:
+    """What `meta.clip_model` records: both halves, since vectors from one only match queries from the other."""
+    return f"{cfg.clip_vision_model}+{cfg.clip_text_model}"
+
+
+class FastembedClipVision:
+    def __init__(self, cfg: Config) -> None:
+        from fastembed import ImageEmbedding
+
+        self.name = clip_model_name(cfg)
+        self.dim = cfg.clip_dim
+        self._batch = cfg.clip_batch
+        cfg.models_dir.mkdir(parents=True, exist_ok=True)
+        log.info("loading CLIP vision model %s", cfg.clip_vision_model)
+        self._model = ImageEmbedding(cfg.clip_vision_model, cache_dir=str(cfg.models_dir))
+
+    def embed_images(self, images: Sequence[Image.Image]) -> np.ndarray:
+        if not images:
+            return np.zeros((0, self.dim), np.float32)
+        return l2_normalise(np.stack(list(self._model.embed(list(images), batch_size=self._batch))))
+
+
+class FastembedClipText:
+    def __init__(self, cfg: Config) -> None:
+        from fastembed import TextEmbedding
+
+        self.name = clip_model_name(cfg)
+        self.dim = cfg.clip_dim
+        cfg.models_dir.mkdir(parents=True, exist_ok=True)
+        log.info("loading CLIP text model %s", cfg.clip_text_model)
+        self._model = TextEmbedding(cfg.clip_text_model, cache_dir=str(cfg.models_dir))
+
+    def embed_text(self, text: str) -> np.ndarray:
+        return l2_normalise(next(iter(self._model.embed([text]))))
+
+
+_clip_vision: ClipVision | None = None
+_clip_text: ClipText | None = None
+
+
+def clip_vision_name(cfg: Config) -> str:
+    """The CLIP model's name without loading it: an installed one's (a fake, in tests), else the configured."""
+    return _clip_vision.name if _clip_vision is not None else clip_model_name(cfg)
+
+
+def clip_vision(cfg: Config | None = None) -> ClipVision:
+    global _clip_vision
+    with _lock:
+        if _clip_vision is None:
+            _clip_vision = FastembedClipVision(cfg or Config())
+        return _clip_vision
+
+
+def clip_text(cfg: Config | None = None) -> ClipText:
+    global _clip_text
+    with _lock:
+        if _clip_text is None:
+            _clip_text = FastembedClipText(cfg or Config())
+        return _clip_text
+
+
+def set_clip(vision: ClipVision | None, text: ClipText | None) -> None:
+    """Install specific CLIP halves (tests), or None to fall back to lazy loading."""
+    global _clip_vision, _clip_text
+    with _lock:
+        _clip_vision, _clip_text = vision, text
 
 
 # ---------------------------------------------------------------- OCR

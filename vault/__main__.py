@@ -65,6 +65,7 @@ def _print_report(console: Console, rep: IndexReport) -> None:
         ("updated", rep.updated), ("deleted paths", rep.deleted), ("deleted files", rep.files_deleted),
         ("errors / skipped", len(rep.errors)), ("OCR'd images + PDF pages", rep.ocr_images),
         ("  of which no text", rep.ocr_empty),
+        ("older files brought up to date", rep.backfilled),
     ]:
         t.add_row(label, str(value))
     for stage, secs in rep.timings.items():
@@ -108,6 +109,7 @@ def cmd_search(console: Console, conn: sqlite3.Connection, cfg: Config, args: ar
             console.print(f"    [magenta]rrf={r.rrf_score:.4f} ranks={r.ranks} chunk={r.chunk_id}[/]")
     if args.debug:
         console.print(f"[magenta]parsed={resp.parsed}[/]")
+        console.print(f"[magenta]clip={resp.clip}[/]")
         console.print(f"[magenta]timings ms={resp.timings_ms} total={sum(resp.timings_ms.values()):.1f}[/]")
     return 0
 
@@ -134,9 +136,11 @@ def cmd_stats(console: Console, conn: sqlite3.Connection, cfg: Config) -> int:
     size = cfg.db_path.stat().st_size if cfg.db_path.exists() else 0
     console.print(
         f"files {count('files')} · paths {count('paths')} · chunks {count('chunks')} · "
-        f"text vectors {count('text_vectors')} · OCR lines {count('ocr_lines')} · db {size / 2**20:.1f} MB"
+        f"text vectors {count('text_vectors')} · image vectors {count('image_vectors')} · "
+        f"OCR lines {count('ocr_lines')} · db {size / 2**20:.1f} MB"
     )
     console.print(f"text model: {db.get_meta(conn, 'text_model') or '-'}")
+    console.print(f"CLIP model: {db.get_meta(conn, 'clip_model') or '-'}")
     console.print(f"last indexed: {db.get_meta(conn, 'last_indexed') or 'never'}")
     for root in db.get_roots(conn):
         console.print(f"root: {escape(root)}")

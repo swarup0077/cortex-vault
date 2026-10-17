@@ -74,6 +74,63 @@ def fake_embedder() -> Iterator[FakeTextEmbedder]:
     models.set_text_embedder(None)
 
 
+COLOURS = {  # the fake CLIP's whole vocabulary: an image is its nearest colour, a query the colours it names
+    "red": (220, 30, 30), "green": (30, 160, 60), "blue": (30, 60, 200), "yellow": (230, 210, 40),
+    "white": (250, 250, 250), "black": (10, 10, 10), "gray": (128, 128, 128), "orange": (240, 140, 20),
+}
+
+
+class FakeClipVision:
+    """Deterministic CLIP stand-in: one-hot of the image's nearest named colour. Records image sizes."""
+
+    name = "fake-clip"
+    dim = len(COLOURS)
+
+    def __init__(self) -> None:
+        self.seen: list[tuple[int, int]] = []
+
+    def embed_images(self, images):
+        out = np.zeros((len(images), self.dim), np.float32)
+        for i, im in enumerate(images):
+            self.seen.append(im.size)
+            mean = np.asarray(im.convert("RGB"), np.float32).reshape(-1, 3).mean(axis=0)
+            out[i, int(np.argmin([np.linalg.norm(mean - c) for c in COLOURS.values()]))] = 1.0
+        return out
+
+
+class FakeClipText:
+    """Query side of the fake CLIP: the colours named in the text; no colour words gives a zero vector."""
+
+    name = "fake-clip"
+    dim = len(COLOURS)
+
+    def embed_text(self, text: str) -> np.ndarray:
+        v = np.array([1.0 if c in re.findall(r"\w+", text.lower()) else 0.0 for c in COLOURS], np.float32)
+        n = np.linalg.norm(v)
+        return v / n if n else v
+
+
+@pytest.fixture(autouse=True)
+def fake_clip() -> Iterator[FakeClipVision]:
+    """Every test gets the fake CLIP, so quick tests never load the real one. Ask for `real_clip` to opt out."""
+    vision = FakeClipVision()
+    models.set_clip(vision, FakeClipText())
+    yield vision
+    models.set_clip(None, None)
+
+
+@pytest.fixture
+def real_clip(fake_clip) -> None:
+    """The real CLIP models (lazy-loaded, then cached by models.py for the session). Tests using it are `slow`."""
+    global _real_clip
+    if _real_clip is None:
+        _real_clip = (models.FastembedClipVision(Config()), models.FastembedClipText(Config()))
+    models.set_clip(*_real_clip)
+
+
+_real_clip: tuple | None = None
+
+
 class FakeOcrEngine:
     """Scripted OCR: `lines_for(image)` gives each image's lines (none by default). Records image sizes."""
 
@@ -151,6 +208,31 @@ def draw_label_photo(size: tuple[int, int], label: tuple[int, int, int, int],
 
 
 GpsDms = tuple[tuple[float, float, float], str, tuple[float, float, float], str]
+
+
+def draw_sunset_beach(w: int = 640, h: int = 480) -> Image.Image:
+    """Orange-to-purple sky, a low sun, dark sea, sand: real CLIP reads it as a sunset at the beach (z ≈ 4.8
+    among 24 generated images, SPEC §19)."""
+    img = Image.new("RGB", (w, h))
+    d = ImageDraw.Draw(img)
+    for y in range(int(h * 0.55)):
+        t = y / (h * 0.55)
+        d.line([(0, y), (w, y)], fill=(int(120 + 130 * t), int(40 + 90 * t), int(120 - 90 * t)))
+    d.ellipse((w * 0.42, h * 0.40, w * 0.58, h * 0.62), fill=(255, 200, 60))
+    for y in range(int(h * 0.55), int(h * 0.78)):
+        d.line([(0, y), (w, y)], fill=(30, 50, 110))
+    d.rectangle((0, h * 0.78, w, h), fill=(220, 190, 140))
+    return img
+
+
+def draw_checkerboard(w: int = 640, h: int = 480, n: int = 8) -> Image.Image:
+    img = Image.new("RGB", (w, h), "white")
+    d = ImageDraw.Draw(img)
+    for i in range(n):
+        for j in range(n):
+            if (i + j) % 2:
+                d.rectangle((i * w / n, j * h / n, (i + 1) * w / n, (j + 1) * h / n), fill="black")
+    return img
 
 
 def camera_exif(taken: str | None = None, gps: GpsDms | None = None, make: str | None = "TestCam",

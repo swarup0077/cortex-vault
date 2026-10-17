@@ -92,7 +92,7 @@ def test_docx_found_by_paraphrase(bge_index) -> None:
     conn, cfg = bge_index
     r = top(search(conn, "power bill payment deadline", cfg))
     assert r.filename == "household.docx"
-    assert r.ranks == {"bm25": None, "all_terms": None, "dense": 1}  # no shared words: found by meaning alone
+    assert r.ranks == {"bm25": None, "all_terms": None, "dense": 1, "clip": None}  # no shared words: found by meaning alone
 
 
 def test_common_words_dont_outrank_the_screenshot(conn, cfg, fake_embedder, fake_ocr, tmp_path) -> None:
@@ -122,6 +122,7 @@ def test_all_terms_list_beats_a_long_loosely_matching_doc(conn, fake_embedder, f
     from vault.ingest.records import OcrLine
 
     cfg = Config(data_dir=tmp_path / "data", top_k=20)
+    cfg = replace(cfg, weights={**cfg.weights, "clip": 0.0})  # about BM25 vs dense; CLIP would lift the lone image
     root = tmp_path / "c"
     save_image(draw_text_image((800, 200), []), root / "Screenshot (5).png")
     fake_ocr.lines_for = lambda img: [OcrLine(t, 0.95, 10, 10 + 40 * i, 500, 40 + 40 * i) for i, t in enumerate([
@@ -134,7 +135,7 @@ def test_all_terms_list_beats_a_long_loosely_matching_doc(conn, fake_embedder, f
     query = "gradient clipping threshold"
     without = search(conn, query, replace(cfg, weights={**cfg.weights, "all_terms": 0.0})).results
     assert [r.filename for r in without] == ["lecture transcript.docx", "Screenshot (5).png"]
-    assert without[1].ranks == {"bm25": 1, "all_terms": None, "dense": None}
+    assert without[1].ranks == {"bm25": 1, "all_terms": None, "dense": None, "clip": None}
 
     results = search(conn, query, cfg).results
     assert [r.filename for r in results] == ["Screenshot (5).png", "lecture transcript.docx"]
@@ -145,10 +146,13 @@ def test_all_terms_list_beats_a_long_loosely_matching_doc(conn, fake_embedder, f
 def test_path_chunks_are_keyword_only(conn, cfg, fake_embedder, tmp_path) -> None:
     """Owner's pattern (b): a photo with no text used to be a weak dense hit for every query through its
     "folder / filename" vector. Now its name is found by BM25 only."""
+    from dataclasses import replace
+
     from PIL import Image
 
     from conftest import save_image
 
+    cfg = replace(cfg, weights={**cfg.weights, "clip": 0.0})  # about text retrieval; CLIP is tested on its own
     root = tmp_path / "c"
     save_image(Image.new("RGB", (640, 480), "gray"), root / "Goa trip 2025" / "IMG_2041.jpg")
     (root / "bills.txt").write_text("The electricity invoice is due on the fifth.", encoding="utf-8")

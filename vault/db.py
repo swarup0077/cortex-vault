@@ -136,18 +136,23 @@ def add_roots(conn: sqlite3.Connection, roots: Iterable[str]) -> None:
     set_meta(conn, "roots", json.dumps(merged))
 
 
-def check_text_model(conn: sqlite3.Connection, name: str, *, claim: bool = False) -> None:
-    """Refuse a DB built with another text model. With `claim`, record `name` on an empty DB."""
-    stored = get_meta(conn, "text_model")
+def check_model(conn: sqlite3.Connection, key: str, name: str, *, claim: bool = False) -> None:
+    """Refuse a DB whose `meta[key]` names another model. With `claim`, record `name` when none is stored."""
+    stored = get_meta(conn, key)
     if stored is None:
         if claim:
-            set_meta(conn, "text_model", name)
+            set_meta(conn, key, name)
         return
     if stored != name:
+        what = key.removesuffix("_model").replace("_", " ").replace("clip", "CLIP")
         raise ModelMismatchError(
-            f"Index was built with text model {stored!r} but {name!r} is configured. "
+            f"Index was built with {what} model {stored!r} but {name!r} is configured. "
             "Run `python -m vault reindex`."
         )
+
+
+def check_text_model(conn: sqlite3.Connection, name: str, *, claim: bool = False) -> None:
+    check_model(conn, "text_model", name, claim=claim)
 
 
 def vec_to_blob(vec: np.ndarray) -> bytes:
@@ -177,6 +182,13 @@ def insert_chunk(
     if vec is not None:
         conn.execute("INSERT INTO text_vectors(chunk_id, vec) VALUES (?, ?)", (chunk_id, vec_to_blob(vec)))
     return chunk_id
+
+
+def set_image_vector(conn: sqlite3.Connection, file_id: int, vec: np.ndarray) -> None:
+    conn.execute(
+        "INSERT INTO image_vectors(file_id, vec) VALUES (?, ?) ON CONFLICT(file_id) DO UPDATE SET vec = excluded.vec",
+        (file_id, vec_to_blob(vec)),
+    )
 
 
 def insert_ocr_lines(conn: sqlite3.Connection, chunk_id: int, lines: Iterable) -> None:
@@ -221,4 +233,4 @@ def wipe_index(conn: sqlite3.Connection) -> None:
     """Remove every indexed file (for `reindex`). Keeps roots and run history."""
     conn.execute("DELETE FROM chunks_fts")
     conn.execute("DELETE FROM files")
-    conn.execute("DELETE FROM meta WHERE key IN ('text_model', 'text_dim')")
+    conn.execute("DELETE FROM meta WHERE key IN ('text_model', 'text_dim', 'clip_model')")

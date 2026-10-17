@@ -32,6 +32,11 @@ class Config:
     text_model: str = "BAAI/bge-small-en-v1.5"
     text_dim: int = 384
     text_batch: int = 32
+    clip_vision_model: str = "Qdrant/clip-ViT-B-32-vision"
+    clip_text_model: str = "Qdrant/clip-ViT-B-32-text"
+    clip_dim: int = 512
+    clip_batch: int = 16
+    clip_side: int = 448  # images are shrunk to this short side before CLIP (it centre-crops 224 px anyway)
 
     # Zip guard for .docx/.pptx (SPEC §6.3): targets bombs, not big decks
     zip_max_ratio: float = 100.0  # per member over 1 MB unpacked
@@ -78,7 +83,14 @@ class Config:
     rrf_k: int = 60
     # RRF weight per ranked list; 0 leaves a list out (the ablations do). "all_terms" is BM25 restricted to chunks
     # holding every content term (SPEC §7.2, §19)
-    weights: dict[str, float] = field(default_factory=lambda: {"bm25": 1.0, "all_terms": 1.0, "dense": 1.0})
+    weights: dict[str, float] = field(
+        default_factory=lambda: {"bm25": 1.0, "all_terms": 1.0, "dense": 1.0, "clip": 1.0})
+    # CLIP gate (SPEC §7.3)
+    clip_gate_z: float = 2.0  # keep images scoring at least this many std devs above the candidates' mean
+    clip_gate_max: int = 50
+    clip_gate_min_candidates: int = 20  # fewer candidates than this: z is meaningless, keep the top few instead
+    clip_gate_fallback_top: int = 5
+    clip_code_weight: float = 0.5  # CLIP's RRF weight is multiplied by this for quoted or code-like queries
     snippet_chars: int = 200
     max_results: int = 20
 

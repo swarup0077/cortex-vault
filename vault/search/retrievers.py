@@ -5,7 +5,9 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 
-from vault.models import TextEmbedder
+import numpy as np
+
+from vault.models import ClipText, TextEmbedder
 from vault.search.parse import ParsedQuery
 from vault.search.terms import content_terms
 from vault.vectors import VectorIndex
@@ -101,3 +103,17 @@ def dense(
     ids = [cid for cid, _ in top]
     file_of = dict(conn.execute(f"SELECT id, file_id FROM chunks WHERE id IN ({','.join('?' * len(ids))})", ids))
     return [Hit(cid, file_of[cid], score) for cid, score in top]
+
+
+def load_image_index(conn: sqlite3.Connection) -> VectorIndex:
+    """CLIP vectors, one per image file; the group is the file itself (for the filter mask)."""
+    return VectorIndex.from_query(conn, "SELECT file_id, vec, file_id FROM image_vectors ORDER BY file_id")
+
+
+def clip_scores(pq: ParsedQuery, model: ClipText, index: VectorIndex,
+                allowed: set[int] | None) -> tuple[np.ndarray, np.ndarray]:
+    """cosine(clip_text(query), image) for every filter-passing image: the gate needs all of them (SPEC §7.3)."""
+    if not pq.text or not len(index):
+        return np.zeros(0, np.int64), np.zeros(0, np.float32)
+    mask = index.mask_groups(allowed) if allowed is not None else None
+    return index.scores(model.embed_text(pq.text), mask)
