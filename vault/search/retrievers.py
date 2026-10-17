@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import re
 import sqlite3
 from dataclasses import dataclass
 
 from vault.models import TextEmbedder
 from vault.search.parse import ParsedQuery
+from vault.search.terms import content_terms
 from vault.vectors import VectorIndex
 
 
@@ -46,9 +46,9 @@ def _quote(s: str) -> str:
 
 
 def fts_query(pq: ParsedQuery) -> str | None:
-    """Text tokens OR'ed, required phrases AND'ed. Every term is quoted, so user input can't inject FTS syntax."""
-    tokens = list(dict.fromkeys(re.findall(r"\w+", pq.text.lower())))
-    any_of = " OR ".join(_quote(t) for t in tokens)
+    """Content terms OR'ed (stopwords dropped while another term remains), required phrases AND'ed. Every term is
+    quoted, so user input can't inject FTS syntax."""
+    any_of = " OR ".join(_quote(t) for t in content_terms(pq.text))
     all_of = " AND ".join(_quote(p) for p in pq.phrases)
     if any_of and all_of:
         return f"({any_of}) AND {all_of}"

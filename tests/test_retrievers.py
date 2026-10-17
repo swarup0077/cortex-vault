@@ -15,10 +15,12 @@ def test_parse_passes_text_through() -> None:
         ("Singular value", '"singular" OR "value"'),
         (
             'AND OR NOT "x" NEAR(a b) col:val *',
-            '"and" OR "or" OR "not" OR "x" OR "near" OR "a" OR "b" OR "col" OR "val"',
+            '"not" OR "x" OR "near" OR "b" OR "col" OR "val"',  # "and", "or", "a" are stopwords
         ),
-        ("a a b", '"a" OR "b"'),
+        ("a a b", '"b"'),
         ("!!!", None),
+        ("where is the wifi password", '"wifi" OR "password"'),
+        ("the who", '"the" OR "who"'),  # nothing but stopwords: keep them all
     ],
 )
 def test_fts_query_is_quoted(text, expected) -> None:

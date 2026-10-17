@@ -93,3 +93,21 @@ def test_docx_found_by_paraphrase(bge_index) -> None:
     r = top(search(conn, "power bill payment deadline", cfg))
     assert r.filename == "household.docx"
     assert r.ranks == {"bm25": None, "dense": 1}  # no shared words: found by meaning alone
+
+
+def test_common_words_dont_outrank_the_screenshot(conn, cfg, fake_embedder, fake_ocr, tmp_path) -> None:
+    """Owner's pattern (d): docs full of "where is the" used to beat the screenshot holding the content words,
+    because BM25 matched them on the stopwords and dense liked the same words."""
+    from conftest import draw_text_image, save_image
+    from vault.ingest.records import OcrLine
+
+    root = tmp_path / "c"
+    save_image(draw_text_image((800, 200), []), root / "Screenshot (4).png")
+    fake_ocr.lines_for = lambda img: [OcrLine("WiFi password: hunter2 router admin page", 0.95, 10, 10, 500, 40)]
+    for i, topic in enumerate(["meeting", "room", "bus stop"]):
+        (root / f"faq{i}.txt").write_text(f"Where is the {topic}? Where is the {topic} today? It is where it was.",
+                                          encoding="utf-8")
+    index_paths(conn, [root], cfg)
+    results = search(conn, "where is the wifi password", cfg).results
+    assert results[0].filename == "Screenshot (4).png" and results[0].ranks["bm25"] == 1
+    assert all(r.ranks["bm25"] is None for r in results[1:])  # stopwords alone no longer match

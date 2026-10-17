@@ -5,10 +5,7 @@ from __future__ import annotations
 import html
 import re
 
-STOPWORDS = frozenset(
-    "a an and are as at be by for from how i in is it my of on or that the this to was what when where which who"
-    " why with about".split()
-)
+from vault.search.terms import STOPWORDS
 _SUFFIXES = ("ations", "ation", "ings", "ing", "ies", "ied", "es", "ed", "s")
 
 
