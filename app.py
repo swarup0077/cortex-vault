@@ -1,5 +1,6 @@
-"""Gradio entry point (SPEC §2): `VAULT_MODE=local` (default) searches your own index, `VAULT_MODE=demo` the
-read-only demo index plus per-session uploads. Both bind 127.0.0.1; on the server Caddy is the public listener.
+"""Cortex Vault, the Gradio entry point (SPEC §2, §8). `VAULT_MODE=local` (default) searches your own
+index; `VAULT_MODE=demo` the read-only demo index plus per-session uploads. Both bind 127.0.0.1; on the server
+Caddy is the public listener.
 
     python app.py                       # local: http://127.0.0.1:7860
     VAULT_MODE=demo python app.py       # demo
@@ -26,7 +27,8 @@ from vault import models  # noqa: E402
 from vault.config import REPO_ROOT, Config  # noqa: E402
 from vault.library import Library  # noqa: E402
 from vault.session import DEFAULT_ROOT, SessionManager  # noqa: E402
-from vault.ui.layout import DEMO_EXAMPLES, LOCAL_EXAMPLES, UiContext, build_blocks  # noqa: E402
+from vault.ui import views  # noqa: E402
+from vault.ui.layout import UiContext, build_blocks  # noqa: E402
 from vault.ui.server import make_app  # noqa: E402
 
 log = logging.getLogger("vault.app")
@@ -39,11 +41,11 @@ def build_context(mode: str) -> UiContext:
         cfg = Config(data_dir=REPO_ROOT / "demo_index")
         library = Library(cfg, read_only=True, base_dir=REPO_ROOT)
         sessions = SessionManager(library, cfg, Path(os.environ.get("VAULT_SESSIONS_DIR") or DEFAULT_ROOT))
-        return UiContext("demo", library, examples=DEMO_EXAMPLES, sessions=sessions,
+        return UiContext("demo", library, suggestions=views.DEMO_SUGGESTIONS, sessions=sessions,
                          upload_dir=Path(get_upload_folder()))
     if mode != "local":
         raise SystemExit(f"VAULT_MODE must be 'local' or 'demo', not {mode!r}")
-    return UiContext("local", Library(Config()), examples=LOCAL_EXAMPLES)
+    return UiContext("local", Library(Config()), suggestions=views.LOCAL_SUGGESTIONS)
 
 
 def start_demo(ctx: UiContext) -> None:
@@ -75,10 +77,10 @@ def main() -> None:
     if ctx.demo:
         start_demo(ctx)
     blocks = build_blocks(ctx)
-    app = make_app(blocks, ctx.resolve, max_file_size="25mb" if ctx.demo else None)
+    app = make_app(blocks, ctx.resolve, demo=ctx.demo, max_file_size="25mb" if ctx.demo else None)
     threading.Thread(target=warm_up, args=(ctx,), daemon=True).start()
     port = int(os.environ.get("GRADIO_SERVER_PORT", "7860"))
-    log.info("Personal Search Vault (%s mode) on http://%s:%d", mode, HOST, port)
+    log.info("Cortex Vault (%s mode) on http://%s:%d", mode, HOST, port)
     uvicorn.run(app, host=HOST, port=port, log_level="warning")
 
 

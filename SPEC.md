@@ -350,7 +350,7 @@ The UI is called **Cortex Vault**: the page title, header, favicon and footer sa
 | Related matches | the weaker matches (§7.4 step 4) |
 
 - Close and Visual matches appear in the order of their best item's fused rank, so the #1 result is always at the top of the page; Related matches always come last. Inside a group the order is the fused rank.
-- The first 20 items in display order show, then "Show N more" up to 50, N being the real remaining count under the current chip.
+- The top 20 results by fused rank show, each in its own group (weaker matches rank after every fused result), then "Show N more" up to 50, N being the real remaining count under the current chip. A visual match at #2 therefore shows even when a long Close group comes before its group.
 - A row: tinted file-type tile, file name, meta (type · date, or page / slide number), one-line snippet with `<mark>`, "Enter" hint on the selected row.
 
 **Preview pane** (a full-screen sheet on phones)
