@@ -70,8 +70,21 @@ class ModelMismatchError(RuntimeError):
     """The index was built with different embedding models than the configured ones."""
 
 
-def connect(db_path: Path | str) -> sqlite3.Connection:
-    """Open (creating if needed) the vault DB. Autocommit mode; use `transaction()` for writes."""
+def connect(db_path: Path | str, *, read_only: bool = False) -> sqlite3.Connection:
+    """Open (creating if needed) the vault DB. Autocommit mode; use `transaction()` for writes.
+
+    `read_only` opens an existing, current index that nothing can write to (the demo index, SPEC §2): no schema
+    setup, no migration, and SQLite itself refuses writes.
+    """
+    if read_only:
+        conn = sqlite3.connect(f"{Path(db_path).resolve().as_uri()}?mode=ro", uri=True, isolation_level=None)
+        conn.row_factory = sqlite3.Row
+        version = get_meta(conn, "schema_version")
+        if version != SCHEMA_VERSION:
+            conn.close()
+            raise RuntimeError(f"{db_path} has schema {version}, not {SCHEMA_VERSION}: rebuild it with "
+                               "`python -m vault build-demo`")
+        return conn
     if str(db_path) != ":memory:":
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path), isolation_level=None)
@@ -143,6 +156,10 @@ def get_roots(conn: sqlite3.Connection) -> list[str]:
 def add_roots(conn: sqlite3.Connection, roots: Iterable[str]) -> None:
     merged = list(dict.fromkeys([*get_roots(conn), *roots]))
     set_meta(conn, "roots", json.dumps(merged))
+
+
+def set_roots(conn: sqlite3.Connection, roots: Iterable[str]) -> None:
+    set_meta(conn, "roots", json.dumps(list(dict.fromkeys(roots))))
 
 
 def check_model(conn: sqlite3.Connection, key: str, name: str, *, claim: bool = False) -> None:

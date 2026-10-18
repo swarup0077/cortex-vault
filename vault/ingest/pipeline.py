@@ -88,7 +88,8 @@ def extract(path: Path, cfg: Config, screen_capture: bool = False, image: Image.
 
 
 class _Indexer:
-    def __init__(self, conn: sqlite3.Connection, cfg: Config, embedder: models.TextEmbedder, compact: bool) -> None:
+    def __init__(self, conn: sqlite3.Connection, cfg: Config, embedder: models.TextEmbedder | None,
+                 compact: bool) -> None:
         self.conn = conn
         self.cfg = cfg
         self.embedder = embedder
@@ -432,6 +433,7 @@ class _Indexer:
                 log.warning("could not compact the index: %s", e)
 
     def run(self, roots: Iterable[Path | str], stop: threading.Event | None, progress: ProgressFn | None) -> IndexReport:
+        assert self.embedder is not None, "indexing needs a text embedder"
         rep = self.report
         db.check_text_model(self.conn, self.embedder.name, claim=True)
         db.check_model(self.conn, "clip_model", models.clip_vision_name(self.cfg), claim=True)
@@ -553,3 +555,21 @@ def reindex(
     with db.transaction(conn):
         db.wipe_index(conn)
     return index_paths(conn, roots, cfg, embedder=embedder, stop=stop, progress=progress, compact=True)
+
+
+def remove_root(conn: sqlite3.Connection, root: str, cfg: Config | None = None) -> int:
+    """Forget an indexed folder (the Index tab's "remove"). Its paths go; content no other path points at is
+    deleted with all its rows and its thumbnail, and the DB is compacted so none of its text stays in the file.
+    `root` is the string `db.get_roots()` lists. Returns how many files were deleted."""
+    cfg = cfg or Config()
+    indexer = _Indexer(conn, cfg, None, compact=True)
+    file_ids = [r[0] for r in conn.execute("SELECT DISTINCT file_id FROM paths WHERE root = ?", (root,))]
+    with db.transaction(conn):
+        conn.execute("DELETE FROM paths WHERE root = ?", (root,))
+        for file_id in file_ids:
+            indexer._drop_if_orphan(file_id)
+        db.set_roots(conn, [r for r in db.get_roots(conn) if r != root])
+    indexer.refresh_path_chunks()  # content still linked elsewhere no longer lists the removed paths
+    thumbs.sweep(conn, cfg)
+    indexer.compact()
+    return indexer.report.files_deleted

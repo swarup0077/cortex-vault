@@ -456,3 +456,22 @@ def test_older_index_reocrs_only_where_the_angle_setting_changed(conn, cfg, fake
 
     rep = index_paths(conn, [forwarded], cfg)
     assert (rep.reclassified, rep.reocr, len(fake_ocr.seen)) == (0, 0, seen + 1)  # nothing left to do
+
+
+def test_remove_root_forgets_its_files_but_keeps_shared_content(conn, cfg, fake_embedder, tmp_path,
+                                                                make_search_corpus) -> None:
+    from vault.ingest import thumbs
+    from vault.ingest.pipeline import remove_root
+
+    a, b = make_search_corpus(tmp_path / "a"), tmp_path / "b"
+    b.mkdir()
+    (b / "recipe copy.txt").write_bytes((a / "home" / "recipe.txt").read_bytes())
+    index_paths(conn, [a, b], cfg)
+    assert conn.execute("SELECT count(*) FROM files").fetchone()[0] == 6
+    removed = remove_root(conn, str(a.resolve()), cfg)
+    assert removed == 5  # the recipe's content is still under b
+    assert [r[0] for r in conn.execute("SELECT path FROM paths")] == [str((b / "recipe copy.txt").resolve())]
+    assert db.get_roots(conn) == [str(b.resolve())]
+    assert conn.execute("SELECT count(*) FROM chunks_fts").fetchone()[0] == conn.execute(
+        "SELECT count(*) FROM chunks").fetchone()[0]
+    assert len(list(thumbs.thumbs_dir(cfg).glob("*.webp"))) == 1

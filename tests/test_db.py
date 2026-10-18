@@ -1,3 +1,5 @@
+import sqlite3
+
 import numpy as np
 import pytest
 
@@ -121,3 +123,24 @@ def test_migration_2_to_3_records_the_angle_classifier_setting(cfg) -> None:
     assert db.get_meta(c, "schema_version") == "3"
     assert dict(c.execute("SELECT sha256, ocr_cls FROM files").fetchall()) == {"p": 1, "s": 0, "d": None, "e": None}
     c.close()
+
+
+def test_read_only_connection_refuses_writes(tmp_path) -> None:
+    """The demo index is opened read-only, so nothing can change it (SPEC §2)."""
+    path = tmp_path / "demo index" / "vault.db"
+    db.connect(path).close()
+    ro = db.connect(path, read_only=True)
+    assert db.get_meta(ro, "schema_version") == db.SCHEMA_VERSION
+    with pytest.raises(sqlite3.OperationalError, match="readonly"):
+        ro.execute("INSERT INTO meta(key, value) VALUES ('x', 'y')")
+    ro.close()
+
+
+def test_read_only_connection_needs_an_existing_current_index(tmp_path) -> None:
+    with pytest.raises(sqlite3.OperationalError):
+        db.connect(tmp_path / "missing.db", read_only=True)
+    old = db.connect(tmp_path / "old.db")
+    db.set_meta(old, "schema_version", "2")
+    old.close()
+    with pytest.raises(RuntimeError, match="build-demo"):
+        db.connect(tmp_path / "old.db", read_only=True)
