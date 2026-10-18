@@ -14,6 +14,7 @@ class Fused:
     score: float
     ranks: dict[str, int] = field(default_factory=dict)  # retriever -> 1-based file rank
     chunks: dict[str, int] = field(default_factory=dict)  # retriever -> best chunk id
+    shares: dict[str, float] = field(default_factory=dict)  # retriever -> its term of the RRF sum
 
 
 def collapse(hits: Sequence[Hit]) -> list[tuple[int, int]]:
@@ -38,7 +39,9 @@ def rrf(
         boost = (boosts or {}).get(name, {})
         for rank, (file_id, chunk_id) in enumerate(ranked, start=1):
             f = fused.setdefault(file_id, Fused(file_id, 0.0))
-            f.score += w * boost.get(file_id, 1.0) / (k + rank)
+            share = w * boost.get(file_id, 1.0) / (k + rank)
+            f.score += share
+            f.shares[name] = share
             f.ranks[name] = rank
             f.chunks[name] = chunk_id
     return sorted(fused.values(), key=lambda f: (-f.score, min(f.ranks.values()), f.file_id))

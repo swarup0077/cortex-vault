@@ -9,6 +9,7 @@ one.
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import threading
 from collections.abc import Callable, Iterable, Iterator, Sequence
@@ -25,10 +26,13 @@ from vault.ingest import pipeline
 from vault.ingest.extract_image import load_upright
 from vault.ingest.pipeline import IndexReport
 from vault.platform import resolve_stored_path
+from vault.search import highlight as boxes_of
 from vault.search import retrievers
 from vault.search.engine import SearchResponse, search
 from vault.search.snippet import highlight
 from vault.vectors import VectorIndex
+
+log = logging.getLogger(__name__)
 
 # One indexing job at a time in the whole process (local "Index now" and demo uploads alike): OCR already uses
 # every CPU, and the OCR engine keeps per-call settings on itself (SPEC §8, §19).
@@ -52,6 +56,14 @@ class Detail:
     page: int | None
     pages: int | None
     chunk_html: str
+
+
+@dataclass
+class Recent:
+    file_id: int
+    name: str
+    kind: str
+    indexed_at: str | None
 
 
 @dataclass
@@ -209,6 +221,55 @@ class Library:
             effective_date=row["effective_date"], page=chunk["page"] if chunk else None, pages=row["pages"],
             chunk_html=highlight(chunk["text"], query) if chunk else "",
         )
+
+    def preview_data(self, file_id: int, chunk_id: int | None, page: int | None, query: str) -> dict | None:
+        """What the preview fetches when a result is selected: highlight boxes (percent of the picture) and the
+        matched passage as plain text (for Copy text)."""
+        with self.connect() as conn:
+            row = self._file(conn, file_id)
+            if row is None:
+                return None
+            chunk = conn.execute("SELECT id, page, source, text FROM chunks WHERE id = ? AND file_id = ?",
+                                 (chunk_id, file_id)).fetchone() if chunk_id is not None else None
+            boxes: list[boxes_of.Box] = []
+            try:
+                if row["kind"] in ("photo", "screenshot") and chunk is not None and row["width"] and row["height"]:
+                    boxes = boxes_of.image_boxes(conn, chunk["id"], query, row["width"], row["height"])
+                elif row["kind"] == "pdf" and (path := self.file_path(file_id)) is not None:
+                    boxes = boxes_of.pdf_boxes(conn, path, file_id, page or (chunk["page"] if chunk else 1) or 1,
+                                                chunk, query)
+            except Exception as e:  # an unreadable file: the preview just has no boxes
+                log.warning("no highlight boxes for file %s: %s", file_id, e)
+                boxes = []
+        return {"boxes": [b.as_dict() for b in boxes], "text": chunk["text"] if chunk else ""}
+
+    def download(self, file_id: int) -> tuple[Path, str] | None:
+        """The file to send for a download, with the name to give it."""
+        path = self.file_path(file_id)
+        return (path, path.name) if path is not None else None
+
+    def count(self, roots: Iterable[str] = ()) -> int:
+        roots = list(roots)
+        with self.connect() as conn:
+            if not roots:
+                return conn.execute("SELECT count(*) FROM files WHERE status = 'ok'").fetchone()[0]
+            return conn.execute(
+                f"SELECT count(*) FROM files f WHERE f.status = 'ok' AND EXISTS (SELECT 1 FROM paths p WHERE "
+                f"p.file_id = f.id AND p.root IN ({','.join('?' * len(roots))}))", roots).fetchone()[0]
+
+    def recent(self, limit: int = 5, roots: Iterable[str] = ()) -> list[Recent]:
+        """The most recently indexed files (the home screen's "Recently added")."""
+        roots = list(roots)
+        scope = (f"AND EXISTS (SELECT 1 FROM paths p WHERE p.file_id = f.id AND p.root IN ({','.join('?' * len(roots))}))"
+                 if roots else "")
+        with self.connect() as conn:
+            rows = conn.execute(f"SELECT f.id, f.kind, f.indexed_at FROM files f WHERE f.status = 'ok' {scope} "
+                                "ORDER BY f.indexed_at DESC, f.id DESC LIMIT ?", [*roots, limit]).fetchall()
+            out = []
+            for r in rows:
+                paths = self._paths(conn, r["id"])
+                out.append(Recent(r["id"], Path(paths[0]).name if paths else "", r["kind"], r["indexed_at"]))
+        return out
 
     def stats(self) -> Stats:
         with self.connect() as conn:

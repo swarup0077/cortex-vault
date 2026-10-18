@@ -96,3 +96,31 @@ def test_roots_scope_every_list(conn, cfg, fake_embedder, tmp_path) -> None:
     assert set(names(search(conn, "", cfg, roots=[up]).results)) == {"IMG_upload_red.jpg", "invoice.txt"}
     both = search(conn, "electricity invoice", cfg)
     assert set(names(both.results)) == {"bills.txt", "invoice.txt"}
+
+
+def test_found_by_ranks_are_real_for_related_matches_and_shares_add_up(conn, cfg, fake_embedder, tmp_path) -> None:
+    """SPEC §8 Found by: every result shows each method's real rank; related matches too (in the full list)."""
+    root = small_library(tmp_path / "c")
+    for i in range(3):
+        photo(root, f"IMG_extra_{i}.jpg", "gray", shade=i + 1)
+    index_paths(conn, [root], cfg)
+    resp = search(conn, "red", cfg)
+    for r in resp.results + resp.weaker:
+        assert abs(sum(r.shares.values()) - r.rrf_score) < 1e-12
+    images = [r for r in resp.weaker if r.kind == "photo"]
+    clip_ranks = sorted(r.ranks["clip"] for r in images)
+    assert clip_ranks == list(range(2, 2 + len(images)))  # rank 1 is the red photo, in the main list
+    assert all(r.clip_status == "not kept" for r in images)
+    assert resp.results[0].clip_status == "strong" and resp.results[0].ranks["clip"] == 1
+    texts = [r for r in resp.weaker if r.kind == "doc"]
+    assert texts and all(r.ranks["dense"] >= 1 and r.chunk_source == "doc_text" for r in texts)
+
+
+def test_results_carry_the_preview_facts(conn, cfg, fake_embedder, tmp_path) -> None:
+    root = small_library(tmp_path / "c")
+    index_paths(conn, [root], cfg)
+    r = search(conn, "sourdough", cfg).results[0]
+    assert r.filename == "recipe.txt" and r.size_bytes == (root / "recipe.txt").stat().st_size
+    assert r.chunk_source == "doc_text" and r.text_sources == ["doc_text"]
+    p = search(conn, "red", cfg).results[0]
+    assert (p.width, p.height) == (640, 480) and p.text_sources == []

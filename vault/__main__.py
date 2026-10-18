@@ -137,7 +137,9 @@ def cmd_search(console: Console, conn: sqlite3.Connection, cfg: Config, args: ar
         if r.snippet_html:
             console.print(f"    {_snippet_markup(r.snippet_html)}")
         if args.debug:
-            console.print(f"    [magenta]rrf={r.rrf_score:.4f} ranks={r.ranks} chunk={r.chunk_id}[/]")
+            shares = {k: round(v, 4) for k, v in r.shares.items()}
+            console.print(f"    [magenta]rrf={r.rrf_score:.4f} ranks={r.ranks} shares={shares} "
+                          f"clip={r.clip_status} chunk={r.chunk_id}[/]")
     if args.debug:
         console.print(f"[magenta]parsed={resp.parsed}[/]")
         console.print(f"[magenta]clip={resp.clip}[/]")

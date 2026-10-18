@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
@@ -45,6 +45,17 @@ class SearchResult:
     clip_gated: bool = False
     rerank_score: float | None = None
     weaker: bool = False  # below the fused list: only the dense floor or the CLIP gate kept it out (SPEC §7.4)
+    # Why this result (SPEC §8): `ranks` are each method's real rank (for a weaker match, in the method's full list,
+    # below the floor or outside the gate); `shares` are each list's term of the RRF sum that placed it
+    shares: dict[str, float] = field(default_factory=dict)
+    clip_status: str | None = None  # images, when CLIP ran: "strong", "kept" (by the gate) or "not kept"
+    # Facts for the preview
+    size_bytes: int | None = None
+    width: int | None = None
+    height: int | None = None
+    pages: int | None = None
+    chunk_source: str | None = None  # 'pdf_text' | 'ocr' | 'doc_text' | 'slide_text' of the snippet chunk
+    text_sources: list[str] = field(default_factory=list)  # every content-chunk source the file has
 
 
 @dataclass
@@ -71,19 +82,47 @@ class _Stopwatch:
 
 
 def _file_rows(conn: sqlite3.Connection, file_ids: list[int]) -> tuple[dict[int, sqlite3.Row], dict[int, list[str]]]:
-    if not file_ids:
-        return {}, {}
-    marks = ",".join("?" * len(file_ids))
-    files = {r["id"]: r for r in conn.execute(f"SELECT * FROM files WHERE id IN ({marks})", file_ids)}
-    paths: dict[int, list[str]] = {}
-    for r in conn.execute(f"SELECT file_id, path FROM paths WHERE file_id IN ({marks}) ORDER BY mtime DESC", file_ids):
-        paths.setdefault(r[0], []).append(r[1])  # most recently modified first: that's the primary path
+    files, paths, _ = _file_info(conn, file_ids)
     return files, paths
 
 
+def _file_info(conn: sqlite3.Connection, file_ids: list[int]
+               ) -> tuple[dict[int, sqlite3.Row], dict[int, list[str]], dict[int, int]]:
+    """files rows, each file's paths (primary first) and the primary path's size."""
+    if not file_ids:
+        return {}, {}, {}
+    marks = ",".join("?" * len(file_ids))
+    files = {r["id"]: r for r in conn.execute(f"SELECT * FROM files WHERE id IN ({marks})", file_ids)}
+    paths: dict[int, list[str]] = {}
+    sizes: dict[int, int] = {}
+    for r in conn.execute(f"SELECT file_id, path, size_bytes FROM paths WHERE file_id IN ({marks}) ORDER BY mtime DESC",
+                          file_ids):
+        paths.setdefault(r[0], []).append(r[1])  # most recently modified first: that's the primary path
+        sizes.setdefault(r[0], r[2])
+    return files, paths, sizes
+
+
+@dataclass(frozen=True)
+class _Clip:
+    """What the CLIP gate did with this query's images, for each result's `clip_status`."""
+
+    ran: bool = False
+    kept: frozenset[int] = frozenset()
+    strong: frozenset[int] = frozenset()
+
+    def status(self, file_id: int, kind: str) -> str | None:
+        if not self.ran or kind not in ("photo", "screenshot"):
+            return None
+        return "strong" if file_id in self.strong else "kept" if file_id in self.kept else "not kept"
+
+
 def _result(file: sqlite3.Row, paths: list[str], fused: Fused | None, chunk: sqlite3.Row | None, query: str, cfg: Config,
-            clip_gated: bool = False, weaker: bool = False) -> SearchResult:
+            clip_gated: bool = False, weaker: bool = False, *, size: int | None = None, sources: Sequence[str] = (),
+            clip: _Clip = _Clip(), real_ranks: dict[str, dict[int, int]] | None = None) -> SearchResult:
     primary = Path(paths[0]) if paths else Path("")
+    ranks = {name: fused.ranks.get(name) for name in cfg.weights} if fused else {}
+    if real_ranks is not None:  # a weaker match: each method's rank in its full list, not in the tail's fusion
+        ranks = {name: (real_ranks.get(name, {}).get(file["id"]) if r is not None else None) for name, r in ranks.items()}
     visual_only = fused is not None and set(fused.ranks) == {"clip"}  # found by CLIP alone: no text to show
     badges = (["weaker match"] if weaker else []) + (["visual match"] if visual_only else [])
     return SearchResult(
@@ -97,17 +136,26 @@ def _result(file: sqlite3.Row, paths: list[str], fused: Fused | None, chunk: sql
         page=chunk["page"] if chunk else None,
         chunk_id=chunk["id"] if chunk else None,
         snippet_html=make_snippet(chunk["text"], query, cfg.snippet_chars) if chunk else "",
-        ranks={name: fused.ranks.get(name) for name in cfg.weights} if fused else {},
+        ranks=ranks,
         rrf_score=fused.score if fused else 0.0,
         badges=badges,
         thumb_url=file["thumb_path"],
         clip_gated=clip_gated,
         weaker=weaker,
+        shares=dict(fused.shares) if fused else {},
+        clip_status=clip.status(file["id"], file["kind"]),
+        size_bytes=size,
+        width=file["width"],
+        height=file["height"],
+        pages=file["pages"],
+        chunk_source=chunk["source"] if chunk else None,
+        text_sources=list(sources),
     )
 
 
 def _hydrate(conn: sqlite3.Connection, fused: list[Fused], query: str, cfg: Config, clip_gated: bool,
-             weaker: bool = False) -> list[SearchResult]:
+             weaker: bool = False, *, clip: _Clip = _Clip(),
+             real_ranks: dict[str, dict[int, int]] | None = None) -> list[SearchResult]:
     """Cards for fused files, in order. Snippet chunk: the one holding every term if any, else BM25's best for
     the file, else dense's."""
     best_chunk = {f.file_id: next((f.chunks[n] for n in SNIPPET_ORDER if n in f.chunks), None) for f in fused}
@@ -115,13 +163,20 @@ def _hydrate(conn: sqlite3.Connection, fused: list[Fused], query: str, cfg: Conf
     chunks = {
         r["id"]: r
         for r in conn.execute(
-            f"SELECT id, page, text FROM chunks WHERE id IN ({','.join('?' * len(chunk_ids))})", chunk_ids
+            f"SELECT id, page, text, source FROM chunks WHERE id IN ({','.join('?' * len(chunk_ids))})", chunk_ids
         )
     } if chunk_ids else {}
-    files, paths = _file_rows(conn, [f.file_id for f in fused])
+    ids = [f.file_id for f in fused]
+    files, paths, sizes = _file_info(conn, ids)
+    sources: dict[int, list[str]] = {}
+    if ids:
+        for fid, src in conn.execute("SELECT DISTINCT file_id, source FROM chunks WHERE source != 'path' AND file_id IN "
+                                     f"({','.join('?' * len(ids))}) ORDER BY source", ids):
+            sources.setdefault(fid, []).append(src)
     return [
         _result(files[f.file_id], paths.get(f.file_id, []), f, chunks.get(best_chunk[f.file_id]), query, cfg,
-                clip_gated, weaker)
+                clip_gated, weaker, size=sizes.get(f.file_id), sources=sources.get(f.file_id, ()), clip=clip,
+                real_ranks=real_ranks)
         for f in fused
     ]
 
@@ -222,14 +277,18 @@ def search(
         tail = rrf(rest, cfg.rrf_k, weights)[: limit - len(fused)]
         sw.lap("weaker")
 
-    results = _hydrate(conn, fused, pq.text, cfg, gated.gated)
-    weaker = _hydrate(conn, tail, pq.text, cfg, False, weaker=True)
+    clip_info = _Clip(bool(clip_ranked), frozenset(f for f, _ in gated.hits), gated.strong)
+    real_ranks = {"dense": {f: i for i, (f, _) in enumerate(collapse(dense_all), start=1)},
+                  "clip": {f: i for i, f in enumerate(clip_ranked, start=1)}}
+    results = _hydrate(conn, fused, pq.text, cfg, gated.gated, clip=clip_info)
+    weaker = _hydrate(conn, tail, pq.text, cfg, False, weaker=True, clip=clip_info, real_ranks=real_ranks)
     by_id = {r.file_id: r for r in results}
     row_ids = [file_id for file_id, _ in gated.hits[: cfg.visual_row]]
     fused_by_id = {f.file_id: f for f in fused_all}
-    missing = _hydrate(conn, [fused_by_id[i] for i in row_ids if i not in by_id], pq.text, cfg, gated.gated)
+    missing = _hydrate(conn, [fused_by_id[i] for i in row_ids if i not in by_id], pq.text, cfg, gated.gated,
+                       clip=clip_info)
     by_id.update({r.file_id: r for r in missing})
     sw.lap("hydrate")
-    clip_info = {"candidates": gated.candidates, "kept": len(gated.hits), "strong": len(gated.strong),
-                 "gated": gated.gated, "weight": weights["clip"], "visual": visual}
-    return SearchResponse(query, pq, results, sw.ms, clip_info, weights, weaker, [by_id[i] for i in row_ids])
+    clip_summary = {"candidates": gated.candidates, "kept": len(gated.hits), "strong": len(gated.strong),
+                    "gated": gated.gated, "weight": weights["clip"], "visual": visual}
+    return SearchResponse(query, pq, results, sw.ms, clip_summary, weights, weaker, [by_id[i] for i in row_ids])
