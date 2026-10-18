@@ -134,8 +134,9 @@ class Config:
     weaker_matches: bool = True
     visual_row: int = 10
 
-    # Demo uploads (SPEC §8): enforced in vault/session.py, not only by Gradio. First values from the spec; the
-    # final caps are set in M5 after timing a 100-file upload on the VM.
+    # Demo uploads (SPEC §8): enforced in vault/session.py, not only by Gradio. Final (M5): a mixed 100-file,
+    # 115 MB upload (bench/bench_upload.py) was listed in 8 s and fully read in 3.5 min on the D4as_v4 VM, inside
+    # the 5-minute target, so the spec's first values stay.
     upload_max_files: int = 100  # per session
     upload_max_bytes: int = 25 * 1024 * 1024  # per file
     upload_max_total: int = 200 * 1024 * 1024  # per session
