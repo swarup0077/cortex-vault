@@ -63,6 +63,7 @@ class IndexReport:
     ocr_images: int = 0  # images and PDF pages sent to OCR
     ocr_empty: int = 0  # of those, how many gave no text (blank pages, photos without any)
     ocr_capped: list[str] = field(default_factory=list)  # PDFs that hit the OCR page cap
+    ocr_stopped: list[str] = field(default_factory=list)  # PDFs whose OCR stopped early: unreadable pages (item k)
     backfilled: int = 0  # older files brought up to date: kind, date, thumbnail, CLIP vector (SPEC §19, item i)
     reclassified: int = 0  # images whose kind CLIP decided after they were indexed (stored vector, no OCR)
     reocr: int = 0  # images OCR'd again because their angle-classifier setting changed (SPEC §6.2)
@@ -158,6 +159,8 @@ class _Indexer:
         self.report.ocr_empty += ex.ocr_empty
         if ex.ocr_capped:
             self.report.ocr_capped.append(str(path))
+        if ex.ocr_stopped:
+            self.report.ocr_stopped.append(str(path))
 
     def _fail(self, path: Path, status: str, error: str) -> None:
         log.warning("%s %s: %s", status, path, error)

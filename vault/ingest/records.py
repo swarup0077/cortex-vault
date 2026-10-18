@@ -56,3 +56,4 @@ class Extracted:
     ocr_images: int = 0  # images (or PDF pages) sent to OCR
     ocr_empty: int = 0  # of those, how many gave no text
     ocr_capped: bool = False  # a PDF hit the OCR page cap
+    ocr_stopped: bool = False  # a PDF's first OCR'd pages were unreadable, so the rest weren't OCR'd (item k)

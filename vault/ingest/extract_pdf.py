@@ -17,7 +17,7 @@ from PIL import Image
 
 from vault import models
 from vault.config import Config
-from vault.ingest.ocr import lines_text, ocr_image, reading_order
+from vault.ingest.ocr import OcrStats, lines_text, ocr_image, reading_order
 from vault.ingest.records import Extracted, OcrLine, Segment, SkipFile
 
 log = logging.getLogger(__name__)
@@ -59,14 +59,25 @@ def image_regions(page: pymupdf.Page, cfg: Config) -> list[pymupdf.Rect]:
     return out
 
 
-def ocr_region(page: pymupdf.Page, rect: pymupdf.Rect, engine: models.OcrEngine, cfg: Config) -> list[OcrLine]:
+def stops_early(pages: list[OcrStats], cfg: Config) -> bool:
+    """Item k: after the first `pdf_ocr_probe_pages` OCR'd pages *with ink* (blank pages don't count), stop if the
+    recogniser was unsure of what it read: mean confidence of the lines found below `pdf_ocr_stop_conf`.
+    Handwriting, mostly. The value is provisional (bench/calibrate.py ocr-stop)."""
+    inked = [s for s in pages if s.detected][: cfg.pdf_ocr_probe_pages]
+    if len(inked) < cfg.pdf_ocr_probe_pages:
+        return False
+    return sum(s.conf_sum for s in inked) / sum(s.detected for s in inked) < cfg.pdf_ocr_stop_conf
+
+
+def ocr_region(page: pymupdf.Page, rect: pymupdf.Rect, engine: models.OcrEngine, cfg: Config,
+               stats: OcrStats | None = None) -> list[OcrLine]:
     """Render `rect` (unrotated points) as the reader sees it, OCR it, and map boxes back to unrotated points."""
     shown = rect * page.rotation_matrix
     pix = page.get_pixmap(dpi=cfg.pdf_ocr_dpi, clip=shown, colorspace=pymupdf.csRGB, alpha=False)
     img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
     sx, sy = shown.width / pix.width, shown.height / pix.height
     out = []
-    for ln in ocr_image(img, engine, cfg):
+    for ln in ocr_image(img, engine, cfg, stats=stats):
         box = pymupdf.Rect(shown.x0 + ln.x0 * sx, shown.y0 + ln.y0 * sy, shown.x0 + ln.x1 * sx, shown.y0 + ln.y1 * sy)
         box = box * page.derotation_matrix
         out.append(replace(ln, x0=box.x0, y0=box.y0, x1=box.x1, y1=box.y1))
@@ -82,6 +93,7 @@ def extract_pdf(path: Path, cfg: Config | None = None, engine: models.OcrEngine 
         if doc.needs_pass:
             raise SkipFile("encrypted PDF")
         ex = Extracted(pages=doc.page_count, doc_date=parse_pdf_date((doc.metadata or {}).get("creationDate")))
+        probe: list[OcrStats] = []  # each OCR'd page's readability, for the early stop (item k)
         for page in doc:
             text = page.get_text("text")
             if native and text.strip():
@@ -92,6 +104,8 @@ def extract_pdf(path: Path, cfg: Config | None = None, engine: models.OcrEngine 
             regions = [unrotated_rect(page)] if scanned else image_regions(page, cfg)
             if not regions:
                 continue
+            if ex.ocr_stopped:
+                continue
             if ex.ocr_images >= cfg.pdf_ocr_max_pages:
                 if not ex.ocr_capped:
                     log.info("OCR cap (%d pages) reached in %s; later pages keep native text only",
@@ -101,12 +115,17 @@ def extract_pdf(path: Path, cfg: Config | None = None, engine: models.OcrEngine 
             engine = engine or models.ocr_engine(cfg)
             t0 = time.perf_counter()
             lines: list[OcrLine] = []
+            page_stats = OcrStats()
             for r in regions:  # each region is its own picture: order it alone, keep numbering running
                 base = lines[-1].block + 1 if lines else 0
-                for ln in reading_order(ocr_region(page, r, engine, cfg), cfg):
+                for ln in reading_order(ocr_region(page, r, engine, cfg, page_stats), cfg):
                     lines.append(replace(ln, line=len(lines), block=ln.block + base))
             ex.ocr_seconds += time.perf_counter() - t0
             ex.ocr_images += 1
+            probe.append(page_stats)
+            if stops_early(probe, cfg):
+                log.info("OCR stopped early in %s: little readable text in its first pages (handwriting?)", path)
+                ex.ocr_stopped = True
             if lines:
                 ex.segments.append(Segment(lines_text(lines), page.number + 1, "ocr", tuple(lines)))
             else:

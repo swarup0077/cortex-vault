@@ -203,7 +203,9 @@ class RapidOcrEngine:
         log.info("loading OCR models %s", self.name)
         self._ocr = RapidOCR(params={
             "Global.log_level": "error",  # an image with no text is normal; the index report counts them
-            "Global.text_score": cfg.ocr_min_conf,
+            # Every recognised line comes back: merge_strips drops those below ocr_min_conf, and counting the
+            # ones it drops tells a page of unreadable ink (handwriting) from a blank one (SPEC §6.3, item k)
+            "Global.text_score": 0.0,
             "Global.use_cls": cfg.ocr_use_cls,
             "Global.max_side_len": cfg.ocr_max_side,  # tiles are already sized; don't shrink them again
             "Det.model_path": str(paths["Det"]),

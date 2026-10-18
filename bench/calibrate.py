@@ -4,6 +4,7 @@
     python bench/calibrate.py clip      # CLIP's top hit (z and cosine): drawn scenes vs queries no picture answers
     python bench/calibrate.py rule      # clip_strong_z / clip_strong_cosine end to end: scene and paraphrase recall
     python bench/calibrate.py kind      # clip_screenshot_margin: generated screen captures vs photo-like pictures
+    python bench/calibrate.py ocr-stop  # pdf_ocr_stop_*: OCR readability of printed vs handwriting-like scanned pages
 
 Each prints a summary and writes every score to bench/generated/calibrate_<name>.json. Nothing here comes from
 anyone's personal files: the texts are written below and the pictures are drawn by `scenes.py`. The values in
@@ -418,8 +419,209 @@ def kind() -> dict:
     }, "rows": rows}
 
 
+# ---------------------------------------------------------------- ocr-stop: early stop for unreadable PDFs (item k)
+
+PAGE = (1240, 1754)  # an A4 page rendered at 150 DPI, as extract_pdf OCRs it
+
+
+def _printed(seed: int, size: int = 28, lines: int | None = None, columns: int = 1) -> "Image.Image":
+    from PIL import Image, ImageDraw
+
+    from bench_ocr import font, sentence
+    import random
+
+    rnd = random.Random(seed)
+    img = Image.new("RGB", PAGE, (244, 242, 236))
+    d = ImageDraw.Draw(img)
+    width = (PAGE[0] - 220) // columns
+    for col in range(columns):
+        y = 130
+        n = 0
+        while y < PAGE[1] - 150 and (lines is None or n < lines):
+            d.text((110 + col * (width + 30), y), sentence(rnd, rnd.randint(5, 9 if columns == 1 else 5)),
+                   fill=(25, 25, 25), font=font(size))
+            y += int(size * 1.6)
+            n += 1
+    return img
+
+
+def _title(seed: int) -> "Image.Image":
+    from PIL import ImageDraw
+
+    from bench_ocr import font, sentence
+    import random
+
+    rnd = random.Random(seed)
+    img = _printed(seed, lines=0)
+    d = ImageDraw.Draw(img)
+    d.text((180, 600), sentence(rnd, 3), fill=(15, 15, 15), font=font(64))
+    d.text((180, 720), sentence(rnd, 4), fill=(40, 40, 40), font=font(36))
+    return img
+
+
+def _contents(seed: int) -> "Image.Image":
+    from PIL import ImageDraw
+
+    from bench_ocr import font, sentence
+    import random
+
+    rnd = random.Random(seed)
+    img = _printed(seed, lines=0)
+    d = ImageDraw.Draw(img)
+    d.text((110, 130), "Contents", fill=(15, 15, 15), font=font(48))
+    for i in range(14):
+        entry = f"{i + 1}  {sentence(rnd, rnd.randint(2, 4))} " + "." * rnd.randint(15, 30) + f" {8 * i + 1}"
+        d.text((110, 240 + 70 * i), entry, fill=(25, 25, 25), font=font(30))
+    return img
+
+
+def _noisy(seed: int) -> "Image.Image":
+    from PIL import Image, ImageFilter
+
+    img = _printed(seed, size=26).rotate(0.8, fillcolor=(244, 242, 236)).filter(ImageFilter.GaussianBlur(1.3))
+    arr = np.asarray(img, np.float32) + np.random.default_rng(seed).normal(0, 12, (PAGE[1], PAGE[0], 3))
+    return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+
+
+def _figure(seed: int) -> "Image.Image":
+    from PIL import ImageDraw
+
+    from bench_ocr import font, sentence
+    import random
+
+    rnd = random.Random(seed)
+    img = _printed(seed, lines=0)
+    d = ImageDraw.Draw(img)
+    for i in range(6):
+        h = rnd.randint(150, 600)
+        d.rectangle((200 + 140 * i, 900 - h, 300 + 140 * i, 900), fill=(90, 120, 170))
+    d.line((180, 900, 1100, 900), fill=(30, 30, 30), width=3)
+    d.text((180, 960), "Figure 3. " + sentence(rnd, 8), fill=(25, 25, 25), font=font(28))
+    d.text((180, 1010), sentence(rnd, 9), fill=(25, 25, 25), font=font(28))
+    return img
+
+
+def _scribble(seed: int, lined: bool = True) -> "Image.Image":
+    """Handwriting-like ink: rows of connected loops and strokes with ascenders and descenders, on lined paper.
+    Nothing a recogniser can read, which is what an untidy hand looks like to it."""
+    from PIL import Image, ImageDraw
+    import random
+
+    rnd = random.Random(seed)
+    img = Image.new("RGB", PAGE, (250, 250, 246))
+    d = ImageDraw.Draw(img)
+    if lined:
+        for y in range(160, PAGE[1] - 80, 64):
+            d.line((60, y, PAGE[0] - 60, y), fill=(180, 200, 230), width=2)
+    ink = rnd.choice([(25, 35, 120), (20, 20, 20), (40, 60, 150)])
+    for base in range(150, PAGE[1] - 120, 64):
+        x = 100 + rnd.randint(0, 40)
+        slant = rnd.uniform(0.15, 0.35)
+        while x < PAGE[0] - 160:
+            pts = []
+            for _ in range(rnd.randint(3, 9)):  # one "word": a run of letter-like loops
+                h = rnd.choice([16, 18, 20, 22, 38 if rnd.random() < 0.25 else 20])
+                w = rnd.uniform(12, 22)
+                down = 14 if rnd.random() < 0.15 else 0
+                for t in np.linspace(0, 2 * math.pi, 9):
+                    px = x + w / 2 + (w / 2) * math.cos(t + math.pi) + rnd.uniform(-1.5, 1.5)
+                    py = base - h / 2 - (h / 2) * math.sin(t) + (down if t > math.pi else 0)
+                    pts.append((px - slant * (py - base), py))
+                x += w * rnd.uniform(0.8, 1.1)
+            d.line(pts, fill=ink, width=3, joint="curve")
+            x += rnd.uniform(25, 45)
+    return img
+
+
+def _neat_hand(seed: int) -> "Image.Image":
+    """Real words, warped: per-word shear and rotation, a wavy baseline and a thicker pen. Partly readable."""
+    from PIL import Image, ImageDraw, ImageFilter
+
+    from bench_ocr import font, WORDS
+    import random
+
+    rnd = random.Random(seed)
+    img = Image.new("L", PAGE, 250)
+    for y in range(150, PAGE[1] - 130, 70):
+        x = 110
+        while x < PAGE[0] - 260:
+            word = rnd.choice(WORDS)
+            tile = Image.new("L", (int(40 * len(word) * 0.75) + 40, 90), 0)
+            ImageDraw.Draw(tile).text((10, 15), word, fill=255, font=font(44))
+            tile = tile.transform(tile.size, Image.Transform.AFFINE, (1, rnd.uniform(-0.35, -0.1), 0, 0, 1, 0))
+            tile = tile.rotate(rnd.uniform(-5, 5), expand=False).filter(ImageFilter.MaxFilter(3))
+            arr = np.asarray(tile, np.float32)
+            shift = (np.sin(np.arange(arr.shape[1]) / rnd.uniform(9, 16)) * rnd.uniform(2, 4)).astype(int)
+            arr = np.stack([np.roll(arr[:, c], shift[c]) for c in range(arr.shape[1])], axis=1)
+            mask = Image.fromarray(arr.astype(np.uint8))
+            img.paste(Image.new("L", mask.size, 30), (x, y + rnd.randint(-6, 6)), mask)
+            x += mask.width - 20 + rnd.randint(5, 25)
+    return img.convert("RGB")
+
+
+def ocr_stop() -> dict:
+    from vault.ingest.extract_pdf import stops_early
+    from vault.ingest.ocr import OcrStats, ocr_image
+
+    cfg = Config()
+    engine = models.ocr_engine(cfg)
+    pages = {}
+    for i in range(3):
+        pages[f"dense_{i}"] = ("printed", _printed(10 + i))
+    for i in range(2):
+        pages[f"small_{i}"] = ("printed", _printed(20 + i, size=20))
+    pages["title"] = ("printed", _title(30))
+    pages["contents"] = ("printed", _contents(31))
+    pages["noisy_0"], pages["noisy_1"] = ("printed", _noisy(40)), ("printed", _noisy(41))
+    pages["figure"] = ("printed", _figure(50))
+    pages["two_columns"] = ("printed", _printed(60, columns=2))
+    pages["blank"] = ("blank", _printed(70, lines=0))
+    for i in range(5):
+        pages[f"scribble_{i}"] = ("handwriting", _scribble(80 + i, lined=i % 2 == 0))
+    for i in range(3):
+        pages[f"neat_{i}"] = ("neat", _neat_hand(90 + i))
+    rows, stats = [], {}
+    for name, (group, img) in pages.items():
+        st = OcrStats()
+        ocr_image(img, engine, cfg, stats=st)
+        stats[name] = st
+        rows.append({"page": name, "group": group, "detected": st.detected, "kept": st.kept,
+                     "mean_conf": round(st.mean_conf, 3)})
+        print(f"{name:<12} {group:<11} detected {st.detected:>4} kept {st.kept:>4} mean conf {st.mean_conf:.3f}")
+
+    printed = [n for n, (g, _) in pages.items() if g == "printed"]
+    docs = {  # 3-page probes, as the rule sees a PDF's first OCR'd pages
+        "book: title, contents, dense": ["title", "contents", "dense_0"],
+        "book: blank, title, dense": ["blank", "title", "dense_1", "dense_2"],
+        "scan: noisy x2, figure": ["noisy_0", "noisy_1", "figure"],
+        "scan: small, two columns, small": ["small_0", "two_columns", "small_1"],
+        "report: figure, title, contents": ["figure", "title", "contents"],
+        "handwriting: scribbles": ["scribble_0", "scribble_1", "scribble_2"],
+        "handwriting: blank, scribbles": ["blank", "scribble_3", "scribble_4", "scribble_0"],
+        "handwriting: printed cover, scribbles": ["title", "scribble_1", "scribble_3"],
+        "neat handwriting": ["neat_0", "neat_1", "neat_2"],
+    }
+
+    def mean_conf(names):  # what stops_early computes: the first 3 pages with ink
+        inked = [stats[n] for n in names if stats[n].detected][:3]
+        return round(sum(s.conf_sum for s in inked) / sum(s.detected for s in inked), 3)
+
+    measured = {d: mean_conf(n) for d, n in docs.items()}
+    should_continue = [d for d in docs if not d.startswith(("handwriting", "neat"))]
+    should_stop = [d for d in docs if d.startswith("handwriting")]
+    lo, hi = min(measured[d] for d in should_continue), max(measured[d] for d in should_stop)
+    decisions = {d: stops_early([stats[n] for n in names], cfg) for d, names in docs.items()}
+    for d in docs:
+        print(f"{d:<38} mean conf {measured[d]:.3f} -> {'STOP' if decisions[d] else 'continue'}")
+    return {"summary": {
+        "mean_conf": {"printed_min": lo, "handwriting_max": hi, "midpoint": round((lo + hi) / 2, 3)},
+        "config": {"pdf_ocr_stop_conf": cfg.pdf_ocr_stop_conf},
+        "decisions": decisions, "printed_pages": len(printed),
+    }, "rows": rows, "docs": measured}
+
+
 def main(argv: list[str]) -> None:
-    jobs = {"dense": dense, "clip": clip, "rule": rule, "kind": kind}
+    jobs = {"dense": dense, "clip": clip, "rule": rule, "kind": kind, "ocr-stop": ocr_stop}
     if not argv or argv[0] not in jobs:
         sys.exit(f"usage: python bench/calibrate.py {{{'|'.join(jobs)}}}")
     out = jobs[argv[0]]()

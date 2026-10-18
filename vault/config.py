@@ -69,6 +69,12 @@ class Config:
     # PDF OCR (SPEC §6.3)
     pdf_ocr_dpi: int = 150
     pdf_ocr_max_pages: int = 30
+    # Early stop (open item k): after this many OCR'd pages with ink, stop OCR'ing a PDF whose lines the recogniser
+    # read with a mean confidence below pdf_ocr_stop_conf (handwriting, mostly). Provisional: calibrated by
+    # bench/calibrate.py ocr-stop on generated pages (SPEC §19): printed pages 0.87-0.99 (a dot-leader contents page
+    # lowest), handwriting-like scribbles 0.50-0.58.
+    pdf_ocr_probe_pages: int = 3
+    pdf_ocr_stop_conf: float = 0.72
     pdf_scanned_chars: int = 20  # fewer native chars than this: OCR the whole page
     pdf_region_min_frac: float = 0.15  # images covering at least this share of the page are OCR'd
     pdf_region_text_chars: int = 20  # ...unless this much native text already lies inside them

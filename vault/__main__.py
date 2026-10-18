@@ -106,6 +106,8 @@ def _print_report(console: Console, rep: IndexReport) -> None:
     console.print(t)
     for path in rep.ocr_capped:
         console.print(f"[yellow]OCR page cap hit (later pages keep native text only): {escape(path)}")
+    for path in rep.ocr_stopped:
+        console.print(f"[yellow]OCR stopped early, its first pages were unreadable (handwriting?): {escape(path)}")
     for root in rep.missing_roots:
         console.print(f"[yellow]Root not found (not swept): {escape(root)}")
     for e in rep.errors[:20]:

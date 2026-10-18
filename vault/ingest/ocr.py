@@ -159,13 +159,35 @@ def merge_strips(per_strip: Sequence[Sequence[OcrLine]], tiling: Tiling, orig_si
     return drop_cjk_fragments([ln for lines in kept for ln in lines], cfg.ocr_latin_share)
 
 
-def ocr_image(img: Image.Image, engine: OcrEngine, cfg: Config, *, use_cls: bool | None = None) -> list[OcrLine]:
-    """OCR an RGB image strip by strip. Lines are in original pixels, cleaned and deduplicated, not ordered."""
+@dataclass
+class OcrStats:
+    """How readable a picture was: lines the detector found (with text), their summed recognition confidence,
+    and lines confident enough to keep. A blank page has none; handwriting has many, read with low confidence."""
+
+    detected: int = 0
+    conf_sum: float = 0.0
+    kept: int = 0
+
+    @property
+    def mean_conf(self) -> float:
+        return self.conf_sum / self.detected if self.detected else 0.0
+
+
+def ocr_image(img: Image.Image, engine: OcrEngine, cfg: Config, *, use_cls: bool | None = None,
+              stats: OcrStats | None = None) -> list[OcrLine]:
+    """OCR an RGB image strip by strip. Lines are in original pixels, cleaned and deduplicated, not ordered.
+    `stats` (if given) adds up what was detected and what was kept."""
     tiling = plan_tiles(img.width, img.height, cfg)
     work = img if tiling.size == img.size else img.resize(tiling.size, Image.Resampling.LANCZOS)
     arr = np.asarray(work)
     per_strip = [engine.read(arr[top:bottom], use_cls=use_cls) for top, bottom in tiling.strips]
-    return merge_strips(per_strip, tiling, img.size, cfg)
+    lines = merge_strips(per_strip, tiling, img.size, cfg)
+    if stats is not None:
+        found = [ln.conf for raw in per_strip for ln in raw if clean_text(ln.text)]
+        stats.detected += len(found)
+        stats.conf_sum += sum(found)
+        stats.kept += len(lines)
+    return lines
 
 
 # ---------------------------------------------------------------- reading order and blocks
