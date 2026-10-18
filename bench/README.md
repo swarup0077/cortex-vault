@@ -6,6 +6,7 @@ goes to `bench/generated/`, which is gitignored; delete it when you're done.
 
 | Script | What it measures |
 |---|---|
+| `bench_embed.py` | Text-embedding chunks/sec for one config (128 ~700-character chunks of SPEC.md, median of 3) |
 | `bench_ocr.py` | OCR time and word recall for one config on 8 generated 1920×1080 UI screenshots |
 | `compare_ocr.py` | `bench_ocr.py` for several configs, interleaved, one process per run, with a summary table |
 | `make_bench_corpus.py` | Generates the mixed folder used for ingest speed (files/sec per kind) |
@@ -44,6 +45,16 @@ python bench/bench_ocr.py workers=2 ocr_threads=4            # two images OCR'd 
 
 Each prints one JSON line: median ms per image, the detect/classify/recognise split (single worker only),
 word recall, and the thread count actually used.
+
+## Embedding (§19 "Embedding benchmark")
+
+```
+python bench/bench_embed.py                      # the app's defaults: quantized bge-small, default threads, batch 32
+python bench/bench_embed.py threads=4 batch=8    # threads (0 = ONNX Runtime's default) and batch size
+```
+
+Each prints one JSON line with the median chunks/sec of 3 passes after a warm-up batch. Run each config in
+its own process, interleaved with the others.
 
 ## Ingest speed (§19 "Measured ingest speed")
 

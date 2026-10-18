@@ -63,6 +63,7 @@ def warm_up(ctx: UiContext) -> None:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # one INFO line per HF Hub request otherwise
     mode = os.environ.get("VAULT_MODE", "local").strip().lower()
     ctx = build_context(mode)
     if ctx.demo:

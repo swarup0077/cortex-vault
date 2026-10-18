@@ -170,7 +170,7 @@ From the **laptop**:
 ```powershell
 curl.exe -s -o NUL -w "%{http_code}\n" "https://swarup-vault.indiasouthcentral.cloudapp.azure.com/?q=error%200x80070005"
 curl.exe -s -o NUL -w "%{http_code} %{content_type}\n" https://swarup-vault.indiasouthcentral.cloudapp.azure.com/thumb/1
-.venv\Scripts\python -c "from gradio_client import Client; c = Client('https://swarup-vault.indiasouthcentral.cloudapp.azure.com/', verbose=False); print('0x80070005' in c.predict('error 0x80070005', [], 'Sample files', False, api_name='/search')[0])"
+.venv\Scripts\python -c "from gradio_client import Client; c = Client('https://swarup-vault.indiasouthcentral.cloudapp.azure.com/', verbose=False); print('0x80070005' in c.predict('error 0x80070005', [], 'Sample files', False, api_name='/search'))"
 ```
 
 Expect `200`, `200 image/webp` and `True`. Then open the URL on a phone.
