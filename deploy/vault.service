@@ -1,0 +1,23 @@
+[Unit]
+Description=Personal Search Vault (demo mode)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=azureuser
+WorkingDirectory=/home/azureuser/personal-search-vault
+Environment=VAULT_MODE=demo
+# app.py binds 127.0.0.1 only; Caddy is the public listener (SPEC §15).
+Environment=GRADIO_SERVER_PORT=7860
+Environment=GRADIO_ANALYTICS_ENABLED=False
+Environment=FASTEMBED_CACHE_PATH=/home/azureuser/personal-search-vault/data/models
+# Gradio's copies of uploads; it deletes them after 30 minutes (delete_cache), and the app clears them on start.
+Environment=GRADIO_TEMP_DIR=/tmp/vault_gradio
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/azureuser/personal-search-vault/.venv/bin/python app.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

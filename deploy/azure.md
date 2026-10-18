@@ -6,7 +6,7 @@
 | User | `azureuser`, key `C:\Users\swaru\.ssh\vault-key.pem` |
 | Address | `172.198.49.18` · `swarup-vault.indiasouthcentral.cloudapp.azure.com` |
 | Open ports | 22, 80, 443 (auto-shutdown off) |
-| Layout on the VM | bare repo `~/vault.git` → checkout `~/personal-search-vault` → systemd `vault-probe` on `127.0.0.1:7860` → Caddy on 443 |
+| Layout on the VM | bare repo `~/vault.git` → checkout `~/personal-search-vault` → systemd `vault` (M0: `vault-probe`) on `127.0.0.1:7860` → Caddy on 443 |
 
 Commands marked **laptop** run in PowerShell on Windows; everything else runs on the VM over SSH.
 
@@ -138,15 +138,42 @@ On the **laptop**:
 
 ```powershell
 git push vm main
-ssh vault "cd ~/personal-search-vault && git pull --ff-only && .venv/bin/pip install -q -r requirements.txt && sudo systemctl restart vault-probe"
+ssh vault "cd ~/personal-search-vault && git pull --ff-only && .venv/bin/pip install -q -r requirements.txt && sudo systemctl restart vault"
 ```
 
-If `deploy/vault-probe.service` or `deploy/Caddyfile` changed, copy it again on the VM:
+If `deploy/vault.service` or `deploy/Caddyfile` changed, copy it again on the VM:
 
 ```bash
-sudo cp deploy/vault-probe.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart vault-probe
+sudo cp deploy/vault.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart vault
 sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
 ```
+
+## 6b. M4: switch from the probe to the app
+
+The app ([vault.service](vault.service)) runs `app.py` with `VAULT_MODE=demo` on `127.0.0.1:7860`, the same port the
+probe used, so Caddy needs no change. It serves the committed `demo_index/` read-only; the server never indexes
+`corpus/` itself. On the VM:
+
+```bash
+cd ~/personal-search-vault && git pull --ff-only && .venv/bin/pip install -q -r requirements.txt
+python3 -c "import sqlite3; print(sqlite3.sqlite_version)"    # 3.44+ for FTS5 secure-delete (open item h)
+sudo systemctl disable --now vault-probe
+sudo rm /etc/systemd/system/vault-probe.service
+sudo cp deploy/vault.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now vault
+journalctl -u vault -f      # the first start downloads CLIP into data/models/; "models warm" when ready
+```
+
+From the **laptop**:
+
+```powershell
+curl.exe -s -o NUL -w "%{http_code}\n" "https://swarup-vault.indiasouthcentral.cloudapp.azure.com/?q=error%200x80070005"
+curl.exe -s -o NUL -w "%{http_code} %{content_type}\n" https://swarup-vault.indiasouthcentral.cloudapp.azure.com/thumb/1
+.venv\Scripts\python -c "from gradio_client import Client; c = Client('https://swarup-vault.indiasouthcentral.cloudapp.azure.com/', verbose=False); print('0x80070005' in c.predict('error 0x80070005', [], 'Sample files', False, api_name='/search')[0])"
+```
+
+Expect `200`, `200 image/webp` and `True`. Then open the URL on a phone.
 
 ## 9. M4: resize to 4 vCPUs (SPEC §19, open item h)
 
@@ -199,14 +226,14 @@ ssh vault "nproc; free -h"                    # 4 CPUs; the 4 GB swap file (§3)
 Benchmark with the app stopped, and record the results in SPEC §19 (open item h):
 
 ```bash
-sudo systemctl stop vault-probe
+sudo systemctl stop vault
 cd ~/personal-search-vault && source .venv/bin/activate
 python bench/compare_ocr.py                   # OCR before/after table; ocr_threads = min(8, CPUs) = 4
 python bench/make_bench_corpus.py
 VAULT_DATA_DIR=bench/generated/data1 python -m vault index bench/generated/corpus
 VAULT_DATA_DIR=bench/generated/data2 python -m vault index bench/generated/corpus
 python bench/bench_ocr.py workers=2 ocr_threads=2   # two files OCR'd in parallel, all 4 CPUs
-sudo systemctl start vault-probe
+sudo systemctl start vault
 ```
 
 Also re-run the embedding benchmark (method in SPEC §19). Then run §8 from the laptop.
@@ -222,7 +249,6 @@ az group delete -n $RG --yes
 
 ## Troubleshooting
 
-- **App:** `systemctl status vault-probe`, `journalctl -u vault-probe -n 100`.
+- **App:** `systemctl status vault`, `journalctl -u vault -n 100`.
 - **No certificate:** check `journalctl -u caddy`, that ports 80 and 443 are open in the Azure network security group, and that the DNS name resolves to `172.198.49.18`.
 - **Memory:** `free -h`; `journalctl -k | grep -i oom`.
-- **After M4:** point `ExecStart` at `app.py` and add `Environment=VAULT_MODE=demo`.
