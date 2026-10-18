@@ -49,6 +49,16 @@ def test_filter_only_query_sorts_newest_first(conn, cfg, fake_embedder, tmp_path
     assert "filter" in resp.timings_ms
 
 
+def test_kind_words_and_chips_filter_results(conn, cfg, fake_embedder, tmp_path, make_search_corpus) -> None:
+    index_paths(conn, [make_search_corpus(tmp_path / "c")], cfg)
+    assert {r.kind for r in search(conn, "pdf about matrices", cfg).results} == {"pdf"}
+    resp = search(conn, "pdfs", cfg)  # only a kind word: every PDF, newest first
+    assert sorted(r.filename for r in resp.results) == ["diffusion.pdf", "linear algebra notes.pdf"]
+    assert {r.kind for r in search(conn, "electricity invoice", cfg, kinds={"slides"}).results} <= {"slides"}
+    union = search(conn, "slide about gradient descent", cfg, kinds={"doc"}).results
+    assert {r.kind for r in union} <= {"slides", "doc"} and union[0].page == 3
+
+
 def test_search_refuses_other_model(conn, cfg, fake_embedder, tmp_path, make_search_corpus) -> None:
     index_paths(conn, [make_search_corpus(tmp_path / "c")], cfg)
 

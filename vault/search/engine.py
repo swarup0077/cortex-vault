@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -109,16 +110,18 @@ def search(
     image_index: VectorIndex | None = None,
     now: datetime | None = None,
     limit: int | None = None,
+    kinds: Iterable[str] = (),
 ) -> SearchResponse:
     """Parse → BM25 + all-terms + dense + gated CLIP → collapse to file → RRF (with the visual-query rule) → snippet.
 
-    Pass prebuilt `text_index` / `image_index` to avoid reloading vectors on every query (the UI does; the CLI
-    needn't). The CLIP text model loads only when the index holds image vectors.
+    `kinds` are the UI's kind chips, united with the query's kind words. Pass prebuilt `text_index` /
+    `image_index` to avoid reloading vectors on every query (the UI does; the CLI needn't). The CLIP text model
+    loads only when the index holds image vectors.
     """
     cfg = cfg or Config()
     limit = limit or cfg.max_results
     sw = _Stopwatch()
-    pq = parse(query, now)
+    pq = parse(query, now, kinds)
     sw.lap("parse")
 
     allowed = retrievers.allowed_file_ids(conn, pq)
