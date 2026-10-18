@@ -47,6 +47,7 @@ class Config:
     ocr_det_model: str = "PP-OCRv6_det_small.onnx"
     ocr_rec_model: str = "PP-OCRv6_rec_small.onnx"
     ocr_cls_model: str = "ch_ppocr_mobile_v2.0_cls_mobile.onnx"
+    ocr_rec_keys: str | None = None  # character list for a recogniser whose ONNX file doesn't carry one
     # Speed settings measured on the dev laptop (SPEC §19, OCR benchmark): 1080p screenshot 4.5 s → 2.4 s.
     ocr_det_limit_side: int = 960  # detector input size (RapidOCR's Det.limit_side_len)
     ocr_det_limit_type: str = "max"  # 'max': long side at most the limit; 'min': short side at least it

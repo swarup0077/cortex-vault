@@ -23,6 +23,12 @@ CONFIGS: dict[str, dict] = {
     "before": {"ocr_det_limit_type": "min", "ocr_det_limit_side": 736, "ocr_cls_screenshots": True, "ocr_threads": 0},
     "after": {},  # the current Config defaults
     "after-default-threads": {"ocr_threads": 0},
+    # Open item j: PP-OCRv6 tiny from the HF Hub (bench/fetch_ocr_models.py), recogniser alone and with its detector
+    "tiny-rec": {"ocr_rec_model": str(GENERATED / "models" / "PP-OCRv6_tiny_rec.onnx"),
+                 "ocr_rec_keys": str(GENERATED / "models" / "PP-OCRv6_tiny_rec_keys.txt")},
+    "tiny": {"ocr_rec_model": str(GENERATED / "models" / "PP-OCRv6_tiny_rec.onnx"),
+             "ocr_rec_keys": str(GENERATED / "models" / "PP-OCRv6_tiny_rec_keys.txt"),
+             "ocr_det_model": str(GENERATED / "models" / "PP-OCRv6_tiny_det.onnx")},
 }
 
 

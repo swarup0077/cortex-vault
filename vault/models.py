@@ -190,11 +190,9 @@ class RapidOcrEngine:
         from rapidocr import RapidOCR
 
         bundled = Path(rapidocr.__file__).parent / "models"
-        paths = {
-            "Det": bundled / cfg.ocr_det_model,
-            "Rec": bundled / cfg.ocr_rec_model,
-            "Cls": bundled / cfg.ocr_cls_model,
-        }
+        # A bare name is a model file bundled in the wheel; a path is a model from elsewhere (bench/fetch_ocr_models.py)
+        paths = {key: Path(name) if Path(name).is_absolute() else bundled / name for key, name in
+                 (("Det", cfg.ocr_det_model), ("Rec", cfg.ocr_rec_model), ("Cls", cfg.ocr_cls_model))}
         missing = [str(p) for p in paths.values() if not p.is_file()]
         if missing:
             raise FileNotFoundError(f"bundled OCR models not found (rapidocr version changed?): {missing}")
@@ -213,6 +211,8 @@ class RapidOcrEngine:
             "Det.limit_type": cfg.ocr_det_limit_type,
             "Rec.model_path": str(paths["Rec"]),
             "Rec.rec_batch_num": cfg.ocr_rec_batch,
+            # The bundled models carry their character list in the ONNX metadata; other exports need a keys file
+            **({"Rec.rec_keys_path": str(cfg.ocr_rec_keys)} if cfg.ocr_rec_keys else {}),
             "Cls.model_path": str(paths["Cls"]),
             "EngineConfig.onnxruntime.intra_op_num_threads": cfg.ocr_threads or -1,
         })
