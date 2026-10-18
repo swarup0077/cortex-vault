@@ -172,3 +172,60 @@ def detail_html(d: Detail, session: str | None, *, page: int | None) -> str:
         f'<div class="v-preview"><img src="{_e(preview)}" alt="Preview of {_e(d.filename)}"></div>'
         f'{chunk}<h4>{label}</h4><ul class="v-paths">{paths}</ul></article>'
     )
+
+
+# ---------------------------------------------------------------- upload and index tabs
+
+UPLOAD_NOTICE = ("Uploads are processed on this server, kept only for your session, and deleted after 30 minutes. "
+                 "For private use, run it on your own computer (see README).")
+
+
+def upload_status_html(files: list, *, indexed_total: int, bytes_total: int, max_files: int, max_bytes_label: str,
+                       report_added: int | None = None) -> str:
+    """Per-file outcome of one upload (`vault.session.FileStatus` rows) and the session's running totals."""
+    if not files:
+        return ""
+    labels = {"indexed": ("v-ok", "Indexed"), "duplicate": ("v-skip", "Already uploaded"),
+              "rejected": ("v-err", "Not accepted"), "error": ("v-err", "Couldn't read")}
+    counts: dict[str, int] = {}
+    rows = []
+    for f in files:
+        cls, label = labels.get(f.status, ("", f.status))
+        counts[label] = counts.get(label, 0) + 1
+        rows.append(f'<tr><td>{_e(f.name)}</td><td class="{cls}">{_e(label)}</td><td>{_e(f.reason)}</td></tr>')
+    summary = " · ".join(f"{n} {label.lower()}" for label, n in counts.items())
+    usage = (f"Your session: {indexed_total} of {max_files} files, {_e(human_size(bytes_total))} of "
+             f"{_e(max_bytes_label)}. Search them on the Search tab with <b>My uploads</b>.")
+    return (f'<div class="v-panel"><h3>{_e(summary)}</h3><p class="v-muted">{usage}</p>'
+            f'<table class="v-table"><tr><th>File</th><th>Result</th><th>Why</th></tr>{"".join(rows)}</table></div>')
+
+
+def human_size(n: float) -> str:
+    for unit in ("bytes", "KB", "MB", "GB"):
+        if n < 1024 or unit == "GB":
+            return f"{n:.0f} {unit}" if unit == "bytes" else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} GB"
+
+
+def stats_html(stats, display: Display = lambda p: p) -> str:
+    """The Index tab: counts by kind, the last run, the folders and any files that failed."""
+    tiles = "".join(f'<div class="v-stat"><b>{stats.counts.get(k, 0)}</b><span>{_e(KIND_LABELS[k])}</span></div>'
+                    for k in KIND_LABELS)
+    roots = "".join(f"<li><code>{_e(r)}</code></li>" for r in stats.roots) or "<li>No folders yet.</li>"
+    last = ""
+    if run := stats.last_run:
+        fields = [("added", "added"), ("linked", "renamed or copied"), ("updated", "changed"), ("deleted", "removed"),
+                  ("unchanged", "unchanged")]
+        parts = [f"{run.get(k, 0)} {label}" for k, label in fields if run.get(k)]
+        secs = sum((run.get("timings") or {}).values())
+        last = (f'<p class="v-muted">Last run {_e(nice_date(stats.last_indexed))}: '
+                f'{_e(", ".join(parts) or "nothing changed")}{f" in {secs:.0f} s" if secs >= 1 else ""}.</p>')
+    errors = ""
+    if stats.errors:
+        rows = "".join(f'<tr><td>{_e(display(e["path"]))}</td><td class="v-err">{_e(e["status"])}</td>'
+                       f'<td>{_e(e["error"])}</td></tr>' for e in stats.errors)
+        errors = (f'<h3 style="margin-top:14px">Files that couldn\'t be indexed ({len(stats.errors)})</h3>'
+                  f'<table class="v-table"><tr><th>File</th><th>Status</th><th>Why</th></tr>{rows}</table>')
+    return (f'<div class="v-panel"><h3>Your index</h3><div class="v-stats">{tiles}</div>{last}'
+            f'<h3 style="margin-top:14px">Folders</h3><ul class="v-paths">{roots}</ul>{errors}</div>')

@@ -127,6 +127,15 @@ class Config:
     weaker_matches: bool = True
     visual_row: int = 10
 
+    # Demo uploads (SPEC §8): enforced in vault/session.py, not only by Gradio. First values from the spec; the
+    # final caps are set in M5 after timing a 100-file upload on the VM.
+    upload_max_files: int = 100  # per session
+    upload_max_bytes: int = 25 * 1024 * 1024  # per file
+    upload_max_total: int = 200 * 1024 * 1024  # per session
+    upload_zip_max_total: int = 100 * 1024 * 1024  # zip_max_total for uploaded .docx/.pptx (unpacked)
+    session_ttl_s: int = 30 * 60  # a session idle this long is wiped
+    max_sessions: int = 20  # sessions at once; more uploaders wait (bounds disk use at 20 × 200 MB)
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "vault.db"

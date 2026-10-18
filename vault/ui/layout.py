@@ -6,9 +6,10 @@ the page, never paths.
 
 from __future__ import annotations
 
+import functools
 import html
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -16,6 +17,8 @@ import gradio as gr
 
 from vault import db, platform
 from vault.library import Library
+from vault.session import SessionManager
+from vault.ingest.discover import INDEX_EXTS
 from vault.search.parse import KIND_LABELS
 from vault.ui import cards
 
@@ -50,20 +53,41 @@ LOGO = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width
         '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>')
 
 
+SCOPES = ("My uploads", "Sample files", "Both")
+
+
 @dataclass
 class UiContext:
     mode: str  # "local" | "demo"
     library: Library  # local: your vault; demo: the read-only demo index
     page_results: int = 20
     examples: Sequence[str] = field(default_factory=list)
+    sessions: SessionManager | None = None  # demo: per-session upload indexes
+    upload_dir: Path | None = None  # Gradio's upload folder: the only place uploads are read from
 
     @property
     def demo(self) -> bool:
         return self.mode == "demo"
 
+    @functools.cached_property
+    def sample_roots(self) -> list[str]:
+        with self.library.connect() as conn:
+            return db.get_roots(conn)
+
     def target(self, session: str | None, scope: str | None) -> tuple[Library, list[str], str | None]:
-        """The library to search, the roots to limit it to, and the session id image URLs need."""
-        return self.library, [], None
+        """The library to search, the roots to limit it to (the scope), and the session id image URLs need.
+        Before any upload, or once a session has expired, that's the demo index itself."""
+        s = self.sessions.get(session) if self.sessions else None
+        if s is None:
+            return self.library, [], None
+        roots = {"My uploads": [s.root], "Sample files": self.sample_roots}.get(scope or "", [])
+        return s.library, roots, s.id
+
+    def resolve(self, session: str | None) -> Library | None:
+        """For the image routes: the main index, or a live session's copy."""
+        if session is None:
+            return self.library
+        return self.sessions.library(session) if self.sessions else None
 
 
 def theme() -> gr.themes.Base:
@@ -142,6 +166,63 @@ def open_file(ctx: UiContext, file_id: int | None) -> str:
     return f"Opened {path.name}"
 
 
+def handle_upload(ctx: UiContext, paths: Sequence[str] | None, session: str | None,
+                  progress: Callable[[int, int, str], None] | None = None) -> tuple[str, str | None]:
+    """Demo uploads → (status HTML, session id). Only files in Gradio's upload folder are read."""
+    if not ctx.sessions or not paths:
+        return "", session
+    s, result = ctx.sessions.add_files(session, [Path(p) for p in paths], ctx.upload_dir, progress)
+    cfg = ctx.sessions.cfg
+    body = cards.upload_status_html(result.files, indexed_total=s.files if s else 0, bytes_total=s.bytes if s else 0,
+                                    max_files=cfg.upload_max_files,
+                                    max_bytes_label=cards.human_size(cfg.upload_max_total))
+    return body, result.session_id or session
+
+
+def index_folder(ctx: UiContext, folder: str | None, progress: Callable[[int, int, str], None] | None = None) -> str:
+    """Local mode: index one new folder, or every known folder when `folder` is None ("Index now")."""
+    if ctx.demo:
+        return ""
+    if folder is not None:
+        path = Path(folder.strip().strip('"')).expanduser()
+        if not folder.strip() or not path.is_dir():
+            return f'<p class="v-err">Not a folder: {html.escape(folder)}</p>'
+        roots: list[Path | str] = [path]
+    else:
+        with ctx.library.connect() as conn:
+            roots = list(db.get_roots(conn))
+        if not roots:
+            return '<p class="v-muted">Add a folder first.</p>'
+    try:
+        rep = ctx.library.index(roots, progress=progress)
+    except db.ModelMismatchError as e:
+        return f'<p class="v-err">{html.escape(str(e))}</p>'
+    parts = [f"{rep.added} added", f"{rep.linked} renamed or copied", f"{rep.updated} changed",
+             f"{rep.files_deleted} removed", f"{len(rep.errors)} couldn't be read"]
+    return f'<p class="v-ok">Done: {html.escape(", ".join(parts))}.</p>'
+
+
+def remove_folder(ctx: UiContext, root: str | None) -> str:
+    if ctx.demo or not root:
+        return ""
+    with ctx.library.connect() as conn:
+        if root not in db.get_roots(conn):
+            return '<p class="v-err">Not an indexed folder.</p>'
+    n = ctx.library.remove_root(root)
+    return f'<p class="v-ok">Removed {html.escape(root)} ({n} files left the index).</p>'
+
+
+def index_tab_state(ctx: UiContext) -> tuple[str, dict]:
+    stats = ctx.library.stats()
+    return cards.stats_html(stats), gr.update(choices=stats.roots, value=None)
+
+
+def _progress_fn(progress: gr.Progress) -> Callable[[int, int, str], None]:
+    def report(done: int, total: int, path: str) -> None:
+        progress((done, total) if total else None, desc=f"Indexing {Path(path).name}" if path else "Finishing up…")
+    return report
+
+
 # ---------------------------------------------------------------- layout
 
 
@@ -172,8 +253,8 @@ def build_blocks(ctx: UiContext) -> gr.Blocks:
                 with gr.Row(elem_id="v-filters"):
                     kinds = gr.CheckboxGroup([(label, kind) for kind, label in KIND_LABELS.items()], value=[],
                                              show_label=False, container=False, elem_id="v-kinds")
-                    scope = gr.Radio(["My uploads", "Sample files", "Both"], value="Sample files", show_label=False,
-                                     container=False, visible=False, elem_id="v-scope")
+                    scope = gr.Radio(list(SCOPES), value="Sample files", show_label=False, container=False,
+                                     visible=False, elem_id="v-scope")
                     scores = gr.Checkbox(label="Show scores", value=False, container=False, scale=0, min_width=0,
                                          elem_id="v-scores")
                 with gr.Row(elem_classes="v-examples"):
@@ -186,6 +267,26 @@ def build_blocks(ctx: UiContext) -> gr.Blocks:
                             open_btn = gr.Button("Open file", size="sm", variant="primary", visible=not ctx.demo)
                             close_btn = gr.Button("Close", size="sm")
                         detail = gr.HTML(padding=False)
+            if ctx.demo:
+                with gr.Tab("Upload", id="upload"):
+                    gr.HTML(f'<div class="v-notice">{html.escape(cards.UPLOAD_NOTICE)}</div>', padding=False)
+                    uploads = gr.File(file_count="multiple", type="filepath", label="Add files",
+                                      file_types=sorted(INDEX_EXTS))
+                    gr.HTML('<p class="v-muted">PDFs, Word and PowerPoint files, text and Markdown, PNG, JPEG and WebP '
+                            "images. Up to 100 files, 25 MB each, 200 MB per session. Images are read with OCR, "
+                            "which takes a few seconds each.</p>", padding=False)
+                    upload_status = gr.HTML(padding=False)
+            else:
+                with gr.Tab("Index", id="index"):
+                    stats = gr.HTML(padding=False)
+                    with gr.Row(equal_height=True):
+                        folder = gr.Textbox(label="Add a folder", placeholder=str(Path.home() / "Pictures"), scale=4)
+                        add_btn = gr.Button("Add and index", scale=1)
+                    with gr.Row(equal_height=True):
+                        roots_dd = gr.Dropdown([], label="Indexed folders", scale=4)
+                        remove_btn = gr.Button("Remove folder", variant="stop", scale=1)
+                    index_btn = gr.Button("Index now", variant="primary")
+                    index_msg = gr.HTML(padding=False)
 
         search_inputs = [query, kinds, scope, scores, session]
 
@@ -224,6 +325,33 @@ def build_blocks(ctx: UiContext) -> gr.Blocks:
             gr.Info(open_file(ctx, fid))
 
         open_btn.click(on_open, selected, None, api_name=False)
-        blocks.ctx = ctx  # for the server's id-only image routes
-        blocks.session_state = session
+
+        if ctx.demo:  # uploads index one job at a time, server-wide (Library.index holds a lock as well)
+            def on_upload(paths, sid, progress=gr.Progress()):
+                body, sid = handle_upload(ctx, paths, sid, _progress_fn(progress))
+                scope_update = gr.update(visible=True, value="My uploads") if sid else gr.update()
+                return body, sid, None, scope_update
+
+            uploads.upload(on_upload, [uploads, session], [upload_status, session, uploads, scope],
+                           concurrency_limit=1, concurrency_id="index", api_name=False)
+        else:
+            def refresh():
+                return index_tab_state(ctx)
+
+            def on_add(path, progress=gr.Progress()):
+                return (index_folder(ctx, path, _progress_fn(progress)), *index_tab_state(ctx))
+
+            def on_index(progress=gr.Progress()):
+                return (index_folder(ctx, None, _progress_fn(progress)), *index_tab_state(ctx))
+
+            def on_remove(root):
+                return (remove_folder(ctx, root), *index_tab_state(ctx))
+
+            blocks.load(refresh, None, [stats, roots_dd], api_name=False)
+            add_btn.click(on_add, folder, [index_msg, stats, roots_dd], concurrency_limit=1, concurrency_id="index",
+                          api_name=False)
+            index_btn.click(on_index, None, [index_msg, stats, roots_dd], concurrency_limit=1,
+                            concurrency_id="index", api_name=False)
+            remove_btn.click(on_remove, roots_dd, [index_msg, stats, roots_dd], concurrency_limit=1,
+                             concurrency_id="index", api_name=False)
     return blocks

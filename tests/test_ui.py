@@ -73,3 +73,61 @@ def test_image_routes_serve_by_id_only(ctx) -> None:
     assert client.get(f"/thumb/{hit.file_id}?s=someone-else").status_code == 404
     assert client.get("/thumb/..%2F..%2Fvault.db").status_code in (404, 422)
     assert client.get("/thumb/1;rm").status_code == 422
+
+
+# ---------------------------------------------------------------- demo uploads and the local Index tab
+
+
+@pytest.fixture
+def demo_ctx(tmp_path, fake_embedder) -> UiContext:
+    from conftest import build_pdf
+    from vault.demo import build_demo
+    from vault.session import SessionManager
+
+    base = tmp_path / "repo"
+    build_pdf(base / "corpus" / "papers" / "diffusion.pdf", ["Denoising diffusion models reverse a noising process."])
+    build_demo(base / "corpus", base / "demo_index", Config(data_dir=tmp_path / "unused"), base=base)
+    cfg = Config(data_dir=base / "demo_index")
+    demo = Library(cfg, read_only=True, base_dir=base)
+    (tmp_path / "gradio").mkdir()
+    return UiContext("demo", demo, sessions=SessionManager(demo, cfg, tmp_path / "sessions"),
+                     upload_dir=tmp_path / "gradio")
+
+
+def test_upload_then_search_my_uploads_samples_or_both(demo_ctx, tmp_path) -> None:
+    up = tmp_path / "gradio" / "abc"
+    up.mkdir()
+    (up / "minutes.txt").write_text("Minutes: the diffusion reading group meets on Friday.", encoding="utf-8")
+    body, sid = layout.handle_upload(demo_ctx, [str(up / "minutes.txt")], None)
+    assert sid and "minutes.txt" in body and "1 indexed" in body.lower()
+    mine, _ = layout.run_search(demo_ctx, "diffusion", [], "My uploads", False, sid)
+    samples, _ = layout.run_search(demo_ctx, "diffusion", [], "Sample files", False, sid)
+    both, _ = layout.run_search(demo_ctx, "diffusion", [], "Both", False, sid)
+    assert "minutes.txt" in mine and "diffusion.pdf" not in mine.split("Weaker matches")[0]
+    assert "diffusion.pdf" in samples and "minutes.txt" not in samples
+    assert "diffusion.pdf" in both and "minutes.txt" in both
+    assert f"s={sid}" in mine  # the session's own thumbnails need its id
+    assert demo_ctx.resolve(sid) is demo_ctx.sessions.get(sid).library and demo_ctx.resolve("other") is None
+    no_session, _ = layout.run_search(demo_ctx, "diffusion", [], "My uploads", False, None)
+    assert "diffusion.pdf" in no_session  # before any upload: the samples
+
+
+def test_upload_refuses_paths_outside_gradios_folder(demo_ctx, tmp_path) -> None:
+    secret = tmp_path / "secret.txt"
+    secret.write_text("private", encoding="utf-8")
+    body, sid = layout.handle_upload(demo_ctx, [str(secret)], None)
+    assert sid is None and "not an uploaded file" in body
+
+
+def test_index_tab_adds_indexes_and_removes_folders(tmp_path, fake_embedder, make_search_corpus) -> None:
+    lib = Library(Config(data_dir=tmp_path / "data"))
+    ctx = UiContext("local", lib)
+    root = make_search_corpus(tmp_path / "files")
+    assert "Not a folder" in layout.index_folder(ctx, str(tmp_path / "nope"))
+    assert "Add a folder first" in layout.index_folder(ctx, None)
+    assert "6 added" in layout.index_folder(ctx, str(root))
+    stats, roots = layout.index_tab_state(ctx)
+    assert "Folders" in stats and roots["choices"] == [str(root.resolve())]
+    assert "0 added" in layout.index_folder(ctx, None)
+    assert "6 files left" in layout.remove_folder(ctx, str(root.resolve()))
+    assert "Not an indexed folder" in layout.remove_folder(ctx, "C:/elsewhere")
