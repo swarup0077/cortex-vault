@@ -97,9 +97,11 @@ def _snippet_markup(snippet_html: str) -> str:
 
 def cmd_search(console: Console, conn: sqlite3.Connection, cfg: Config, args: argparse.Namespace) -> int:
     resp = search(conn, args.query, cfg, limit=args.limit)
-    if not resp.results:
+    if not resp.results and not resp.weaker:
         console.print("No results.")
-    for i, r in enumerate(resp.results, start=1):
+    for i, r in enumerate(resp.results + resp.weaker, start=1):
+        if i == len(resp.results) + 1:  # the first weaker match
+            console.print("[dim]── weaker matches ──[/]")
         where = f" [cyan]{'slide' if r.kind == 'slides' else 'page'} {r.page}[/]" if r.page else ""
         copies = f" [dim]+{r.copies} copies[/]" if r.copies else ""
         console.print(f"[bold]{i:>2}. {escape(r.filename)}[/]{where}  [dim]{r.kind} · {r.effective_date or ''}[/]{copies}")

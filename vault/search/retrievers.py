@@ -32,12 +32,16 @@ def filter_sql(pq: ParsedQuery, alias: str = "f") -> tuple[str, list]:
     if pq.date_to:
         conds.append(f"{alias}.effective_date < ?")
         params.append(pq.date_to)
+    if pq.roots:
+        conds.append(f"EXISTS (SELECT 1 FROM paths p WHERE p.file_id = {alias}.id "
+                     f"AND p.root IN ({','.join('?' * len(pq.roots))}))")
+        params += sorted(pq.roots)
     return " AND ".join(conds), params
 
 
 def allowed_file_ids(conn: sqlite3.Connection, pq: ParsedQuery) -> set[int] | None:
-    """File ids passing the filters, or None when there's no kind/date filter (everything indexed is ok)."""
-    if not (pq.kinds or pq.date_from or pq.date_to):
+    """File ids passing the filters, or None when there's no kind/date/scope filter (everything indexed is ok)."""
+    if not (pq.kinds or pq.date_from or pq.date_to or pq.roots):
         return None
     where, params = filter_sql(pq)
     return {r[0] for r in conn.execute(f"SELECT f.id FROM files f WHERE {where}", params)}

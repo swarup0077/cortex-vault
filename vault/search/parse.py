@@ -37,6 +37,7 @@ class ParsedQuery:
     date_from: str | None = None  # ISO-8601, inclusive
     date_to: str | None = None  # ISO-8601, exclusive
     phrases: tuple[str, ...] = ()
+    roots: frozenset[str] = frozenset()  # only files with a path under one of these indexed roots (upload scope)
 
     @property
     def filter_only(self) -> bool:

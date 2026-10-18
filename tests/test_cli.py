@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -34,6 +35,23 @@ def test_index_search_stats(data_dir, fake_embedder, tmp_path, make_search_corpu
 
     assert main(["reindex"]) == 0
     assert "added" in capsys.readouterr().out
+
+
+def test_search_prints_ten_by_default_with_weaker_matches_last(data_dir, fake_embedder, tmp_path, capsys) -> None:
+    root = tmp_path / "notes"
+    root.mkdir()
+    for i in range(14):
+        (root / f"note {i:02}.txt").write_text(f"Shopping list number {i}: bread, milk and eggs.", encoding="utf-8")
+    (root / "boarding.txt").write_text("Boarding pass for the Goa flight, gate 7.", encoding="utf-8")
+    assert main(["index", str(root)]) == 0
+    capsys.readouterr()
+    assert main(["search", "boarding pass"]) == 0
+    out = capsys.readouterr().out
+    numbered = [line for line in out.splitlines() if re.match(r"\s*\d+\. ", line)]
+    assert len(numbered) == 10 and "boarding.txt" in numbered[0]
+    assert out.index("weaker matches") > out.index("boarding.txt")
+    assert main(["search", "boarding pass", "-n", "3"]) == 0
+    assert "3. " in capsys.readouterr().out
 
 
 def test_model_mismatch_exit_code(data_dir, fake_embedder, tmp_path, make_search_corpus, capsys) -> None:

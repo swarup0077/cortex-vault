@@ -119,7 +119,13 @@ class Config:
     # right, the best balance. Generated "photos" aren't photographs, so M6 checks it on the corpus's real ones.
     clip_screenshot_margin: float = 0.04
     snippet_chars: int = 200
-    max_results: int = 20
+    # Result list (SPEC §8): the UI shows `page_results` cards, then "Show more" up to `max_results` (the CLI's
+    # own default is -n 10). Below the fused list come the weaker matches (SPEC §7.4 step 4), up to the same cap;
+    # the eval can switch them off. `visual_row` caps the Visual matches row (open item t).
+    max_results: int = 50
+    page_results: int = 20
+    weaker_matches: bool = True
+    visual_row: int = 10
 
     @property
     def db_path(self) -> Path:
