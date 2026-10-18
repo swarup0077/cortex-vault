@@ -329,44 +329,65 @@ Example: `screenshot of the access denied error from last week` → kinds={scree
 
 ---
 
-## 8. UI (Gradio Blocks)
+## 8. UI: Cortex Vault (Gradio Blocks)
 
-**Search tab**
-- Search box (Enter to submit), kind filter chips, removable parsed-filter chips and a rerank toggle (both Later, §14), and a "show scores" debug toggle.
-- A ranked list of cards: the top 20, then "Show more" up to 50. Each card shows a thumbnail, filename, date, kind badge, page or slide number, snippet, and "+N copies" when there are duplicates.
-- Clicking a card opens a detail panel with:
-  - a larger preview with highlight boxes (for a PDF, the matched page rendered);
-  - the full matched chunk with highlights;
-  - "Why this result?": per-retriever ranks, the RRF arithmetic, and whether CLIP was gated;
-  - all paths of the file;
-  - "Open file" (local mode only).
-- Empty state: example queries as clickable chips.
+The UI is called **Cortex Vault**: the page title, header, favicon and footer say so. The package, CLI and this spec keep `vault` / Personal Search Vault. The approved design is the pack in `design/` (README, `reference.html`, `cortex.css`, screenshots; committed for reference, not served). This section records what the app does; `design/README.md` has the visual detail (§19, 18 Oct).
 
-**Index tab (local only)**
-- Add or remove folders, and a manual "Index now" button with a progress bar. Automatic re-indexing (a file watcher or periodic scan) is Later (§14). Demo mode has no folder indexing at all, only uploads.
-- Last run report, counts by kind, and an error list.
+**One screen, no tabs.** Header (brand · status · scope control in demo mode · the one primary button), search bar, file-type chips, results on the left with a sticky 440 px preview on the right, footer (mode line and key hints).
 
-**Upload tab (demo only)**
-- Upload individual files, or (Later, §14) a whole folder via `gr.File(file_count="directory")`.
+**Search**
+- Runs as you type: about 300 ms after the last key, only when the box holds at least 2 characters and differs from the last search; only the newest request counts (`trigger_mode="always_last"`). "N results · T s" next to the box comes from the app. If the VM's query time (stage timers) goes above ~0.5 s, the delay goes up.
+- **Enter** opens the selected result, but only if the results on screen belong to the text now in the box; otherwise it runs that search at once and opens nothing.
+- **File-type chips** (All, Screenshots, Photos, PDFs, Slides, Docs) filter the results on the page (up to 50); their counts come from the full result set, and groups left empty are hidden. Kind *words* in the query stay hard filters (§7.1). A chip is not a new search: with "PDFs" on, you see the PDFs among the top 50.
+- **Keyboard (combobox pattern):** focus stays in the search box; ↑/↓ moves the selection (`aria-activedescendant`) in display order and updates the preview; Enter opens; Esc closes the phone sheet if it's open, otherwise clears the box; Ctrl K or `/` focuses search. No Ctrl C / D / L shortcuts.
+
+**Results, grouped (presentation only; the ranking is unchanged, §7.4)**
+
+| Group | What goes in it |
+|---|---|
+| Close matches | results above the weaker-matches divider that some text method found |
+| Visual matches · found by what is in the picture | results above the divider that only CLIP found, as thumbnails |
+| Related matches | the weaker matches (§7.4 step 4) |
+
+- Close and Visual matches appear in the order of their best item's fused rank, so the #1 result is always at the top of the page; Related matches always come last. Inside a group the order is the fused rank.
+- The first 20 items in display order show, then "Show N more" up to 50, N being the real remaining count under the current chip.
+- A row: tinted file-type tile, file name, meta (type · date, or page / slide number), one-line snippet with `<mark>`, "Enter" hint on the selected row.
+
+**Preview pane** (a full-screen sheet on phones)
+- The image, the rendered PDF page, or the thumbnail card of a document.
+- **Highlight boxes** in percent of the picture: on OCR lines (images, OCR'd PDF pages and regions) and on the PDF's own text layer (`page.search_for` at render time). Query words shorter than 3 characters and stopwords are ignored; at most 10 boxes per page. A meaning-only match gets one lighter box around the best passage's lines instead (OCR text only: a native text layer has no passage boxes).
+- Title and meta line.
+- **Found by:** for every result, each search method that returned it with its real rank in that method's list: exact words (BM25), every word (the all-terms list), meaning (dense), what is in the picture (CLIP). Related matches show the rank in the method's full list, below the dense floor or outside the CLIP gate. **Details** (closed by default, both modes): each method's RRF share, the total, and the CLIP gate result, the same numbers as `vault search --debug`. This replaces the "show scores" toggle.
+- **Text read by:** OCR ("on this server" in demo mode, "on this computer" locally), the PDF's own text layer, Word document text, slide text, plain text, or no text found.
+- **Size:** pixels or pages / slides, and bytes.
+- **Actions:** Download (demo, `/file/{id}`) or Open (local, `vault/platform.py`) · Copy text (the matched passage) · Copy link to this result (`?q=…&r=<id>`; never a path).
+
+**Home:** centred column, 760 px. "Search N files by words, meaning, or what is in a picture", a 56 px search box with a Ctrl K hint, "Try a search" (each with its search type) and "Recently added" (newest indexed first), then in demo mode the drop zone, the upload notice and the note about the three models, and in local mode the indexed folders.
+
+**States:** no results (a one-line suggestion); still reading uploads ("Reading X of Y uploads" in the header, a thin banner with a progress bar, search keeps working); after an upload, each file listed as added, already in your uploads (sha256), not a supported type, or couldn't be read, with the reason.
+
+**Demo mode**
+- **Add files** (header) and the home drop zone upload files; they replace the Upload tab. Folder upload is Later (§14).
 - **Limits:** ≤ 100 files, ≤ 25 MB each, ≤ 200 MB total per session, with an extension allow-list.
   - Enforce the limits in our own code, not only through Gradio's settings.
   - Set the final caps after measuring indexing speed in M5. Target: a 100-file mixed upload indexes in ≤ 5 min on the deploy host (§15).
-- A progress bar with per-file status; failed files show why.
 - **Session index:** on the first upload, copy the demo index (SQLite backup API) into `/tmp/vault_sessions/<uuid4>/` and index the uploads into that copy. The demo index itself never changes.
 - **Incremental (§19, 18 Oct):** every later upload adds only its new files to the session index; a file identical (sha256) to one already in the session is skipped. Uploading 30 files and then 20 more indexes 20 the second time, and the report says "added 20".
 - Uploads are indexed one job at a time (a queue): OCR uses every CPU, and the OCR engine keeps per-call state.
-- **Scope toggle:** *My uploads* (the default once something is uploaded), *Sample files*, or *Both*.
+- **Scope control:** *Samples*, *My uploads* or *Both*; *Both* before any upload, *My uploads* once something is uploaded. Hidden on phones, where the scope is always *Both*.
 - Wipe a session after 30 min idle, and wipe all sessions on app start.
-- Visible notice: "Uploads are processed on this server, kept only for your session, and deleted after 30 minutes. For private use, run it on your own computer (see README)."
+- Visible notice, under the drop zone and above the upload outcome: "Uploads are processed on this server, kept only for your session, and deleted after 30 minutes. For private use, run it on your own computer (see README)." The footer says "Demo server · your uploads are deleted after 30 minutes".
+- `/file/{id}` sends a file as an attachment with its content type, by DB id (plus the session id for uploads). An unknown id, another session's file and anything path-like all get 404.
 
-**How it works tab**
-- Architecture diagram, the eval ablation table (rendered from `eval/results.md`), a privacy note, and a link to "Run on your own files".
+**Local mode:** the same design without the scope control; "on this computer" in the footer and in "Text read by"; Enter opens the file through `vault/platform.py`. The primary button is **Folders**: a panel to add a folder, remove one, and "Index now" with progress, the last run report, counts by kind and the error list (it replaces the Index tab; automatic re-indexing is Later, §14). The panel and its handlers exist only in local mode. The status reads "N files · indexed <when>".
 
-Thumbnails and previews are served only by file id or session id, through the app's own routes (`/thumb/{file_id}`, `/preview/{file_id}`), which look the file up in the DB. No URL carries a path, and Gradio's `allowed_paths` stays empty (§19, 18 Oct).
+**How it works** (M6): architecture diagram, the eval ablation table (from `eval/results.md`), a privacy note, and a link to "Run on your own files".
 
-**Look:** one custom theme (colour tokens, spacing, type scale) for every tab, readable cards, and a layout that works on a phone. The URL is the first thing the professor sees.
-
-**M4 scope of the detail panel:** larger preview (for a PDF, the matched page rendered), the full matched chunk with `<mark>` highlights, all paths, and "Open file" in local mode. Highlight boxes and "Why this result?" are M5. The "How it works" tab is M6, with the eval table.
+**Files and look**
+- Thumbnails, previews and downloads are served only by file id or session id, through the app's own routes (`/thumb/{id}`, `/preview/{id}`, `/file/{id}`), which look the file up in the DB. No URL carries a path, and Gradio's `allowed_paths` stays empty (§19, 18 Oct).
+- Static assets (`cortex.css`, `cortex.js`, the Geist fonts with their OFL licence, the logo) are served by the app from `vault/ui/static/` at `/cv/…`. Nothing loads from the internet: the Gradio theme names the fonts as plain strings, so no Google Fonts.
+- Dark by default; light through `?__theme=light`. One primary button per screen; brass only for focus, highlight boxes and the logo; no shadows or gradients.
+- Every file name, path, snippet and OCR string is HTML-escaped on the server; the only tags our code adds are `<mark>` and the layout.
 
 ---
 
@@ -483,6 +504,7 @@ Requirements:
 ```
 personal-search-vault/
   CLAUDE.md  SPEC.md  README.md  requirements.txt  .gitignore
+  design/                        # the approved Cortex Vault UI design pack (reference only, not served)
   setup.bat  setup.sh            # check Python 3.12, create venv, install, launch
   app.py                         # Gradio entry; reads VAULT_MODE
   deploy/                        # azure.md runbook, systemd unit, Caddyfile (§15)
@@ -503,7 +525,8 @@ personal-search-vault/
     demo.py                      # build-demo (repo-relative paths, GPS guard) and scrub-exif
     session.py                   # demo-mode per-session index copy, upload limits, TTL cleanup
     eval.py
-    ui/      layout.py cards.py styles.css server.py (id-only /thumb and /preview routes)
+    ui/      layout.py views.py (HTML builders) server.py (id-only /thumb, /preview and /file routes)
+             static/ cortex.css cortex.js fonts/ (Geist + OFL.txt) logo/   (served at /cv/)
   corpus/   (+ MANIFEST.csv, make_standin.py)   demo_index/ (vault.db + thumbs, built by `vault build-demo`)
   eval/     queries.jsonl results.md results.json
   tests/    conftest.py (generates fixtures) test_*.py
@@ -530,7 +553,7 @@ The plan has one Claude Code session per milestone, with a commit at the end of 
 
 | # | Date | Milestone | Done when |
 |---|---|---|---|
-| M5 | Wed 21 Oct | **Speed + visual polish** | Two-phase indexing (open item g): filename and native text searchable within seconds; OCR, embeddings and CLIP run in the background, with progress shown in the UI. Highlight boxes. "Why this result?". Open items (j) and (k). A 100-file upload is timed on the VM and the final caps are set. |
+| M5 | Wed 21 Oct | **Speed + visual polish** | UI redesign to `design/` (Cortex Vault, §8). Two-phase indexing (open item g): filename and native text searchable within seconds; OCR, embeddings and CLIP run in the background, with progress shown in the UI. Highlight boxes. "Why this result?". Open items (j) and (k). A 100-file upload is timed on the VM and the final caps are set. |
 | M6 | Thu 22 Oct | **Full corpus + eval** | ~200 files covering the 7 demo scenarios, plus MANIFEST. ≥ 40 queries meeting the §9 coverage. `vault eval` writes the ablation table (§9) and latency, with laptop vs VM numbers. Open item (n) first, then (o) and (f). Demo index rebuilt and redeployed. |
 | M7 | Fri 23 Oct | **Buffer** | Finish anything left from M4–M6. Then optional items from "Later", only the ones the owner picks. |
 | M8 | Sat 24 Oct | **Pack** | README: the problem, a GIF, architecture, the §11 decisions, the eval table, measured numbers, §17 limitations, and "Run on your own files". Offline demo rehearsed (§16). |
@@ -720,6 +743,7 @@ The plan has one Claude Code session per milestone, with a commit at the end of 
 | 18 Oct | **Proposed, owner to confirm:** at most `max_sessions` = 20 upload sessions at once; the next uploader is told the demo is busy | Not in the spec. Bounds the server's disk use at 20 × 200 MB; set with the other caps in M5 |
 | 18 Oct | **Demo index from the stand-in slice:** 52 generated files (18 screenshots, 5 of them tall phone scrolls; 10 drawn scenes and 5 photographed notices, one upside down, and a receipt; 10 PDFs: 4 papers, 2 scans, 3 slide-style, a ticket and a bill; 3 decks; 5 notes). `build-demo` on the laptop: 0 errors, 44 images or pages OCR'd (OCR 79 s), 0.8 MB with thumbnails. Smoke run with the real models: the right file at #1 for the error code, the traceback, the diffusion paper, the whiteboard, the phrase at the bottom of a tall scroll, the text inside a slide-style PDF's picture, the exact SVD sentence, Bayes in the scanned book, dice, the electricity bill, the upside-down notice and the Docker error. "sunset at the beach" puts `travel plan goa.docx` ("beach day… sunset is around 18:10") at #1 and the photo at #2 and in the Visual matches row. Wrong page: the agenda and overview pages (item n); noise: tiny chunks in dense (item x) | Generated files, so these are a smoke test, not an eval |
 | 18 Oct | **VM benchmark (open item h)** on `Standard_D4as_v4` (AMD EPYC 7763, 4 vCPUs, 16 GB; resized in place 18 Oct), with the app running idle; method and scripts as in the laptop rows (`bench/`). **Embedding** (quantized bge-small, batch 32, `bench/bench_embed.py`): 11.5 / 11.6 / 11.8 chunks/s with ONNX Runtime's default threads, 11.7 with 4: steady, unlike the laptop's 9–18 swing. **OCR** (`compare_ocr.py`, 3 interleaved runs, 1920×1080): before (RapidOCR defaults) 3.06 / 3.08 / 3.07 s, recall 97.0% (detect 526 ms, recognise 2,599 ms); after (the `Config` defaults) 2.03 / 2.03 / 2.01 s, recall 99.9% (detect 135, recognise 1,900); after with ONNX Runtime's default threads 2.01 / 2.00 / 2.00 s. **Ingest** (the synthetic 47-file set, two runs): files/sec **screenshot 0.44 / 0.44, photo 1.01 / 0.99, pdf 0.17 / 0.17**; OCR 116.3 / 116.4 s, embed 9.1 / 9.0 s, CLIP 5.0 / 5.0 s, thumbnails 0.9 s; 62 images or pages OCR'd, 0 errors. **Two OCR engines × 2 threads:** 1.80 s per image vs 2.04 s for one 4-thread engine (+12% throughput). SQLite 3.45.1 | No VM-specific defaults: `ocr_threads` = min(8, CPUs) = 4 matches ONNX Runtime's default here, and embedding threads make no difference. Ingest is 1.4–2.4× the laptop's (whose M3 run was in its slow state). A second OCR engine adds 12% throughput, not enough to justify processes (CLAUDE.md). At these rates the synthetic set's 47 files take ~2.2 min, so a 100-file mixed upload is near the 5-minute target (§8); M5 times a real one |
+| 18 Oct | **UI redesign (M5), owner-approved design in `design/`** with the owner's changes: the UI is called Cortex Vault (package and CLI stay `vault`); one screen, dark by default, light via `?__theme=light`, Geist served locally; search as you type (300 ms, ≥ 2 characters, changed text only, newest request wins) and Enter opens the selected result only if the results belong to the text in the box; file-type chips filter the page, kind words stay hard filters; groups Close / Visual (results only CLIP found) / Related (the weaker matches), Close and Visual ordered by their best item's fused rank, Related last; Found by shows each method's real rank for every result, with a Details section (RRF shares, CLIP gate) replacing the Show scores toggle; highlight boxes on OCR lines and the PDF text layer (words ≥ 3 characters, no stopwords, ≤ 10 per page; one lighter passage box for a meaning-only match); Esc closes the phone sheet first; `/file/{id}` downloads by id (404 for unknown ids, other sessions' files and anything path-like); Add files and the drop zone replace the Upload tab; in local mode a Folders panel, created only in local mode, replaces the Index tab | The owner approved the design pack. The chip change is the design's: counts and groups describe the results on screen. Grouping by "only CLIP found it" puts each result in one group, so the arrow keys never visit a file twice |
 
 ### Open items
 
