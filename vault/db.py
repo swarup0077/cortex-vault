@@ -13,7 +13,7 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = "3"  # 2: path chunks are keyword-only (no vector); 3: files.ocr_cls
+SCHEMA_VERSION = "4"  # 2: path chunks are keyword-only (no vector); 3: files.ocr_cls; 4: files.stage
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS files (
@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS files (
   gps_lat REAL, gps_lon REAL,
   thumb_path TEXT,
   ocr_cls INTEGER,
+  stage TEXT NOT NULL DEFAULT 'ready',  -- 'listed': phase 1 done (name, native text, thumbnail); 'ready': all done
   status TEXT NOT NULL DEFAULT 'ok',
   error TEXT,
   indexed_at TEXT
@@ -107,7 +108,12 @@ def connect(db_path: Path | str, *, read_only: bool = False) -> sqlite3.Connecti
                 conn.execute("ALTER TABLE files ADD COLUMN ocr_cls INTEGER")
             conn.execute("UPDATE files SET ocr_cls = (kind = 'photo') WHERE kind IN ('photo', 'screenshot') "
                          "AND status = 'ok'")
-            set_meta(conn, "schema_version", "3")
+            set_meta(conn, "schema_version", version := "3")
+    if version == "3":
+        with transaction(conn):  # two-phase indexing (SPEC §6.1): everything indexed before it is complete
+            if "stage" not in {r[1] for r in conn.execute("PRAGMA table_info(files)")}:
+                conn.execute("ALTER TABLE files ADD COLUMN stage TEXT NOT NULL DEFAULT 'ready'")
+            set_meta(conn, "schema_version", "4")
     return conn
 
 
@@ -238,6 +244,10 @@ def update_chunk_text(conn: sqlite3.Connection, chunk_id: int, text: str, vec: n
         "ON CONFLICT(chunk_id) DO UPDATE SET vec = excluded.vec",
         (chunk_id, vec_to_blob(vec)),
     )
+
+
+def set_text_vector(conn: sqlite3.Connection, chunk_id: int, vec: np.ndarray) -> None:
+    conn.execute("INSERT OR REPLACE INTO text_vectors(chunk_id, vec) VALUES (?, ?)", (chunk_id, vec_to_blob(vec)))
 
 
 def delete_content_chunks(conn: sqlite3.Connection, file_id: int) -> None:

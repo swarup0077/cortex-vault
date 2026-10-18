@@ -30,10 +30,14 @@ def fts_hits(conn, term: str) -> int:
 
 
 def assert_consistent(conn) -> None:
-    """Every chunk has exactly one FTS row, every content chunk one vector, path chunks none; nothing dangles."""
+    """Every chunk has exactly one FTS row; every content chunk of a ready file one vector, and a listed file's
+    none yet (phase 2 writes them all at once); path chunks never; nothing dangles."""
     c = counts(conn)
-    content = conn.execute("SELECT count(*) FROM chunks WHERE source != 'path'").fetchone()[0]
-    assert c["chunks"] == c["chunks_fts"] and c["text_vectors"] == content
+    ready = conn.execute("SELECT count(*) FROM chunks c JOIN files f ON f.id = c.file_id "
+                         "WHERE c.source != 'path' AND f.stage = 'ready'").fetchone()[0]
+    assert c["chunks"] == c["chunks_fts"] and c["text_vectors"] == ready
+    assert conn.execute("SELECT count(*) FROM text_vectors v JOIN chunks c ON c.id = v.chunk_id "
+                        "JOIN files f ON f.id = c.file_id WHERE f.stage = 'listed'").fetchone()[0] == 0
     assert conn.execute(
         "SELECT count(*) FROM text_vectors v JOIN chunks c ON c.id = v.chunk_id WHERE c.source = 'path'"
     ).fetchone()[0] == 0
@@ -175,9 +179,10 @@ def test_newest_first(conn, cfg, fake_embedder, tmp_path) -> None:
         p = root / name
         p.write_text(f"file {name}", encoding="utf-8")
         os.utime(p, (1_700_000_000, 1_700_000_000 + {"old.txt": 0, "mid.txt": 100, "newest.txt": 200}[name]))
-    order = []
-    index_paths(conn, [root], cfg, progress=lambda i, n, path: path and order.append(Path(path).name))
-    assert order == ["newest.txt", "mid.txt", "old.txt"]
+    order = {"list": [], "read": []}
+    index_paths(conn, [root], cfg,
+                progress=lambda i, n, path, phase="read": path and order[phase].append(Path(path).name))
+    assert order["list"] == order["read"] == ["newest.txt", "mid.txt", "old.txt"]  # both phases
 
 
 def test_errors_are_recorded_and_run_continues(conn, cfg, fake_embedder, tmp_path, make_pdf, make_zip_bomb) -> None:
@@ -204,7 +209,7 @@ def test_stop_finishes_current_file_and_skips_sweep(conn, cfg, fake_embedder, co
     for i in range(3):
         (corpus / f"new{i}.txt").write_text(f"new file {i}", encoding="utf-8")
     stop = threading.Event()
-    rep = index_paths(conn, [corpus], cfg, stop=stop, progress=lambda i, n, p: i == 0 and stop.set())
+    rep = index_paths(conn, [corpus], cfg, stop=stop, progress=lambda i, n, p, phase="read": i == 0 and stop.set())
     assert rep.interrupted and rep.added == 1 and rep.deleted == 0
     assert counts(conn)["files"] == 5  # 4 old (todo not swept yet) + 1 new
     rep = index_paths(conn, [corpus], cfg)  # resumes
@@ -475,3 +480,63 @@ def test_remove_root_forgets_its_files_but_keeps_shared_content(conn, cfg, fake_
     assert conn.execute("SELECT count(*) FROM chunks_fts").fetchone()[0] == conn.execute(
         "SELECT count(*) FROM chunks").fetchone()[0]
     assert len(list(thumbs.thumbs_dir(cfg).glob("*.webp"))) == 1
+
+
+# ---------------------------------------------------------------- two-phase indexing (SPEC §6.1, open item g)
+
+
+def test_listed_files_are_searchable_by_name_and_native_text_before_phase_two(conn, cfg, fake_embedder, fake_ocr,
+                                                                             tmp_path, make_pdf) -> None:
+    from conftest import OcrLine, draw_text_image, save_image
+
+    root = tmp_path / "r"
+    make_pdf(root / "papers" / "svd notes.pdf", ["Singular value decomposition, defined."])
+    save_image(draw_text_image((400, 200), [(20, 80, "ERROR 0x80070005")]), root / "shots" / "dialog box.png")
+    fake_ocr.lines_for = lambda img: [OcrLine("ERROR 0x80070005", 0.99, 20, 80, 300, 110)]
+    seen = {}
+
+    def listed() -> None:  # between the phases: names and native text are in, OCR and vectors are not
+        seen["native"] = fts_hits(conn, "singular")
+        seen["name"] = fts_hits(conn, "dialog")
+        seen["ocr"] = fts_hits(conn, "0x80070005")
+        seen["vectors"] = counts(conn)["text_vectors"]
+        seen["stages"] = sorted(r[0] for r in conn.execute("SELECT stage FROM files"))
+
+    rep = index_paths(conn, [root], cfg, listed=listed)
+    assert seen == {"native": 1, "name": 1, "ocr": 0, "vectors": 0, "stages": ["listed", "listed"]}
+    assert (rep.listed, rep.completed) == (2, 2)
+    assert fts_hits(conn, "0x80070005") == 1 and {r[0] for r in conn.execute("SELECT stage FROM files")} == {"ready"}
+    assert_consistent(conn)
+
+
+def test_a_run_stopped_after_listing_is_finished_by_the_next(conn, cfg, fake_embedder, corpus) -> None:
+    stop = threading.Event()
+    rep = index_paths(conn, [corpus], cfg, stop=stop, listed=stop.set)
+    assert rep.interrupted and rep.listed == 4 and rep.completed == 0
+    assert {r[0] for r in conn.execute("SELECT stage FROM files")} == {"listed"}
+    assert fts_hits(conn, "plumber") == 1 and counts(conn)["text_vectors"] == 0  # keyword-searchable already
+    assert_consistent(conn)
+    rep = index_paths(conn, [corpus], cfg)
+    assert (rep.added, rep.unchanged, rep.completed) == (0, 4, 4)
+    assert {r[0] for r in conn.execute("SELECT stage FROM files")} == {"ready"}
+    assert_consistent(conn)
+
+
+def test_an_image_that_fails_ocr_is_an_error_and_a_pdf_keeps_its_text(conn, cfg, fake_embedder, fake_ocr, tmp_path,
+                                                                      make_pdf) -> None:
+    from conftest import draw_text_image, save_image
+
+    root = tmp_path / "r"
+    make_pdf(root / "scan.pdf", ["Native text on page one.", ""])  # page 2 has no text: OCR'd
+    save_image(draw_text_image((300, 100), [(10, 40, "hello")]), root / "Screenshot (1).png")
+
+    def broken(img):
+        raise RuntimeError("OCR model missing")
+
+    fake_ocr.lines_for = broken
+    rep = index_paths(conn, [root], cfg)
+    status = {Path(r[0]).name: r[1] for r in conn.execute(
+        "SELECT p.path, f.status FROM files f JOIN paths p ON p.file_id = f.id")}
+    assert status == {"scan.pdf": "ok", "Screenshot (1).png": "error"} and len(rep.errors) == 1
+    assert fts_hits(conn, "native") == 1
+    assert_consistent(conn)

@@ -12,6 +12,7 @@ import json
 import logging
 import sqlite3
 import threading
+import time
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -92,6 +93,8 @@ class Library:
         self.display_root = display_root
         self._lock = threading.Lock()
         self._vectors: tuple[VectorIndex, VectorIndex] | None = None
+        self._stale = False  # phase 2 stored new vectors since they were loaded
+        self._loaded_at = 0.0
 
     # ------------------------------------------------------------ connections and vectors
 
@@ -108,15 +111,21 @@ class Library:
                 retrievers.load_image_index(conn))
 
     def vectors(self, conn: sqlite3.Connection) -> tuple[VectorIndex, VectorIndex]:
+        """The cached vectors; while phase 2 is storing new ones, reloaded at most once a second, so a search
+        during indexing finds files by meaning as they're read."""
         with self._lock:
-            if self._vectors is None:
+            if self._vectors is None or (self._stale and time.monotonic() - self._loaded_at > 1.0):
                 self._vectors = self._load_vectors(conn)
+                self._stale = False
+                self._loaded_at = time.monotonic()
             return self._vectors
 
     def refresh(self) -> None:
         """Reload the vectors after the index changed."""
         with self.connect() as conn, self._lock:
             self._vectors = self._load_vectors(conn)
+            self._stale = False
+            self._loaded_at = time.monotonic()
 
     # ------------------------------------------------------------ search and indexing
 
@@ -128,12 +137,21 @@ class Library:
                           roots=roots, limit=limit)
 
     def index(self, folders: Iterable[Path | str], progress: ProgressFn | None = None,
-              stop: threading.Event | None = None) -> IndexReport:
+              stop: threading.Event | None = None, listed: Callable[[], None] | None = None) -> IndexReport:
+        """Index in two phases (SPEC §6.1): searches made meanwhile see listed files by name and native text at
+        once, and by meaning and pictures as phase 2 reads them."""
         if self.read_only:
             raise PermissionError("this index is read-only")
+
+        def reading(done: int, total: int, path: str, phase: str = "read") -> None:
+            if phase == "read" and done:
+                self._stale = True
+            if progress:
+                progress(done, total, path, phase=phase)
+
         with INDEX_LOCK:
             with self.connect() as conn:
-                report = pipeline.index_paths(conn, folders, self.cfg, progress=progress, stop=stop)
+                report = pipeline.index_paths(conn, folders, self.cfg, progress=reading, stop=stop, listed=listed)
             self.refresh()
         return report
 

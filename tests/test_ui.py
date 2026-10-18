@@ -295,19 +295,27 @@ def test_upload_outcome_then_scopes(demo_ctx) -> None:
     assert "diffusion.pdf" in samples and "minutes.txt" not in samples and f"s={sid}" in mine
 
 
-def test_upload_reports_progress_while_reading(demo_ctx, monkeypatch) -> None:
-    def slow(session, files, upload_dir, progress):
+def test_upload_outcome_shows_while_the_files_are_still_read(demo_ctx, monkeypatch) -> None:
+    """Two-phase indexing (SPEC §6.1): the per-file outcome appears once the files are listed; the header then
+    reports "Reading X of Y uploads" until phase 2 is done."""
+    def slow(session, files, upload_dir, progress, on_listed=None):
+        statuses = [FileStatus(Path(f).name, "indexed") for f in files]
+        for i, f in enumerate(files):
+            progress(i, len(files), str(f), phase="list")
+        on_listed(UploadResult(None, statuses))
         for i in range(len(files)):
-            progress(i, len(files), str(files[i]))
+            progress(i, len(files), str(files[i]), phase="read")
             time.sleep(0.05)
-        return None, UploadResult(None, [FileStatus(Path(f).name, "indexed") for f in files])
+        return None, UploadResult(None, statuses)
 
     monkeypatch.setattr(demo_ctx.sessions, "add_files", slow)
     steps = list(layout.handle_upload(demo_ctx, None, [gradio_file(demo_ctx, f"n{i}.txt", "x") for i in range(3)]))
-    busy = [status for main, status, _ in steps[:-1]]
-    assert busy and any("Reading 2 of 3 uploads" in s for s in busy) and 'data-busy="true"' in busy[0]
+    first_main = next(i for i, (main, _, _) in enumerate(steps) if isinstance(main, str))
+    assert "3 files received · 3 added" in steps[first_main][0] and first_main < len(steps) - 1
+    busy = [status for _, status, _ in steps[first_main:-1]]
+    assert any("Reading 2 of 3 uploads" in s for s in busy) and all('data-busy="true"' in s for s in busy[1:])
     assert any("still being read" in s for s in busy)
-    assert "3 files received · 3 added" in steps[-1][0] and 'data-busy="false"' in steps[-1][1]
+    assert 'data-busy="false"' in steps[-1][1]
 
 
 def test_upload_refuses_paths_outside_gradios_folder(demo_ctx, tmp_path) -> None:

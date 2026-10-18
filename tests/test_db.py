@@ -120,7 +120,8 @@ def test_migration_2_to_3_records_the_angle_classifier_setting(cfg) -> None:
         db.set_meta(c, "schema_version", "2")
     c.close()
     c = db.connect(cfg.db_path)
-    assert db.get_meta(c, "schema_version") == "3"
+    assert db.get_meta(c, "schema_version") == db.SCHEMA_VERSION  # 2 → 3 → 4
+    assert {r[0] for r in c.execute("SELECT stage FROM files")} == {"ready"}  # v4: indexed before two phases
     assert dict(c.execute("SELECT sha256, ocr_cls FROM files").fetchall()) == {"p": 1, "s": 0, "d": None, "e": None}
     c.close()
 

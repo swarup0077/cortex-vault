@@ -173,9 +173,11 @@ class SessionManager:
     # ------------------------------------------------------------ uploads
 
     def add_files(self, session_id: str | None, files: Sequence[Path | str], upload_dir: Path,
-                  progress: ProgressFn | None = None) -> tuple[Session | None, UploadResult]:
+                  progress: ProgressFn | None = None,
+                  on_listed: Callable[[UploadResult], None] | None = None) -> tuple[Session | None, UploadResult]:
         """Check, copy and index uploaded files. `upload_dir` is Gradio's upload folder: nothing outside it is
-        read. Creates the session on the first accepted file."""
+        read. Creates the session on the first accepted file. `on_listed` gets the per-file outcome as soon as
+        phase 1 has listed the files (SPEC §6.1); the returned result is the final one."""
         session = self.get(session_id)
         upload_dir = upload_dir.resolve()
         statuses: list[FileStatus] = []
@@ -238,17 +240,25 @@ class SessionManager:
                 session.files += 1
                 session.bytes += size
                 copied.append((dest, st))
-            report = session.library.index([session.uploads], progress=progress)
-            with session.library.connect() as conn:
-                for dest, st in copied:
-                    row = conn.execute("SELECT f.status, f.error FROM paths p JOIN files f ON f.id = p.file_id "
-                                       "WHERE p.path = ?", (str(dest.resolve()),)).fetchone()
-                    if row is None:
-                        st.status, st.reason = "error", "not indexed"
-                    elif row["status"] == "ok":
-                        st.status, st.reason = "indexed", ""
-                    else:
-                        st.status, st.reason = "error", row["error"] or row["status"]
+            def outcome() -> None:
+                with session.library.connect() as conn:
+                    for dest, st in copied:
+                        row = conn.execute("SELECT f.status, f.error FROM paths p JOIN files f ON f.id = p.file_id "
+                                           "WHERE p.path = ?", (str(dest.resolve()),)).fetchone()
+                        if row is None:
+                            st.status, st.reason = "error", "not indexed"
+                        elif row["status"] == "ok":
+                            st.status, st.reason = "indexed", ""
+                        else:
+                            st.status, st.reason = "error", row["error"] or row["status"]
+
+            def listed() -> None:
+                outcome()
+                if on_listed:
+                    on_listed(UploadResult(session.id, list(statuses)))
+
+            report = session.library.index([session.uploads], progress=progress, listed=listed)
+            outcome()
         finally:
             session.busy = False
             session.last_used = self.clock()

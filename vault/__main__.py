@@ -52,8 +52,9 @@ def _progress_bar(console: Console) -> Iterator[Callable[[int, int, str], None]]
     with Progress(*columns, console=console, transient=True) as bar:
         task = bar.add_task("Indexing", total=None, file="")
 
-        def progress(done: int, total: int, path: str) -> None:
-            bar.update(task, completed=done, total=total, file=Path(path).name if path else "")
+        def progress(done: int, total: int, path: str, phase: str = "read") -> None:
+            bar.update(task, description="Listing" if phase == "list" else "Reading", completed=done, total=total,
+                       file=Path(path).name if path else "")
 
         yield progress
 
@@ -91,6 +92,7 @@ def _print_report(console: Console, rep: IndexReport) -> None:
     for label, value in [
         ("seen", rep.seen), ("unchanged", rep.unchanged), ("added", rep.added), ("linked", rep.linked),
         ("updated", rep.updated), ("deleted paths", rep.deleted), ("deleted files", rep.files_deleted),
+        ("listed (name, native text)", rep.listed), ("read fully (OCR, meaning, pictures)", rep.completed),
         ("errors / skipped", len(rep.errors)), ("OCR'd images + PDF pages", rep.ocr_images),
         ("  of which no text", rep.ocr_empty),
         ("older files brought up to date", rep.backfilled),

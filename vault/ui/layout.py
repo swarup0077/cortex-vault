@@ -143,25 +143,42 @@ def handle_upload(ctx: UiContext, session: str | None, paths: object) -> Iterato
         yield gr.skip(), status_html(ctx, session), session
         return
     files = [Path(p) for p in paths[:1000] if isinstance(p, str)]
-    progress = {"done": 0, "total": 0}
+    progress = {"done": 0, "total": 0, "phase": "list"}
     outcome: dict = {}
 
-    def report(done: int, total: int, path: str) -> None:
-        progress.update(done=done, total=total)
+    def report(done: int, total: int, path: str, phase: str = "read") -> None:
+        progress.update(done=done, total=total, phase=phase)
+
+    def listed(result) -> None:  # phase 1 is done: the outcome can show while phase 2 reads the files
+        outcome["listed"] = result
 
     def work() -> None:
         try:
-            outcome["result"] = ctx.sessions.add_files(session, files, ctx.upload_dir, report)
+            outcome["result"] = ctx.sessions.add_files(session, files, ctx.upload_dir, report, listed)
         except Exception as e:  # shown as the outcome rather than a status stuck on "Reading"
             log.exception("upload failed")
             outcome["error"] = e
 
     worker = threading.Thread(target=work, name="upload", daemon=True)
     worker.start()
+    shown = False
     while worker.is_alive():
         worker.join(ctx.poll_s)
-        if worker.is_alive() and progress["total"]:
-            yield gr.skip(), status_html(ctx, session, busy=(progress["done"], progress["total"])), session
+        if not worker.is_alive():
+            break
+        main: object = gr.skip()
+        sid = session
+        if "listed" in outcome and not shown:  # the per-file outcome, as soon as the files are listed
+            shown = True
+            sid = outcome["listed"].session_id or session
+            main = views.upload_outcome(outcome["listed"].files, received=len(files),
+                                        scope="My uploads" if sid else "Both")
+        elif shown:
+            sid = outcome["listed"].session_id or session
+        if progress["total"] and progress["phase"] == "read":
+            yield main, status_html(ctx, sid, busy=(progress["done"], progress["total"])), sid
+        elif shown:
+            yield main, status_html(ctx, sid), sid
     if "error" in outcome:
         yield views.message("The upload couldn't be read. Please try again.", ok=False), status_html(ctx, session), \
             session
@@ -228,9 +245,10 @@ def folders_state(ctx: UiContext) -> tuple[str, dict]:
     return views.folders_stats(stats), gr.update(choices=stats.roots, value=None)
 
 
-def _progress_fn(progress: gr.Progress) -> Callable[[int, int, str], None]:
-    def report(done: int, total: int, path: str) -> None:
-        progress((done, total) if total else None, desc=f"Indexing {Path(path).name}" if path else "Finishing up…")
+def _progress_fn(progress: gr.Progress) -> Callable[..., None]:
+    def report(done: int, total: int, path: str, phase: str = "read") -> None:
+        verb = "Listing" if phase == "list" else "Reading"
+        progress((done, total) if total else None, desc=f"{verb} {Path(path).name}" if path else "Finishing up…")
     return report
 
 

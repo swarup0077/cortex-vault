@@ -2,6 +2,12 @@
 
 One `files` row per unique sha256; any number of `paths` point at it. Renames, moves and duplicates
 only touch `paths` and the file's one keyword-only `path` chunk: nothing is re-embedded.
+
+Two phases (SPEC §6.1, open item g). Phase 1 lists every new file quickly: its name, its native text (PDF text
+layer, Word, PowerPoint, plain text) and its thumbnail, so it is keyword-searchable within seconds. Phase 2 then
+reads each listed file fully: CLIP (which also decides an undecided image's kind), OCR of images and of scanned
+or picture-heavy PDF pages, and the text embeddings. Each phase writes a file in one transaction; a run that stops
+in phase 2 leaves files 'listed', and the next run finishes them.
 """
 
 from __future__ import annotations
@@ -35,7 +41,8 @@ from vault.ingest.records import Extracted, SkipFile
 
 log = logging.getLogger(__name__)
 
-ProgressFn = Callable[[int, int, str], None]
+ProgressFn = Callable[..., None]  # (done, total, path, phase="read"|"list")
+ListedFn = Callable[[], None]  # called once every new file is listed (phase 1), before phase 2 starts
 
 
 @dataclass
@@ -59,6 +66,8 @@ class IndexReport:
     backfilled: int = 0  # older files brought up to date: kind, date, thumbnail, CLIP vector (SPEC §19, item i)
     reclassified: int = 0  # images whose kind CLIP decided after they were indexed (stored vector, no OCR)
     reocr: int = 0  # images OCR'd again because their angle-classifier setting changed (SPEC §6.2)
+    listed: int = 0  # files listed by phase 1 this run (name, native text, thumbnail)
+    completed: int = 0  # files phase 2 finished this run (OCR, CLIP, embeddings)
     interrupted: bool = False
     started_at: str = ""
     finished_at: str = ""
@@ -74,10 +83,12 @@ def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
-def extract(path: Path, cfg: Config, screen_capture: bool = False, image: Image.Image | None = None) -> Extracted:
+def extract(path: Path, cfg: Config, screen_capture: bool = False, image: Image.Image | None = None,
+            *, native_only: bool = False) -> Extracted:
+    """Everything a file holds; with `native_only` (phase 1), a PDF's own text without its OCR."""
     ext = path.suffix.lower()
     if ext == ".pdf":
-        return extract_pdf(path, cfg)
+        return extract_pdf(path, cfg, ocr=not native_only)
     if ext in IMAGE_EXTS:
         return extract_image(path, cfg, screen_capture=screen_capture, image=image)
     if ext == ".docx":
@@ -97,6 +108,7 @@ class _Indexer:
         self.report = IndexReport(started_at=_now())
         self.run_id = 0
         self._prompts: tuple[np.ndarray, np.ndarray] | bool | None = None  # CLIP prompt vectors; False: unavailable
+        self._listed_seconds: dict[int, float] = {}  # phase-1 time per file, for files/sec
 
     @contextmanager
     def timed(self, stage: str) -> Iterator[None]:
@@ -139,44 +151,43 @@ class _Indexer:
                 self.report.updated += 1
                 self._drop_if_orphan(old)
 
-    def add(self, sha: str, group: list[FoundFile]) -> None:
-        """New content: extract, chunk and embed outside the transaction, then write it all in one."""
+    def _account_ocr(self, ex: Extracted, path: Path) -> None:
+        self.report.timings["extract"] = self.report.timings.get("extract", 0.0) - ex.ocr_seconds
+        self.report.timings["ocr"] = self.report.timings.get("ocr", 0.0) + ex.ocr_seconds
+        self.report.ocr_images += ex.ocr_images
+        self.report.ocr_empty += ex.ocr_empty
+        if ex.ocr_capped:
+            self.report.ocr_capped.append(str(path))
+
+    def _fail(self, path: Path, status: str, error: str) -> None:
+        log.warning("%s %s: %s", status, path, error)
+        self.report.errors.append({"path": str(path), "status": status, "error": error})
+
+    def list_file(self, sha: str, group: list[FoundFile]) -> None:
+        """Phase 1 for new content: kind, date, native text, thumbnail and paths, in one transaction. The text is
+        keyword-searchable at once; its vectors, OCR and CLIP come in phase 2."""
         t0 = time.perf_counter()
         primary = max(group, key=lambda f: f.mtime)
         is_image = primary.path.suffix.lower() in IMAGE_EXTS
         meta = read_image_meta(primary.path) if is_image else None  # read once: kind, date and GPS
         kind, kind_reason = classify_image(primary.path.name, meta) if is_image else classify(primary.path)
-        screen = is_image and known_screen_capture(kind_reason)  # only these skip the angle classifier
         status, error, ex, chunks, img = "ok", None, None, [], None
         try:
             with self.timed("extract"):
-                if is_image:  # decoded once, for OCR, the thumbnail and CLIP
+                if is_image:  # decoded for the thumbnail now; OCR and CLIP decode it again in phase 2
                     img = load_upright(primary.path)
-                ex = extract(primary.path, self.cfg, screen, img)
+                    ex = Extracted(width=img.width, height=img.height)
+                else:
+                    ex = extract(primary.path, self.cfg, native_only=True)
                 chunks = chunk_extracted(ex, self.cfg)
-            self.report.timings["extract"] -= ex.ocr_seconds  # report OCR as its own stage
-            self.report.timings["ocr"] = self.report.timings.get("ocr", 0.0) + ex.ocr_seconds
-            self.report.ocr_images += ex.ocr_images
-            self.report.ocr_empty += ex.ocr_empty
-            if ex.ocr_capped:
-                self.report.ocr_capped.append(str(primary.path))
         except SkipFile as e:
             status, error = "skipped", str(e)
         except Exception as e:  # corrupt or undecodable: record it and keep going
             status, error = "error", f"{type(e).__name__}: {e}"
         if status != "ok":
-            log.warning("%s %s: %s", status, primary.path, error)
-            self.report.errors.append({"path": str(primary.path), "status": status, "error": error or ""})
+            self._fail(primary.path, status, error or "")
 
         thumb_path = self.thumbnail(sha, primary.path, chunks[0].text if chunks else "", img) if status == "ok" else None
-        clip_vecs = self.clip_embed([img]) if status == "ok" and img is not None else None
-        if clip_vecs is not None and not is_final(kind_reason):  # no name, EXIF or PNG rule: CLIP decides
-            kind, kind_reason = self.zero_shot(clip_vecs[0], (kind, kind_reason))
-        ocr_cls = int(ocr_uses_cls(self.cfg, screen)) if is_image and status == "ok" else None
-        path_text = path_chunk_text(f.path for f in group)
-        with self.timed("embed"):  # the path chunk is keyword-only: no vector (SPEC §5)
-            vecs = self.embedder.embed_documents([c.text for c in chunks])
-
         date, date_source = effective_date(primary.path.name, meta.taken if meta else None,
                                            ex.doc_date if ex else None, primary.mtime)
         lat, lon = meta.gps if meta and meta.gps else (None, None)
@@ -184,19 +195,16 @@ class _Indexer:
         with self.timed("write"), db.transaction(self.conn):
             file_id = self.conn.execute(
                 "INSERT INTO files(sha256, kind, kind_reason, effective_date, date_source, width, height, pages,"
-                " gps_lat, gps_lon, thumb_path, ocr_cls, status, error, indexed_at)"
+                " gps_lat, gps_lon, thumb_path, stage, status, error, indexed_at)"
                 " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (sha, kind, kind_reason, date, date_source, ex.width if ex else None, ex.height if ex else None,
-                 ex.pages if ex else None, lat, lon, thumb_path, ocr_cls, status, error, _now()),
+                 ex.pages if ex else None, lat, lon, thumb_path, "listed" if status == "ok" else "ready", status,
+                 error, _now()),
             ).lastrowid
-            if status == "ok":
-                db.insert_chunk(self.conn, file_id, None, 0, "path", path_text, None)
-                for i, (c, v) in enumerate(zip(chunks, vecs), start=1):
-                    chunk_id = db.insert_chunk(self.conn, file_id, c.page, i, c.source, c.text, v)
-                    if c.lines:
-                        db.insert_ocr_lines(self.conn, chunk_id, c.lines)
-                if clip_vecs is not None:
-                    db.set_image_vector(self.conn, file_id, clip_vecs[0])
+            if status == "ok":  # the path chunk is keyword-only: never a vector (SPEC §5)
+                db.insert_chunk(self.conn, file_id, None, 0, "path", path_chunk_text(f.path for f in group), None)
+                for i, c in enumerate(chunks, start=1):
+                    db.insert_chunk(self.conn, file_id, c.page, i, c.source, c.text, None)
             olds = set()
             for n, f in enumerate(group):
                 old = self._upsert_path(f, file_id)
@@ -209,10 +217,84 @@ class _Indexer:
                     self.report.linked += 1
             for old in olds:
                 self._drop_if_orphan(old)
+        self.report.listed += 1
+        self._listed_seconds[file_id] = time.perf_counter() - t0
+        if status != "ok":
+            self._count_kind(kind, file_id)
 
+    def _count_kind(self, kind: str, file_id: int, seconds: float = 0.0) -> None:
         stats = self.report.per_kind.setdefault(kind, {"files": 0, "seconds": 0.0})
         stats["files"] += 1
-        stats["seconds"] += time.perf_counter() - t0
+        stats["seconds"] += self._listed_seconds.pop(file_id, 0.0) + seconds
+
+    def complete_file(self, file_id: int) -> None:
+        """Phase 2 for a listed file: CLIP and its kind decision, OCR, and vectors for every content chunk, in one
+        transaction. A file that changed or vanished since it was listed is left for the next run."""
+        t0 = time.perf_counter()
+        row = self.conn.execute("SELECT * FROM files WHERE id = ?", (file_id,)).fetchone()
+        where = self.conn.execute("SELECT path, size_bytes, mtime FROM paths WHERE file_id = ? ORDER BY mtime DESC "
+                                  "LIMIT 1", (file_id,)).fetchone()
+        if row is None or where is None:
+            return
+        path = Path(where["path"])
+        try:
+            st = path.stat()
+        except OSError:  # e.g. under a root that's unplugged right now
+            return
+        if (st.st_size, st.st_mtime) != (where["size_bytes"], where["mtime"]):
+            return  # changed since phase 1: the next run hashes it again
+        kind, kind_reason = row["kind"], row["kind_reason"]
+        is_image = kind in ("photo", "screenshot")
+        status, error, new_chunks, clip_vecs, ocr_cls = "ok", None, [], None, row["ocr_cls"]
+        try:
+            with self.timed("extract"):
+                if is_image:
+                    img = load_upright(path)
+                    clip_vecs = self.clip_embed([img])
+                    if clip_vecs is not None and not is_final(kind_reason):  # no name, EXIF or PNG rule decided
+                        kind, kind_reason = self.zero_shot(clip_vecs[0], (kind, kind_reason))
+                    screen = known_screen_capture(kind_reason)  # only these skip the angle classifier
+                    ex = extract(path, self.cfg, screen, img)
+                    ocr_cls = int(ocr_uses_cls(self.cfg, screen))
+                elif kind == "pdf":  # OCR of scanned pages and picture regions; the native text is in already
+                    ex = extract_pdf(path, self.cfg, native=False)
+                else:
+                    ex = Extracted()
+                new_chunks = chunk_extracted(ex, self.cfg)
+            self._account_ocr(ex, path)
+        except SkipFile as e:
+            status, error = "skipped", str(e)
+        except Exception as e:
+            status, error = "error", f"{type(e).__name__}: {e}"
+        if status != "ok" and is_image:  # an image's text is all OCR: without it there's nothing to search
+            self._fail(path, status, error or "")
+        elif status != "ok":  # a PDF keeps its native text when its OCR fails
+            log.warning("OCR of %s failed, native text kept: %s", path, error)
+            status, error = "ok", None
+
+        pending = self.conn.execute(
+            "SELECT c.id, c.text FROM chunks c LEFT JOIN text_vectors v ON v.chunk_id = c.id "
+            "WHERE c.file_id = ? AND c.source != 'path' AND v.chunk_id IS NULL ORDER BY c.ord", (file_id,)).fetchall()
+        texts = [r["text"] for r in pending] + [c.text for c in new_chunks]
+        with self.timed("embed"):
+            vecs = self.embedder.embed_documents(texts) if texts and status == "ok" else []
+        with self.timed("write"), db.transaction(self.conn):
+            if status == "ok":
+                for r, v in zip(pending, vecs[:len(pending)]):
+                    db.set_text_vector(self.conn, r["id"], v)
+                start = self.conn.execute("SELECT coalesce(max(ord), 0) FROM chunks WHERE file_id = ?",
+                                          (file_id,)).fetchone()[0]
+                for i, (c, v) in enumerate(zip(new_chunks, vecs[len(pending):]), start=start + 1):
+                    chunk_id = db.insert_chunk(self.conn, file_id, c.page, i, c.source, c.text, v)
+                    if c.lines:
+                        db.insert_ocr_lines(self.conn, chunk_id, c.lines)
+                if clip_vecs is not None:
+                    db.set_image_vector(self.conn, file_id, clip_vecs[0])
+            self.conn.execute("UPDATE files SET kind = ?, kind_reason = ?, ocr_cls = ?, stage = 'ready', status = ?, "
+                              "error = ?, indexed_at = ? WHERE id = ?",
+                              (kind, kind_reason, ocr_cls, status, error, _now(), file_id))
+        self.report.completed += 1
+        self._count_kind(kind, file_id, time.perf_counter() - t0)
 
     def clip_embed(self, images: list[Image.Image]) -> np.ndarray | None:
         """CLIP vectors for upright images; None if CLIP can't run (e.g. no model offline): the files stay
@@ -432,7 +514,8 @@ class _Indexer:
             except sqlite3.OperationalError as e:  # e.g. another connection is reading; deletes are zeroed anyway
                 log.warning("could not compact the index: %s", e)
 
-    def run(self, roots: Iterable[Path | str], stop: threading.Event | None, progress: ProgressFn | None) -> IndexReport:
+    def run(self, roots: Iterable[Path | str], stop: threading.Event | None, progress: ProgressFn | None,
+            listed: ListedFn | None = None) -> IndexReport:
         assert self.embedder is not None, "indexing needs a text embedder"
         rep = self.report
         db.check_text_model(self.conn, self.embedder.name, claim=True)
@@ -484,20 +567,36 @@ class _Indexer:
             else:
                 pending.setdefault(sha, []).append(f)
 
+        # Phase 1: list every new file (newest first), so names and native text are searchable within seconds.
         queue = sorted(pending.items(), key=lambda kv: max(f.mtime for f in kv[1]), reverse=True)
         for i, (sha, group) in enumerate(queue):
             if stop is not None and stop.is_set():
                 rep.interrupted = True
                 break
             if progress:
-                progress(i, len(queue), str(group[0].path))
-            self.add(sha, group)
-        if progress and not rep.interrupted:
-            progress(len(queue), len(queue), "")
+                progress(i, len(queue), str(group[0].path), phase="list")
+            self.list_file(sha, group)
 
         if not rep.interrupted:  # unprocessed changes would look like deletions
             self.sweep(live_roots)
         self.refresh_path_chunks()
+        if listed is not None:
+            listed()
+
+        # Phase 2: read each listed file fully (newest first), including any an interrupted run left listed.
+        todo = [r[0] for r in self.conn.execute(
+            "SELECT f.id FROM files f JOIN paths p ON p.file_id = f.id WHERE f.stage = 'listed' AND f.status = 'ok' "
+            "GROUP BY f.id ORDER BY max(p.mtime) DESC")]
+        for i, file_id in enumerate(todo):
+            if stop is not None and stop.is_set():
+                rep.interrupted = True
+                break
+            if progress:
+                where = self.conn.execute("SELECT path FROM paths WHERE file_id = ? LIMIT 1", (file_id,)).fetchone()
+                progress(i, len(todo), where[0] if where else "", phase="read")
+            self.complete_file(file_id)
+        if progress and not rep.interrupted:
+            progress(len(todo), len(todo), "", phase="read")
         if not rep.interrupted:
             self.backfill(stop)
         if not rep.interrupted:
@@ -532,13 +631,16 @@ def index_paths(
     stop: threading.Event | None = None,
     progress: ProgressFn | None = None,
     compact: bool = False,
+    listed: ListedFn | None = None,
 ) -> IndexReport:
-    """Incrementally index `roots`. Set `stop` to finish the current file and return early.
+    """Incrementally index `roots`, in two phases (see the module docstring). Set `stop` to finish the current
+    file and return early; `listed` is called between the phases. `progress(done, total, path, phase=...)` reports
+    both phases.
 
     A run that deleted files ends by compacting the DB (FTS merge + VACUUM); `compact=True` always does.
     """
     cfg = cfg or Config()
-    return _Indexer(conn, cfg, embedder or models.text_embedder(cfg), compact).run(roots, stop, progress)
+    return _Indexer(conn, cfg, embedder or models.text_embedder(cfg), compact).run(roots, stop, progress, listed)
 
 
 def reindex(

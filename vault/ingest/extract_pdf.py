@@ -73,7 +73,10 @@ def ocr_region(page: pymupdf.Page, rect: pymupdf.Rect, engine: models.OcrEngine,
     return out
 
 
-def extract_pdf(path: Path, cfg: Config | None = None, engine: models.OcrEngine | None = None) -> Extracted:
+def extract_pdf(path: Path, cfg: Config | None = None, engine: models.OcrEngine | None = None, *,
+                native: bool = True, ocr: bool = True) -> Extracted:
+    """Native text per page and OCR of scanned pages and picture regions. Two-phase indexing (SPEC §6.1) asks for
+    the native text first (`ocr=False`) and the OCR later (`native=False`)."""
     cfg = cfg or Config()
     with pymupdf.open(path) as doc:
         if doc.needs_pass:
@@ -81,8 +84,10 @@ def extract_pdf(path: Path, cfg: Config | None = None, engine: models.OcrEngine 
         ex = Extracted(pages=doc.page_count, doc_date=parse_pdf_date((doc.metadata or {}).get("creationDate")))
         for page in doc:
             text = page.get_text("text")
-            if text.strip():
+            if native and text.strip():
                 ex.segments.append(Segment(text=text, page=page.number + 1, source="pdf_text"))
+            if not ocr:
+                continue
             scanned = len(text.strip()) < cfg.pdf_scanned_chars
             regions = [unrotated_rect(page)] if scanned else image_regions(page, cfg)
             if not regions:
