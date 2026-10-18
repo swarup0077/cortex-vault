@@ -22,3 +22,11 @@ def test_window_centres_on_matches() -> None:
 def test_no_match_returns_start() -> None:
     s = make_snippet("alpha beta gamma " * 20, "zeta", width=50)
     assert s.startswith("alpha beta") and s.endswith("…") and "<mark>" not in s
+
+
+def test_highlight_marks_the_whole_text_and_escapes_it() -> None:
+    from vault.search.snippet import highlight
+
+    text = "Gradient <descent> steps " + "x " * 300 + "against the gradient"
+    out = highlight(text, "gradient descent")
+    assert out.count("<mark>") == 3 and "&lt;<mark>descent</mark>&gt;" in out and out.endswith("<mark>gradient</mark>")

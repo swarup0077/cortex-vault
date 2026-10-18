@@ -49,6 +49,11 @@ def make_snippet(text: str, query: str, width: int = 200) -> str:
         space = text.rfind(" ", end - 30, end)
         end = space if space > start else end
 
+    return ("…" if start > 0 else "") + _marked(text, matches, start, end) + ("…" if end < len(text) else "")
+
+
+def _marked(text: str, matches: list[re.Match[str]], start: int, end: int) -> str:
+    """`text[start:end]` HTML-escaped, with the matches inside it wrapped in <mark>."""
     out, pos = [], start
     for m in matches:
         if m.start() < start or m.end() > end:
@@ -57,4 +62,10 @@ def make_snippet(text: str, query: str, width: int = 200) -> str:
         out.append(f"<mark>{html.escape(m.group())}</mark>")
         pos = m.end()
     out.append(html.escape(text[pos:end]))
-    return ("…" if start > 0 else "") + "".join(out) + ("…" if end < len(text) else "")
+    return "".join(out)
+
+
+def highlight(text: str, query: str) -> str:
+    """The whole text, HTML-escaped, with the query terms in <mark> (the detail panel's full chunk)."""
+    pat = term_pattern(query)
+    return _marked(text, list(pat.finditer(text)) if pat else [], 0, len(text))
