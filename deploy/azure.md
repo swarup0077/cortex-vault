@@ -89,15 +89,19 @@ python3 -m venv .venv
 
 ## 6. systemd service
 
-The unit ([vault-probe.service](vault-probe.service)) runs `probe/app.py` as `azureuser`, binds `127.0.0.1:7860`, disables Gradio analytics, and keeps the model cache in `data/models/` so it survives reboots.
+The unit ([vault.service](vault.service)) runs `app.py` as `azureuser` with `VAULT_MODE=demo`, binds `127.0.0.1:7860`, disables Gradio analytics, and keeps the model cache in `data/models/` so it survives reboots. It serves the committed `demo_index/` read-only; the server never indexes `corpus/` itself. Uploads go to per-session copies under `/tmp/vault_sessions/`, wiped after 30 idle minutes and on every start.
 
 ```bash
-sudo cp deploy/vault-probe.service /etc/systemd/system/
+python3 -c "import sqlite3; print(sqlite3.sqlite_version)"    # 3.44+ for FTS5 secure-delete (open item h)
+sudo cp deploy/vault.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now vault-probe
-journalctl -u vault-probe -f      # first start downloads bge-small; Ctrl+C when it's up
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:7860/    # 200
+sudo systemctl enable --now vault
+journalctl -u vault -f      # the first start downloads bge-small and CLIP into data/models/; "models warm" when ready
+curl -s -o /dev/null -w "%{http_code}
+" http://127.0.0.1:7860/    # 200
 ```
+
+Until 18 Oct (M0–M3) the VM ran the deploy probe instead (`probe/app.py`, unit `vault-probe`); both were removed after the switch (`sudo systemctl disable --now vault-probe` and deleting its unit file).
 
 ## 7. Caddy for HTTPS on 443
 
@@ -126,11 +130,12 @@ journalctl -u caddy --since "5 min ago" | grep -i "certificate obtained"
 From the **laptop**:
 
 ```powershell
-curl.exe -sI https://swarup-vault.indiasouthcentral.cloudapp.azure.com/
-.venv\Scripts\python -c "from gradio_client import Client; print(Client('https://swarup-vault.indiasouthcentral.cloudapp.azure.com/', verbose=False).predict('hello', api_name='/embed'))"
+curl.exe -s -o NUL -w "%{http_code}\n" "https://swarup-vault.indiasouthcentral.cloudapp.azure.com/?q=error%200x80070005"
+curl.exe -s -o NUL -w "%{http_code} %{content_type}\n" https://swarup-vault.indiasouthcentral.cloudapp.azure.com/thumb/1
+.venv\Scripts\python -c "from gradio_client import Client; c = Client('https://swarup-vault.indiasouthcentral.cloudapp.azure.com/', verbose=False); print('0x80070005' in c.predict('error 0x80070005', [], 'Sample files', False, api_name='/search'))"
 ```
 
-Expect `dim: 384` and `l2_norm: 1.0`. Then open the URL on a phone.
+Expect `200`, `200 image/webp` and `True`. Then open the URL on a phone.
 
 ## Updating after a change
 
@@ -147,33 +152,6 @@ If `deploy/vault.service` or `deploy/Caddyfile` changed, copy it again on the VM
 sudo cp deploy/vault.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart vault
 sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
 ```
-
-## 6b. M4: switch from the probe to the app
-
-The app ([vault.service](vault.service)) runs `app.py` with `VAULT_MODE=demo` on `127.0.0.1:7860`, the same port the
-probe used, so Caddy needs no change. It serves the committed `demo_index/` read-only; the server never indexes
-`corpus/` itself. On the VM:
-
-```bash
-cd ~/personal-search-vault && git pull --ff-only && .venv/bin/pip install -q -r requirements.txt
-python3 -c "import sqlite3; print(sqlite3.sqlite_version)"    # 3.44+ for FTS5 secure-delete (open item h)
-sudo systemctl disable --now vault-probe
-sudo rm /etc/systemd/system/vault-probe.service
-sudo cp deploy/vault.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now vault
-journalctl -u vault -f      # the first start downloads CLIP into data/models/; "models warm" when ready
-```
-
-From the **laptop**:
-
-```powershell
-curl.exe -s -o NUL -w "%{http_code}\n" "https://swarup-vault.indiasouthcentral.cloudapp.azure.com/?q=error%200x80070005"
-curl.exe -s -o NUL -w "%{http_code} %{content_type}\n" https://swarup-vault.indiasouthcentral.cloudapp.azure.com/thumb/1
-.venv\Scripts\python -c "from gradio_client import Client; c = Client('https://swarup-vault.indiasouthcentral.cloudapp.azure.com/', verbose=False); print('0x80070005' in c.predict('error 0x80070005', [], 'Sample files', False, api_name='/search'))"
-```
-
-Expect `200`, `200 image/webp` and `True`. Then open the URL on a phone.
 
 ## 9. M4: resize to 4 vCPUs (SPEC §19, open item h)
 
