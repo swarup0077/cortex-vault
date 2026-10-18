@@ -6,6 +6,7 @@ goes to `bench/generated/`, which is gitignored; delete it when you're done.
 
 | Script | What it measures |
 |---|---|
+| `bench_query.py` | Search latency per stage (p50 / p95) from the engine's stage timers, on the demo index or another |
 | `bench_embed.py` | Text-embedding chunks/sec for one config (128 ~700-character chunks of SPEC.md, median of 3) |
 | `bench_ocr.py` | OCR time and word recall for one config on 8 generated 1920×1080 UI screenshots |
 | `compare_ocr.py` | `bench_ocr.py` for several configs, interleaved, one process per run, with a summary table |
@@ -55,6 +56,16 @@ python bench/bench_embed.py threads=4 batch=8    # threads (0 = ONNX Runtime's d
 
 Each prints one JSON line with the median chunks/sec of 3 passes after a warm-up batch. Run each config in
 its own process, interleaved with the others.
+
+## Search latency (§7.8, §8)
+
+```
+python bench/bench_query.py                          # the committed demo index, 5 rounds of 16 queries
+python bench/bench_query.py data_dir=data rounds=10  # your own index
+```
+
+Prints the total and each stage's p50 / p95 (ms), after a warm-up pass. The UI's search-as-you-type delay
+(300 ms) goes up if a search takes more than about 0.5 s on the deploy host.
 
 ## Ingest speed (§19 "Measured ingest speed")
 
