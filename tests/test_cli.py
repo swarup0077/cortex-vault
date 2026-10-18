@@ -64,3 +64,22 @@ def test_model_mismatch_exit_code(data_dir, fake_embedder, tmp_path, make_search
 
 def test_snippet_markup_escapes_rich() -> None:
     assert _snippet_markup("a [b] <mark>c&amp;d</mark>") == "a \\[b] [bold yellow]c&d[/]"
+
+
+def test_build_demo_and_scrub_exif_commands(data_dir, fake_embedder, tmp_path, capsys) -> None:
+    from PIL import Image
+
+    from conftest import camera_exif, save_image
+
+    corpus = tmp_path / "corpus"
+    save_image(Image.new("RGB", (64, 48), "blue"), corpus / "IMG_1.jpg",
+               exif=camera_exif(gps=((15, 29, 30), "N", (73, 49, 40), "E")))
+    out = tmp_path / "demo_index"
+    assert main(["build-demo", "--corpus", str(corpus), "--out", str(out)]) == 1
+    assert "scrub-exif" in capsys.readouterr().out and not out.exists()
+    assert main(["scrub-exif", str(corpus)]) == 0
+    assert "1 image(s) had GPS EXIF" in capsys.readouterr().out
+    # the default base is the repo root, which doesn't contain tmp_path: build in-process with base=tmp_path
+    from vault.config import Config
+    from vault.demo import build_demo
+    assert build_demo(corpus, out, Config(data_dir=data_dir), base=tmp_path).added == 1

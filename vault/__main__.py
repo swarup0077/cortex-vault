@@ -1,4 +1,4 @@
-"""CLI: python -m vault index | reindex | search | stats (SPEC §13)."""
+"""CLI: python -m vault index | reindex | search | stats | build-demo | scrub-exif (SPEC §13)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import signal
 import sqlite3
 import sys
 import threading
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -22,6 +22,7 @@ from rich.table import Table
 
 from vault import db
 from vault.config import Config
+from vault.demo import CORPUS_DIR, DEMO_DIR, build_demo, gps_files, strip_gps
 from vault.ingest.pipeline import IndexReport, index_paths, reindex
 from vault.search.engine import search
 
@@ -44,18 +45,45 @@ def graceful_stop(console: Console) -> Iterator[threading.Event]:
         signal.signal(signal.SIGINT, previous)
 
 
-def _run_index(console: Console, conn: sqlite3.Connection, cfg: Config, folders: Sequence[Path] | None) -> IndexReport:
+@contextmanager
+def _progress_bar(console: Console) -> Iterator[Callable[[int, int, str], None]]:
     columns = (TextColumn("{task.description}"), BarColumn(), MofNCompleteColumn(), TimeElapsedColumn(),
                TextColumn("[dim]{task.fields[file]}"))
-    with graceful_stop(console) as stop, Progress(*columns, console=console, transient=True) as bar:
+    with Progress(*columns, console=console, transient=True) as bar:
         task = bar.add_task("Indexing", total=None, file="")
 
         def progress(done: int, total: int, path: str) -> None:
             bar.update(task, completed=done, total=total, file=Path(path).name if path else "")
 
+        yield progress
+
+
+def _run_index(console: Console, conn: sqlite3.Connection, cfg: Config, folders: Sequence[Path] | None) -> IndexReport:
+    with graceful_stop(console) as stop, _progress_bar(console) as progress:
         if folders is None:
             return reindex(conn, cfg, stop=stop, progress=progress)
         return index_paths(conn, folders, cfg, stop=stop, progress=progress)
+
+
+def cmd_build_demo(console: Console, cfg: Config, args: argparse.Namespace) -> int:
+    try:
+        with _progress_bar(console) as progress:
+            rep = build_demo(args.corpus, args.out, cfg, progress=progress)
+    except ValueError as e:
+        console.print(f"[red]{escape(str(e))}")
+        return 1
+    _print_report(console, rep)
+    console.print(f"Demo index written to {escape(str(args.out))}")
+    return 0
+
+
+def cmd_scrub_exif(console: Console, args: argparse.Namespace) -> int:
+    found = gps_files(args.folder)
+    for path in found:
+        strip_gps(path)
+        console.print(f"GPS removed: {escape(str(path))}")
+    console.print(f"{len(found)} image(s) had GPS EXIF")
+    return 0
 
 
 def _print_report(console: Console, rep: IndexReport) -> None:
@@ -168,6 +196,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--debug", action="store_true", help="show ranks, scores and stage timings")
     p.add_argument("-n", "--limit", type=int, default=10)
     sub.add_parser("stats", help="counts, models, roots and errors")
+    p = sub.add_parser("build-demo", help="build demo_index/ from corpus/ (repo-relative paths, no GPS)")
+    p.add_argument("--corpus", type=Path, default=CORPUS_DIR)
+    p.add_argument("--out", type=Path, default=DEMO_DIR)
+    p = sub.add_parser("scrub-exif", help="remove GPS EXIF from the images in a folder")
+    p.add_argument("folder", type=Path)
     return parser
 
 
@@ -181,6 +214,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         force=True,
     )
     cfg = Config()
+    if args.cmd == "build-demo":
+        return cmd_build_demo(console, cfg, args)
+    if args.cmd == "scrub-exif":
+        return cmd_scrub_exif(console, args)
     conn = db.connect(cfg.db_path)
     try:
         if args.cmd in ("index", "reindex"):
