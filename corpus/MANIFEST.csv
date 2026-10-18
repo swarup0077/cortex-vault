@@ -1,0 +1,53 @@
+path,kind,source_url_or_own,licence
+corpus/decks/Linear algebra review.pptx,slides,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/decks/ML lecture v1.pptx,slides,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/decks/ML lecture v2.pptx,slides,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/notes/git cheatsheet.md,doc,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/notes/meeting notes 2026-10-14.docx,doc,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/notes/reading list.md,doc,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/notes/sourdough recipe.txt,doc,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/notes/travel plan goa.docx,doc,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/papers/1412.6980.pdf,pdf,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/papers/1706.03762.pdf,pdf,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/papers/2006.11239.pdf,pdf,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/papers/matrix-decompositions.pdf,pdf,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/photos/IMG_20260921_183012.jpg,photo,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/photos/IMG_20260922_071544.jpg,photo,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/photos/IMG_20260923_120301.jpg,photo,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/photos/IMG_20260924_221145.jpg,photo,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/photos/IMG_20260925_160010.jpg,photo,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/photos/IMG_20260926_090909.jpg,photo,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/photos/IMG_20260927_175500.jpg,photo,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/photos/IMG_20260928_131313.jpg,photo,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/photos/IMG_20260929_101010.jpg,photo,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/photos/IMG_20260930_141414.jpg,photo,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/photos/notices/IMG_20261002_084500.jpg,photo,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/photos/notices/IMG_20261003_103000.jpg,photo,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/photos/notices/IMG_20261004_150000.jpg,photo,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/photos/notices/IMG_20261005_091500.jpg,photo,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/photos/notices/IMG_20261018_143500.jpg,photo,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/receipts/electricity-bill-october.pdf,pdf,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/receipts/ticket-2026-10-24.pdf,pdf,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/scans/scan_0001.pdf,pdf,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/scans/scan_0002.pdf,pdf,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/Screenshot (3).png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/Screenshot (4).png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/Screenshot 2026-10-12 101530.png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/Screenshot 2026-10-13 091204.png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/Screenshot 2026-10-13 151022.png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/Screenshot 2026-10-14 112233.png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/Screenshot 2026-10-14 180501.png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/Screenshot 2026-10-15 083015.png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/Screenshot 2026-10-15 120000.png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/Screenshot 2026-10-16 094512.png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/Screenshot 2026-10-16 201010.png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/Screenshot 2026-10-17 110203.png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/Screenshot_20261018-130512_Pay.png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/phone/Screenshot_20261011-221530_Browser.png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/phone/Screenshot_20261012-080102_Messages.png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/phone/Screenshot_20261012-193344_Notes.png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/phone/Screenshot_20261013-120000_Reader.png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/screenshots/phone/Screenshot_20261014-090000_Mail.png,screenshot,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/slides-pdf/lecture-slides-cnn.pdf,pdf,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/slides-pdf/poster-hackathon.pdf,pdf,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/slides-pdf/slides-export-rl.pdf,pdf,generated (corpus/make_standin.py),generated for this project; no third-party content
