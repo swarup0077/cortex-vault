@@ -279,10 +279,10 @@ def build_blocks(ctx: UiContext) -> gr.Blocks:
             else:
                 with gr.Tab("Index", id="index"):
                     stats = gr.HTML(padding=False)
-                    with gr.Row(equal_height=True):
+                    with gr.Row(elem_classes="v-formrow"):
                         folder = gr.Textbox(label="Add a folder", placeholder=str(Path.home() / "Pictures"), scale=4)
                         add_btn = gr.Button("Add and index", scale=1)
-                    with gr.Row(equal_height=True):
+                    with gr.Row(elem_classes="v-formrow"):
                         roots_dd = gr.Dropdown([], label="Indexed folders", scale=4)
                         remove_btn = gr.Button("Remove folder", variant="stop", scale=1)
                     index_btn = gr.Button("Index now", variant="primary")

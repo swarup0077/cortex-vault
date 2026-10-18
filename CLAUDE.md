@@ -29,7 +29,9 @@ python -m vault reindex                          # full rebuild (model change)
 python -m vault search "query" [--no-rerank] [--debug]
 python -m vault stats
 python -m vault eval                             # writes eval/results.md + .json
-python -m vault build-demo                       # builds demo_index/ from corpus/
+python -m vault build-demo                       # builds demo_index/ from corpus/ (repo-relative paths, refuses GPS)
+python -m vault scrub-exif <folder>              # removes GPS EXIF from the images in a folder
+python corpus/make_standin.py                    # regenerates the generated stand-in slice of corpus/
 python app.py                                    # Gradio UI (VAULT_MODE=local|demo)
 pytest -q                                        # everything
 pytest -q -m "not slow"                          # skip tests that load real models
