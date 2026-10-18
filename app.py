@@ -7,21 +7,27 @@ read-only demo index plus per-session uploads. Both bind 127.0.0.1; on the serve
 
 from __future__ import annotations
 
-import logging
 import os
-import shutil
-import threading
-from pathlib import Path
 
-import uvicorn
-from gradio.utils import get_upload_folder
+# No telemetry in either mode (SPEC §11, §18). Gradio reads this variable for its analytics and version check,
+# whatever Blocks(analytics_enabled=...) says, so it's set before Gradio is imported.
+os.environ.setdefault("GRADIO_ANALYTICS_ENABLED", "False")
+os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 
-from vault import models
-from vault.config import REPO_ROOT, Config
-from vault.library import Library
-from vault.session import DEFAULT_ROOT, SessionManager
-from vault.ui.layout import DEMO_EXAMPLES, LOCAL_EXAMPLES, UiContext, build_blocks
-from vault.ui.server import make_app
+import logging  # noqa: E402
+import shutil  # noqa: E402
+import threading  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+import uvicorn  # noqa: E402
+from gradio.utils import get_upload_folder  # noqa: E402
+
+from vault import models  # noqa: E402
+from vault.config import REPO_ROOT, Config  # noqa: E402
+from vault.library import Library  # noqa: E402
+from vault.session import DEFAULT_ROOT, SessionManager  # noqa: E402
+from vault.ui.layout import DEMO_EXAMPLES, LOCAL_EXAMPLES, UiContext, build_blocks  # noqa: E402
+from vault.ui.server import make_app  # noqa: E402
 
 log = logging.getLogger("vault.app")
 
