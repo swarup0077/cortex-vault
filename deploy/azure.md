@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| VM | Ubuntu 24.04, `Standard_B2ls_v2` (2 vCPU, 4 GiB RAM), India South Central. At M4 it is resized in place to `Standard_D4as_v4` (4 vCPU, 16 GB; same IP and URL; §9); everything is deleted after 30 Oct 2026 |
+| VM | Ubuntu 24.04, `Standard_D4as_v4` (4 vCPU, 16 GB; resized in place from `Standard_B2ls_v2` on 18 Oct, §9), India South Central; everything is deleted after 30 Oct 2026 |
 | User | `azureuser`, key `C:\Users\swaru\.ssh\vault-key.pem` |
 | Address | `172.198.49.18` · `swarup-vault.indiasouthcentral.cloudapp.azure.com` |
 | Open ports | 22, 80, 443 (auto-shutdown off) |
