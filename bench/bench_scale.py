@@ -3,7 +3,8 @@
     python bench/bench_scale.py make <folder> [--files 1000]      # bench_upload's generator and mix, × files/100
     python bench/bench_scale.py index <folder> --data <dir> [--with-corpus] [--out report.json]
 
-`make` writes the files (deterministic: the same seeds on every machine). `index` indexes them, with `corpus/` too
+`make` writes the files from fixed seeds; the fonts and image encoders differ by OS, so two machines' files differ
+slightly (1,000 files: 1,145.9 MB on Windows, 1,146.8 MB on Linux). `index` indexes them, with `corpus/` too
 when asked, into `<dir>` (a fresh data dir), then searches the committed queries (the owner's public ones and the
 generated-file set; the private ones never leave the owner's laptop) and prints one JSON report: indexing time per
 stage and in total, files/sec per kind, the database and thumbnails on disk, the process's peak RAM, and search
