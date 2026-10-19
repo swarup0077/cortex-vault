@@ -829,6 +829,13 @@ Status is `open`, `done` (with the commit), or `moved to Mx` (with the reason). 
 
 ## 20. Changelog
 
+**v2.7 (19 Oct 2026, M6 item 3)**
+- `vault eval` (§9): the owner's 44 queries (13 public, 31 private by id), a stratified 22 / 22 split, the generated set as a guardrail, ablation rows 1–7, the divider measured; the held-out half run for the baseline and once for the final report (`eval/results.md`).
+- Fixes x, y, n, f (§19), each measured on the tuning half and the generated set.
+- Tuning (`bench/tune.py`): no provisional value changed; the weaker-matches divider gets a bar, `divider_min_share` 0.31 (§7.4, provisional).
+- Item w measured on the real files (`eval/results_kind.md`); open item z added.
+- The demo index holds 71 files: the 52 generated and the owner's 19 public real files.
+
 **v2.6 (19 Oct 2026, M6 items 1–2)**
 - The UI is re-skinned to "The Brass Index" (`design/v0-brass/`, §8): The Archive sidebar with real counts per type, one numbered list with the weaker matches after a divider, a hero with the vault dial that collapses while searching, recent searches kept in the browser only, theme from the OS with a remembered toggle, and system fonts. Behaviour as in M5; nothing logs a query (§19).
 - Demo limits for a small audience (§8): 5 sessions; per session 200 files, 500 MB, 50 MB per file; uploads deleted 60 minutes after the last search or upload. A 200-file upload timed on the VM (§19).
