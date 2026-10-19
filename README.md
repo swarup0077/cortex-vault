@@ -12,7 +12,7 @@ are kept only for your session and are deleted 60 minutes after your last search
 |---|---|
 | ![Search results for "error 0x80070005"](design/v0-brass/port/readme-desktop-light-results.png) | ![A picture match](design/v0-brass/port/readme-desktop-light-picture-match.png) |
 | **Uploading your own files: searchable by name at once, then by content** | **On a phone, dark theme** |
-| ![The upload progress bar](design/v0-brass/port/readme-desktop-bar-reading.png) | ![Results on a phone](design/v0-brass/port/readme-phone-dark-results.png) |
+| ![The upload progress bar](design/v0-brass/port/readme-desktop-bar-reading.png) | <img src="design/v0-brass/port/readme-phone-dark-results.png" alt="Results on a phone" width="180"> |
 
 ## How search works
 
@@ -211,6 +211,8 @@ in `eval/`), and the scripts in [`bench/`](bench/README.md).
 | [Qdrant/bge-small-en-v1.5-onnx-Q](https://huggingface.co/Qdrant/bge-small-en-v1.5-onnx-Q), a quantised ONNX port of [BAAI/bge-small-en-v1.5](https://huggingface.co/BAAI/bge-small-en-v1.5) | Meaning (384-d text vectors) | MIT (both model cards) |
 | [Qdrant/clip-ViT-B-32-vision](https://huggingface.co/Qdrant/clip-ViT-B-32-vision) and [-text](https://huggingface.co/Qdrant/clip-ViT-B-32-text), ONNX ports of [sentence-transformers/clip-ViT-B-32](https://huggingface.co/sentence-transformers/clip-ViT-B-32) | Picture search, screenshot or photo | MIT (Qdrant's model cards; the sentence-transformers card states none) |
 | PP-OCRv6 det small, PP-OCRv6 rec small, ch_ppocr_mobile_v2.0_cls, shipped in the `rapidocr` wheel | OCR | Apache-2.0 (RapidOCR's `MODEL_LICENSES.md`; weights from PaddleOCR, Baidu) |
+
+The libraries in `requirements.txt`:
 
 | Library | Version | Licence (package metadata) |
 |---|---|---|
