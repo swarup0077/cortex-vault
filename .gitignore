@@ -21,3 +21,8 @@ desktop.ini
 
 # Benchmark output: generated corpora, throwaway indexes, results (bench/README.md)
 bench/generated/
+
+# v0 design reference: source only, never built or served (design/v0-brass/)
+design/v0-brass/node_modules/
+design/v0-brass/.next/
+design/v0-brass/.env*
