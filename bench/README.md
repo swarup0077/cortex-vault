@@ -16,6 +16,7 @@ goes to `bench/generated/`, which is gitignored; delete it when you're done.
 | `kind_real.py` | Item w: the screenshot-vs-photo CLIP rule on the real files (labels from names and camera EXIF), measurement only; writes `eval/results_kind.*` |
 | `bench_scale.py` | Scale test (item u): ~1,000 files in `bench_upload.py`'s mix indexed into a scratch index; indexing time per stage, files/sec, disk, peak RAM, search latency |
 | `tune.py` | M6 tuning (SPEC §9, §19): each provisional value on a small grid, then the divider's two candidate bars, on the eval's tuning half with the generated set as a guardrail; never reads the held-out half |
+| `check_gap.py` | Item z: `clip_strong_gap` checked (not tuned) on the tuning half and the generated set at three index sizes (demo, eval, scale): ranks, where the visual-query rule fired, and CLIP's top-hit z and lead per query; never reads the held-out half |
 
 The OCR models ship inside the `rapidocr` wheel. Only the ingest run needs bge-small, which downloads once
 from the HF Hub; after that, `HF_HUB_OFFLINE=1` works.

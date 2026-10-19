@@ -46,6 +46,7 @@ GRID: dict[str, list] = {
     "clip_min_cosine": [0.22, 0.24, 0.26, 0.28, 0.30],
     "dense_min_cosine": [0.36, 0.39, 0.42, 0.45, 0.48, 0.51],
     "clip_strong_z": [2.5, 2.75, 3.0, 3.25, 3.5, 4.0],
+    "clip_strong_gap": [0.0, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045],  # item z, after the M6 tuning
     "clip_strong_cosine": [0.26, 0.27, 0.28, 0.29, 0.30],
     "visual_bm25_factor": [0.25, 0.5, 0.75, 1.0],
     "visual_clip_factor": [1.5, 2.0, 3.0, 4.0],
