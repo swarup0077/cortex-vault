@@ -35,6 +35,7 @@ from vault.search.engine import SearchResponse, SearchResult, search
 
 SEED = 20261019
 SOURCES = ("owner", "owner-extra")  # queries.csv, then queries_extra.csv: their ids start with q and x
+GUARD = "guard"  # the split of the generated-file set: reported apart, a guardrail in tuning, never tuned toward
 METHODS = ("bm25", "all_terms", "dense", "clip")
 CUTOFFS = (1, 5, 10)
 
@@ -62,6 +63,10 @@ class Paths:
     @property
     def public_queries(self) -> Path:
         return self.out / "queries.jsonl"
+
+    @property
+    def generated_queries(self) -> Path:
+        return self.out / "queries_generated.jsonl"
 
     @property
     def split_file(self) -> Path:
@@ -108,14 +113,16 @@ class ImportReport:
     trimmed: list[tuple[str, int]] = field(default_factory=list)  # (query id, correct files dropped)
 
 
-def import_queries(csvs: Sequence[Path], paths: Paths = Paths(), seed: int = SEED) -> ImportReport:
+def import_queries(csvs: Sequence[Path], paths: Paths = Paths(), seed: int = SEED, *,
+                   sources: Sequence[str] = SOURCES) -> ImportReport:
     """The owner's CSVs (query, expected_file, search_type; several files separated by "|") → queries with keys.
-    The first CSV is `owner` (ids q01…), the second `owner-extra` (x01…). The CSVs are read, never changed."""
+    The first CSV is `owner` (ids q01…), the second `owner-extra` (x01…); `sources=("generated",)` reads the
+    generated-file set (g01…), which isn't split. The CSVs are read, never changed."""
     ids = private_ids(paths)
     public = {p.name: p.relative_to(paths.repo).as_posix() for p in paths.corpus.rglob("*") if p.is_file()}
     report = ImportReport([])
-    for source, csv_path in zip(SOURCES, csvs):
-        prefix = "q" if source == "owner" else "x"
+    for source, csv_path in zip(sources, csvs):
+        prefix = {"owner": "q", "owner-extra": "x", "generated": "g"}[source]
         with Path(csv_path).open(encoding="utf-8-sig", newline="") as f:
             for i, row in enumerate(csv.DictReader(f), start=1):
                 qid = f"{prefix}{i:02d}"
@@ -128,7 +135,11 @@ def import_queries(csvs: Sequence[Path], paths: Paths = Paths(), seed: int = SEE
                     report.trimmed.append((qid, len(names) - len(keys)))
                 report.queries.append(Query(qid, row["query"].strip(), row["search_type"].strip(), keys,
                                             source=source))
-    assign_splits(report.queries, seed)
+    if "generated" in sources:
+        for q in report.queries:
+            q.split = GUARD
+    else:
+        assign_splits(report.queries, seed)
     return report
 
 
@@ -167,9 +178,20 @@ def write_queries(queries: Sequence[Query], paths: Paths = Paths()) -> None:
                                            indent=1) + "\n", encoding="utf-8")
 
 
-def load_queries(paths: Paths = Paths()) -> list[Query]:
-    """The full set when this machine has it, else the committed public queries."""
-    src = paths.full_queries if paths.full_queries.is_file() else paths.public_queries
+def write_generated(queries: Sequence[Query], paths: Paths = Paths()) -> None:
+    paths.out.mkdir(parents=True, exist_ok=True)
+    with paths.generated_queries.open("w", encoding="utf-8") as f:
+        for q in queries:
+            f.write(json.dumps(asdict(q), ensure_ascii=False) + "\n")
+
+
+def load_queries(paths: Paths = Paths(), which: str = "owner") -> list[Query]:
+    """The owner's set (the full one when this machine has it, else the committed public queries), or the
+    generated-file set."""
+    if which == "generated":
+        src = paths.generated_queries
+    else:
+        src = paths.full_queries if paths.full_queries.is_file() else paths.public_queries
     with src.open(encoding="utf-8") as f:
         return [Query(**json.loads(line)) for line in f if line.strip()]
 
@@ -423,8 +445,8 @@ def report(run: Run, *, splits: Sequence[str], detail: Sequence[str], title: str
             entry["queries"] = per_query(run, qs)
         data["splits"][name] = entry
         app = s["rows"][APP]
-        md += [f"## {'Tuning half' if name == 'tune' else 'Held-out half' if name == 'heldout' else 'Both halves'}"
-               f" ({len(qs)} queries)", ""]
+        heading = {"tune": "Tuning half", "heldout": "Held-out half", GUARD: "Generated-file set"}.get(name, "Both halves")
+        md += [f"## {heading} ({len(qs)} queries)", ""]
         md += _table("Setting", {row: v["overall"] for row, v in s["rows"].items()}) + [""]
         for by in ("search type", "file type", "set"):
             md += _table(f"App, by {by}", app[by]) + [""]

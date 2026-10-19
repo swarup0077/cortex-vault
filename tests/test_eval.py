@@ -146,3 +146,17 @@ def test_a_held_out_run_needs_a_purpose() -> None:
     """Owner's rule (§9): the held-out half runs for the baseline and once for the final settings, never casually."""
     assert main(["eval", "--split", "heldout"]) == 2
     assert main(["eval", "--split", "all"]) == 2
+
+
+def test_the_generated_set_is_imported_apart_and_never_split(tmp_path) -> None:
+    """Owner's rule (19 Oct): the generated-file set is reported apart and is a guardrail in tuning, never tuned
+    toward, so it has no tuning or held-out half."""
+    paths = make_paths(tmp_path)
+    setup_files(paths)
+    src = write_csv(tmp_path / "queries_generated.csv", [("tomatoes", "garden plan.md", "meaning"),
+                                                         ("dice", "dice.png", "picture")])
+    rep = ev.import_queries([src], paths, sources=("generated",))
+    assert [(q.id, q.split, q.source) for q in rep.queries] == [("g01", ev.GUARD, "generated"),
+                                                                 ("g02", ev.GUARD, "generated")]
+    ev.write_generated(rep.queries, paths)
+    assert [q.id for q in ev.load_queries(paths, "generated")] == ["g01", "g02"]

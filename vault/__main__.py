@@ -83,17 +83,29 @@ def cmd_eval(console: Console, cfg: Config, args: argparse.Namespace) -> int:
         console.print(f"split: {paths.split_file.relative_to(paths.repo).as_posix()}, "
                       f"full set: {paths.full_queries.relative_to(paths.repo).as_posix()} (git-ignored)")
         return 0
-    splits = ["tune", "heldout"] if args.split == "all" else [args.split]
+    if args.import_generated:
+        rep = ev.import_queries([args.import_generated], paths, sources=("generated",))
+        ev.write_generated(rep.queries, paths)
+        console.print(f"{len(rep.queries)} generated-file queries; {len(rep.left_out)} left out → "
+                      f"{paths.generated_queries.relative_to(paths.repo).as_posix()}")
+        return 0
+    if args.queries == "generated":
+        splits = [ev.GUARD]
+    else:
+        splits = ["tune", "heldout"] if args.split == "all" else [args.split]
     if "heldout" in splits and not args.purpose:
         console.print("[red]A run on the held-out half needs --purpose baseline or --purpose final (SPEC §9).")
         return 2
     overrides = ev.parse_settings(args.set)
     lib = ev.eval_library(cfg, paths, index=not args.no_index)
-    queries = [q for q in ev.load_queries(paths) if q.split in splits]
+    queries = [q for q in ev.load_queries(paths, args.queries) if q.split in splits]
     rows = list(ev.ABLATIONS) if args.rows == "all" else [ev.APP]
     run = ev.evaluate(lib, queries, overrides, rows=rows, paths=paths)
-    detail = splits if args.purpose == "final" else [s for s in splits if s == "tune"]
+    detail = splits if args.purpose == "final" else [s for s in splits if s in ("tune", ev.GUARD)]
     title = {"baseline": "Eval baseline", "final": "Eval: final settings"}.get(args.purpose, "Eval (tuning half)")
+    if args.queries == "generated":
+        title = {"baseline": "Generated-file set: baseline", "final": "Generated-file set: final settings"}.get(
+            args.purpose, "Generated-file set")
     md, data = ev.report(run, splits=splits, detail=detail, title=title)
     ev.write_report(md, data, args.out)
     if "heldout" in splits:
@@ -256,6 +268,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("eval", help="run the eval (SPEC §9): eval/results.md and .json")
     p.add_argument("--import", dest="import_csv", nargs="+", type=Path, metavar="CSV",
                    help="convert the owner's queries.csv (then queries_extra.csv) and split them; nothing is run")
+    p.add_argument("--import-generated", type=Path, metavar="CSV",
+                   help="convert the approved generated-file query set (eval/queries_generated.csv)")
+    p.add_argument("--queries", choices=("owner", "generated"), default="owner",
+                   help="the owner's set (headline numbers) or the generated-file set (a guardrail, reported apart)")
     p.add_argument("--split", choices=("tune", "heldout", "all"), default="tune")
     p.add_argument("--purpose", choices=("baseline", "final"), help="required when the held-out half runs")
     p.add_argument("--out", type=Path, default=ev.Paths().out / "results")

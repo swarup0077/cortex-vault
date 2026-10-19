@@ -1,0 +1,32 @@
+{"id": "g01", "text": "0x80070005 access denied installer", "category": "exact word", "relevant": ["corpus/screenshots/Screenshot 2026-10-12 101530.png"], "split": "guard", "source": "generated"}
+{"id": "g02", "text": "KeyError user_id traceback", "category": "exact word", "relevant": ["corpus/screenshots/Screenshot 2026-10-13 091204.png"], "split": "guard", "source": "generated"}
+{"id": "g03", "text": "ERESOLVE unable to resolve dependency tree", "category": "exact word", "relevant": ["corpus/screenshots/Screenshot 2026-10-13 151022.png"], "split": "guard", "source": "generated"}
+{"id": "g04", "text": "PNR 4521873906", "category": "exact word", "relevant": ["corpus/receipts/ticket-2026-10-24.pdf", "corpus/screenshots/phone/Screenshot_20261012-080102_Messages.png"], "split": "guard", "source": "generated"}
+{"id": "g05", "text": "UPI transaction ID 629184736251", "category": "exact word", "relevant": ["corpus/screenshots/Screenshot_20261018-130512_Pay.png"], "split": "guard", "source": "generated"}
+{"id": "g06", "text": "consumer number 110045227", "category": "exact word", "relevant": ["corpus/receipts/electricity-bill-october.pdf"], "split": "guard", "source": "generated"}
+{"id": "g07", "text": "NET::ERR_CERT_DATE_INVALID", "category": "exact word", "relevant": ["corpus/screenshots/Screenshot (3).png"], "split": "guard", "source": "generated"}
+{"id": "g08", "text": "git reset --soft HEAD~1", "category": "exact word", "relevant": ["corpus/notes/git cheatsheet.md"], "split": "guard", "source": "generated"}
+{"id": "g09", "text": "the page that defines the singular value decomposition", "category": "meaning", "relevant": ["corpus/papers/matrix-decompositions.pdf"], "split": "guard", "source": "generated"}
+{"id": "g10", "text": "paper on generating images by gradually removing noise", "category": "meaning", "relevant": ["corpus/papers/2006.11239.pdf"], "split": "guard", "source": "generated"}
+{"id": "g11", "text": "notes on letting every word in a sentence look at every other word", "category": "meaning", "relevant": ["corpus/papers/1706.03762.pdf"], "split": "guard", "source": "generated"}
+{"id": "g12", "text": "default hyperparameters for the Adam optimizer", "category": "meaning", "relevant": ["corpus/papers/1412.6980.pdf"], "split": "guard", "source": "generated"}
+{"id": "g13", "text": "slide about gradient descent with momentum", "category": "meaning", "relevant": ["corpus/decks/ML lecture v2.pptx"], "split": "guard", "source": "generated"}
+{"id": "g14", "text": "what was decided at the project sync about freezing the API", "category": "meaning", "relevant": ["corpus/notes/meeting notes 2026-10-14.docx"], "split": "guard", "source": "generated"}
+{"id": "g15", "text": "how long to bake bread in a covered pot", "category": "meaning", "relevant": ["corpus/notes/sourdough recipe.txt"], "split": "guard", "source": "generated"}
+{"id": "g16", "text": "my card was declined at an online shop", "category": "meaning", "relevant": ["corpus/screenshots/Screenshot 2026-10-17 110203.png"], "split": "guard", "source": "generated"}
+{"id": "g17", "text": "port 8080 already in use when starting a container", "category": "meaning", "relevant": ["corpus/screenshots/Screenshot (4).png"], "split": "guard", "source": "generated"}
+{"id": "g18", "text": "advice on sleeping better and avoiding coffee", "category": "meaning", "relevant": ["corpus/screenshots/phone/Screenshot_20261013-120000_Reader.png"], "split": "guard", "source": "generated"}
+{"id": "g19", "text": "sunset over the sea", "category": "picture", "relevant": ["corpus/photos/IMG_20260921_183012.jpg"], "split": "guard", "source": "generated"}
+{"id": "g20", "text": "two dice on a table", "category": "picture", "relevant": ["corpus/photos/IMG_20260925_160010.jpg"], "split": "guard", "source": "generated"}
+{"id": "g21", "text": "snow covered mountains", "category": "picture", "relevant": ["corpus/photos/IMG_20260923_120301.jpg"], "split": "guard", "source": "generated"}
+{"id": "g22", "text": "a red apple", "category": "picture", "relevant": ["corpus/photos/IMG_20260926_090909.jpg"], "split": "guard", "source": "generated"}
+{"id": "g23", "text": "a rainbow in the sky", "category": "picture", "relevant": ["corpus/photos/IMG_20260928_131313.jpg"], "split": "guard", "source": "generated"}
+{"id": "g24", "text": "the moon at night", "category": "picture", "relevant": ["corpus/photos/IMG_20260924_221145.jpg"], "split": "guard", "source": "generated"}
+{"id": "g25", "text": "Bayes theorem example about a test for a rare condition", "category": "inside a scan", "relevant": ["corpus/scans/scan_0001.pdf"], "split": "guard", "source": "generated"}
+{"id": "g26", "text": "hostel quiet hours", "category": "inside a scan", "relevant": ["corpus/scans/scan_0002.pdf"], "split": "guard", "source": "generated"}
+{"id": "g27", "text": "lab 3 has moved to room 214", "category": "inside a scan", "relevant": ["corpus/photos/notices/IMG_20261004_150000.jpg"], "split": "guard", "source": "generated"}
+{"id": "g28", "text": "water supply interrupted on 21 October", "category": "inside a scan", "relevant": ["corpus/photos/notices/IMG_20261005_091500.jpg"], "split": "guard", "source": "generated"}
+{"id": "g29", "text": "total on the Blue Door Cafe bill", "category": "inside a scan", "relevant": ["corpus/photos/notices/IMG_20261018_143500.jpg"], "split": "guard", "source": "generated"}
+{"id": "g30", "text": "where is the spare key for the lab cupboard", "category": "inside a scan", "relevant": ["corpus/screenshots/phone/Screenshot_20261012-193344_Notes.png"], "split": "guard", "source": "generated"}
+{"id": "g31", "text": "back up the phone overnight while it charges", "category": "inside a scan", "relevant": ["corpus/screenshots/phone/Screenshot_20261011-221530_Browser.png"], "split": "guard", "source": "generated"}
+{"id": "g32", "text": "linear regression loss written on the whiteboard", "category": "inside a scan", "relevant": ["corpus/photos/notices/IMG_20261003_103000.jpg"], "split": "guard", "source": "generated"}
