@@ -3,11 +3,13 @@
 `/thumb/{id}`, `/preview/{id}`, `/detail/{id}` (highlight boxes and the passage text, as JSON) and, in demo mode,
 `/file/{id}` (a download) look the file up in the index; a session's files also need its `s=<uuid4>`. Anything
 that isn't a plain id, an unknown id and another session's file all get the same 404, so nothing reveals whether
-a file exists. The app's own assets (stylesheet, script, logo) are static files under `/cv/`.
+a file exists. The app's own assets (stylesheet, script, logo) are static files under `/cv/`; the page names the
+stylesheet and the script with a hash of their content (`asset`).
 """
 
 from __future__ import annotations
 
+import hashlib
 import io
 import mimetypes
 from collections.abc import Callable
@@ -30,13 +32,24 @@ THEME_JS = ("(function(){try{var u=new URL(window.location.href),t=u.searchParam
             "if(t==='light'||t==='dark')return;try{s=window.localStorage.getItem('cv-theme');}catch(e){}"
             "if(s==='light'||s==='dark'){u.searchParams.set('__theme',s);window.history.replaceState(null,'',u);}"
             "}catch(e){}})();")
+
+
+def asset(name: str, root: Path = STATIC) -> str:
+    """`/cv/<name>?v=<hash of its content>`: the URL changes whenever the file does, so after a deploy a browser
+    fetches the new stylesheet and script instead of running a copy it cached before (they're served without
+    Cache-Control, so a browser may reuse one for a while). The page that names them has no validators, so a browser
+    always fetches it again. Hashed when the app starts, which every deploy does (deploy/azure.md)."""
+    digest = hashlib.sha256((root / name).read_bytes()).hexdigest()[:12]
+    return f"/cv/{name}?v={digest}"
+
+
 HEAD = ('<meta name="robots" content="noindex">'
         '<link rel="icon" href="/cv/logo/favicon.ico" sizes="any">'
         '<link rel="icon" href="/cv/logo/cortex-vault-icon.svg" type="image/svg+xml">'
         '<link rel="apple-touch-icon" href="/cv/logo/apple-touch-icon.png">'
-        '<link rel="stylesheet" href="/cv/cortex.css">'
+        f'<link rel="stylesheet" href="{asset("cortex.css")}">'
         f"<script>{THEME_JS}</script>"
-        '<script src="/cv/cortex.js"></script>')
+        f'<script src="{asset("cortex.js")}"></script>')
 
 
 def theme() -> gr.themes.Base:

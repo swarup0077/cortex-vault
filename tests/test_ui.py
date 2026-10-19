@@ -1,6 +1,7 @@
 """The Cortex Vault UI (SPEC §8): server-built HTML, the numbered list, The Archive, the id-only routes, demo
 safety, no query logging, and the handlers, without a browser and without real models."""
 
+import hashlib
 import logging
 import re
 import threading
@@ -360,6 +361,28 @@ def test_local_mode_has_no_download_route(tmp_path, fake_embedder, make_search_c
     client = TestClient(make_app(build_blocks(ctx), ctx.resolve, demo=False))
     assert client.get("/file/1").status_code == 404
     assert client.get("/cv/cortex.js").status_code == 200 and client.get("/favicon.ico").status_code == 200
+
+
+def test_the_stylesheet_and_script_urls_change_with_their_content(demo_ctx, tmp_path, fake_embedder) -> None:
+    """Owner, 20 Oct: after a deploy no browser may run a stylesheet or script it cached before. Their URLs carry
+    a hash of their content, and the page that names them is served without validators, so it's fetched again."""
+    from vault.ui import server
+
+    for name in ("cortex.js", "cortex.css"):
+        assert f"/cv/{name}?v={hashlib.sha256((STATIC / name).read_bytes()).hexdigest()[:12]}" in HEAD
+    assert 'src="/cv/cortex.js"' not in HEAD and 'href="/cv/cortex.css"' not in HEAD
+    (tmp_path / "a.js").write_text("one", encoding="utf-8")
+    before = server.asset("a.js", tmp_path)
+    (tmp_path / "a.js").write_text("two", encoding="utf-8")
+    assert before.startswith("/cv/a.js?v=") and server.asset("a.js", tmp_path) != before
+    client = TestClient(make_app(build_blocks(demo_ctx), demo_ctx.resolve, demo=True))
+    page = client.get("/")
+    assert page.status_code == 200
+    assert server.asset("cortex.js") in page.text and server.asset("cortex.css") in page.text
+    assert "etag" not in page.headers and "last-modified" not in page.headers
+    for name in ("cortex.js", "cortex.css"):
+        got = client.get(server.asset(name))
+        assert got.status_code == 200 and got.content == (STATIC / name).read_bytes()
 
 
 def test_the_folders_panel_exists_only_in_local_mode(demo_ctx, tmp_path, fake_embedder) -> None:
