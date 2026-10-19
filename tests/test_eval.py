@@ -141,6 +141,10 @@ def test_a_run_end_to_end_names_private_files_by_id_only(tmp_path, fake_embedder
     _, both = ev.report(run, splits=["tune", "heldout"], detail=["tune", "heldout"], title="final")
     md, rerun = ev.divider_rerun(run, both, ["tune", "heldout"])  # same settings: the ranking must match
     assert rerun["identical"] and "queries" not in json.dumps(rerun) and "| Held-out half | 1 | yes | yes |" in md
+    both["divider_changed_after_final"] = {"splits": {"tune": {"divider": {"median_above": 1, "all_correct_above": 0,
+                                                                            "of": 2}}}}
+    current = ev.with_current_divider(both)  # later runs compare with the divider's numbers at the current bar
+    assert current["splits"]["tune"]["divider"]["median_above"] == 1 and both["splits"]["tune"]["divider"]["of"] == 2
 
 
 def test_the_ungated_ablation_keeps_every_clip_candidate() -> None:

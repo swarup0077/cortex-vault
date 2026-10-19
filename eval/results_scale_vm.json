@@ -1,0 +1,52 @@
+{
+ "roots": [
+  "/home/azureuser/scale-test/files",
+  "/home/azureuser/personal-search-vault/corpus"
+ ],
+ "files_indexed": 1071,
+ "chunks": 6914,
+ "errors": 0,
+ "listed_s": 86.1,
+ "total_s": 2058.7,
+ "stages_s": {
+  "discover": 0.0,
+  "hash": 0.9,
+  "extract": 148.0,
+  "thumbs": 15.0,
+  "write": 37.1,
+  "sweep": 0.0,
+  "ocr": 1622.1,
+  "embed": 216.2,
+  "clip": 74.7
+ },
+ "files_per_sec": {
+  "doc": 5.21,
+  "slides": 8.79,
+  "pdf": 0.2,
+  "photo": 1.09,
+  "screenshot": 0.48
+ },
+ "per_kind_files": {
+  "doc": 147,
+  "slides": 63,
+  "pdf": 161,
+  "photo": 224,
+  "screenshot": 476
+ },
+ "ocr_images": 881,
+ "db_mb": 25.4,
+ "thumbs_mb": 6.0,
+ "peak_rss_mb_indexing": 2318.0,
+ "peak_rss_mb": 2318.0,
+ "queries": {
+  "owner_public": 13,
+  "generated": 32,
+  "repeat": 3
+ },
+ "search_ms": {
+  "engine_p50": 136.2,
+  "engine_p95": 174.8,
+  "wall_p50": 136.4,
+  "wall_p95": 175.2
+ }
+}

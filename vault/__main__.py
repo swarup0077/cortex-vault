@@ -131,8 +131,8 @@ def cmd_eval(console: Console, cfg: Config, args: argparse.Namespace) -> int:
             args.purpose, "Generated-file set")
     md, data = ev.report(run, splits=splits, detail=detail, title=title)
     if args.purpose == "scale" and (paths.out / f"results{gen}.json").exists():
-        lines, data["final_vs_scale"] = ev.compare(json.loads((paths.out / f"results{gen}.json").read_text(
-            encoding="utf-8")), data, before="final", after="at scale")
+        final = ev.with_current_divider(json.loads((paths.out / f"results{gen}.json").read_text(encoding="utf-8")))
+        lines, data["final_vs_scale"] = ev.compare(final, data, before="final", after="at scale")
         md = _before_first_section(md, lines)
     baseline = args.baseline or (paths.out / ("results_generated_baseline.json" if args.queries == "generated"
                                               else "results_baseline.json"))

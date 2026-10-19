@@ -1,0 +1,1186 @@
+{
+ "title": "Eval at scale: the eval files plus generated extras",
+ "when": "2026-10-19T18:39:19",
+ "corpus": {
+  "files": 1095,
+  "private_paths": 24,
+  "public_paths": 1071
+ },
+ "settings": {},
+ "models": {
+  "text": "BAAI/bge-small-en-v1.5",
+  "clip": "Qdrant/clip-ViT-B-32-vision+Qdrant/clip-ViT-B-32-text",
+  "ocr": "PP-OCRv6_det_small.onnx+PP-OCRv6_rec_small.onnx"
+ },
+ "commit": "b6a93f1",
+ "splits": {
+  "tune": {
+   "rows": {
+    "6. All three, CLIP gated (the app)": {
+     "overall": {
+      "n": 22,
+      "r1": 12,
+      "r1_pct": 54.5,
+      "r5": 15,
+      "r5_pct": 68.2,
+      "r10": 19,
+      "r10_pct": 86.4,
+      "mrr": 0.612
+     },
+     "search type": {
+      "exact word": {
+       "n": 5,
+       "r1": 5,
+       "r1_pct": 100.0,
+       "r5": 5,
+       "r5_pct": 100.0,
+       "r10": 5,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "inside a scan": {
+       "n": 3,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 2,
+       "r5_pct": 66.7,
+       "r10": 3,
+       "r10_pct": 100.0,
+       "mrr": 0.278
+      },
+      "meaning": {
+       "n": 9,
+       "r1": 5,
+       "r1_pct": 55.6,
+       "r5": 6,
+       "r5_pct": 66.7,
+       "r10": 8,
+       "r10_pct": 88.9,
+       "mrr": 0.613
+      },
+      "picture": {
+       "n": 5,
+       "r1": 2,
+       "r1_pct": 40.0,
+       "r5": 2,
+       "r5_pct": 40.0,
+       "r10": 3,
+       "r10_pct": 60.0,
+       "mrr": 0.422
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 4,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 2,
+       "r5_pct": 50.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.212
+      },
+      "photo": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "screenshot": {
+       "n": 15,
+       "r1": 10,
+       "r1_pct": 66.7,
+       "r5": 11,
+       "r5_pct": 73.3,
+       "r10": 12,
+       "r10_pct": 80.0,
+       "mrr": 0.696
+      },
+      "text": {
+       "n": 2,
+       "r1": 1,
+       "r1_pct": 50.0,
+       "r5": 1,
+       "r5_pct": 50.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 0.583
+      }
+     },
+     "set": {
+      "private": {
+       "n": 15,
+       "r1": 9,
+       "r1_pct": 60.0,
+       "r5": 12,
+       "r5_pct": 80.0,
+       "r10": 14,
+       "r10_pct": 93.3,
+       "mrr": 0.679
+      },
+      "public": {
+       "n": 7,
+       "r1": 3,
+       "r1_pct": 42.9,
+       "r5": 3,
+       "r5_pct": 42.9,
+       "r10": 5,
+       "r10_pct": 71.4,
+       "mrr": 0.468
+      }
+     }
+    }
+   },
+   "divider": {
+    "median_above": 10.5,
+    "all_correct_above": 20,
+    "of": 22,
+    "set": {
+     "private": {
+      "median_above": 8,
+      "all_correct_above": 14,
+      "of": 15
+     },
+     "public": {
+      "median_above": 18,
+      "all_correct_above": 6,
+      "of": 7
+     }
+    }
+   },
+   "latency_ms": {
+    "p50": 210.4,
+    "p95": 406.5
+   },
+   "queries": [
+    {
+     "id": "q01",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "Find the image of a famous fractal formed by repeatedly applying a complex quadratic recurrence",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 192036.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 46,
+     "above_divider": 18,
+     "all_correct_above": false,
+     "found_by": {
+      "dense": 26
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q03",
+     "split": "tune",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-18",
+      "private-19"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 5,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 8,
+      "dense": 9,
+      "clip": 3
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q08",
+     "split": "tune",
+     "search_type": "picture",
+     "set": "public",
+     "query": "Locate the image whose color legend identifies different roots of a polynomial",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 191854.png",
+      "corpus/real/Screenshot 2025-11-17 193345.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 12,
+     "above_divider": 22,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 29,
+      "dense": 6
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q11",
+     "split": "tune",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-14"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 2,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 87,
+      "clip": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q12",
+     "split": "tune",
+     "search_type": "picture",
+     "set": "public",
+     "query": "Locate the visualization with three distinct root-attraction regions in the complex plane",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 193345.png",
+      "corpus/real/Screenshot 2025-11-17 191854.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 16,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 7,
+      "dense": 5,
+      "clip": 2
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q13",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-18"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 6,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q22",
+     "split": "tune",
+     "search_type": "picture",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-15"
+     ],
+     "file_type": "screenshot",
+     "rank": 47,
+     "above_divider": 17,
+     "all_correct_above": false,
+     "found_by": {
+      "dense": 28
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q23",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-16",
+      "private-17"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 4,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 8,
+      "dense": 3,
+      "clip": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q26",
+     "split": "tune",
+     "search_type": "inside a scan",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-17"
+     ],
+     "file_type": "screenshot",
+     "rank": 3,
+     "above_divider": 10,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q27",
+     "split": "tune",
+     "search_type": "picture",
+     "set": "public",
+     "query": "Find the colorful image showing regions that attract complex-number iterations to different roots",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 191854.png",
+      "corpus/real/Screenshot 2025-11-17 193345.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 9,
+     "above_divider": 29,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 31,
+      "dense": 4
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q28",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-17",
+      "private-16"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 25,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q29",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-08"
+     ],
+     "file_type": "pdf",
+     "rank": 4,
+     "above_divider": 9,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q30",
+     "split": "tune",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-11"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 8,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q31",
+     "split": "tune",
+     "search_type": "picture",
+     "set": "public",
+     "query": "snowy mountain peaks over autumn valley with winding road and wooden chalets",
+     "relevant": [
+      "corpus/real/image.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 8,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q32",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "why accuracy is useless for rare-event classification and PR-AUC preference",
+     "relevant": [
+      "corpus/real/Phase 0 — Problem framing (no code).txt"
+     ],
+     "file_type": "text",
+     "rank": 6,
+     "above_divider": 14,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q33",
+     "split": "tune",
+     "search_type": "inside a scan",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-10"
+     ],
+     "file_type": "pdf",
+     "rank": 3,
+     "above_divider": 16,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 3,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q35",
+     "split": "tune",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-12",
+      "private-13"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 4,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 2,
+      "clip": 2
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q38",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-11"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 6,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q40",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-09"
+     ],
+     "file_type": "pdf",
+     "rank": 10,
+     "above_divider": 14,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q41",
+     "split": "tune",
+     "search_type": "inside a scan",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-07"
+     ],
+     "file_type": "pdf",
+     "rank": 6,
+     "above_divider": 11,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 2
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q42",
+     "split": "tune",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "data leakage risks when building time-aware features for transactional fraud models",
+     "relevant": [
+      "corpus/real/Phase 0 — Problem framing (no code).txt"
+     ],
+     "file_type": "text",
+     "rank": 1,
+     "above_divider": 19,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "q44",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-13",
+      "private-12"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 7,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {}
+    }
+   ]
+  },
+  "heldout": {
+   "rows": {
+    "6. All three, CLIP gated (the app)": {
+     "overall": {
+      "n": 22,
+      "r1": 5,
+      "r1_pct": 22.7,
+      "r5": 13,
+      "r5_pct": 59.1,
+      "r10": 17,
+      "r10_pct": 77.3,
+      "mrr": 0.395
+     },
+     "search type": {
+      "exact word": {
+       "n": 4,
+       "r1": 2,
+       "r1_pct": 50.0,
+       "r5": 3,
+       "r5_pct": 75.0,
+       "r10": 3,
+       "r10_pct": 75.0,
+       "mrr": 0.625
+      },
+      "inside a scan": {
+       "n": 3,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 1,
+       "r5_pct": 33.3,
+       "r10": 2,
+       "r10_pct": 66.7,
+       "mrr": 0.222
+      },
+      "meaning": {
+       "n": 10,
+       "r1": 2,
+       "r1_pct": 20.0,
+       "r5": 5,
+       "r5_pct": 50.0,
+       "r10": 8,
+       "r10_pct": 80.0,
+       "mrr": 0.336
+      },
+      "picture": {
+       "n": 5,
+       "r1": 1,
+       "r1_pct": 20.0,
+       "r5": 4,
+       "r5_pct": 80.0,
+       "r10": 4,
+       "r10_pct": 80.0,
+       "mrr": 0.433
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 4,
+       "r1": 2,
+       "r1_pct": 50.0,
+       "r5": 2,
+       "r5_pct": 50.0,
+       "r10": 2,
+       "r10_pct": 50.0,
+       "mrr": 0.5
+      },
+      "photo": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "screenshot": {
+       "n": 17,
+       "r1": 2,
+       "r1_pct": 11.8,
+       "r5": 10,
+       "r5_pct": 58.8,
+       "r10": 14,
+       "r10_pct": 82.4,
+       "mrr": 0.335
+      }
+     },
+     "set": {
+      "private": {
+       "n": 16,
+       "r1": 4,
+       "r1_pct": 25.0,
+       "r5": 10,
+       "r5_pct": 62.5,
+       "r10": 13,
+       "r10_pct": 81.2,
+       "mrr": 0.425
+      },
+      "public": {
+       "n": 6,
+       "r1": 1,
+       "r1_pct": 16.7,
+       "r5": 3,
+       "r5_pct": 50.0,
+       "r10": 4,
+       "r10_pct": 66.7,
+       "mrr": 0.315
+      }
+     }
+    }
+   },
+   "divider": {
+    "median_above": 9.5,
+    "all_correct_above": 17,
+    "of": 22,
+    "set": {
+     "private": {
+      "median_above": 9.5,
+      "all_correct_above": 13,
+      "of": 16
+     },
+     "public": {
+      "median_above": 10.0,
+      "all_correct_above": 4,
+      "of": 6
+     }
+    }
+   },
+   "latency_ms": {
+    "p50": 226.3,
+    "p95": 330.5
+   }
+  },
+  "all": {
+   "rows": {
+    "6. All three, CLIP gated (the app)": {
+     "overall": {
+      "n": 44,
+      "r1": 17,
+      "r1_pct": 38.6,
+      "r5": 28,
+      "r5_pct": 63.6,
+      "r10": 36,
+      "r10_pct": 81.8,
+      "mrr": 0.503
+     },
+     "search type": {
+      "exact word": {
+       "n": 9,
+       "r1": 7,
+       "r1_pct": 77.8,
+       "r5": 8,
+       "r5_pct": 88.9,
+       "r10": 8,
+       "r10_pct": 88.9,
+       "mrr": 0.833
+      },
+      "inside a scan": {
+       "n": 6,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 3,
+       "r5_pct": 50.0,
+       "r10": 5,
+       "r10_pct": 83.3,
+       "mrr": 0.25
+      },
+      "meaning": {
+       "n": 19,
+       "r1": 7,
+       "r1_pct": 36.8,
+       "r5": 11,
+       "r5_pct": 57.9,
+       "r10": 16,
+       "r10_pct": 84.2,
+       "mrr": 0.467
+      },
+      "picture": {
+       "n": 10,
+       "r1": 3,
+       "r1_pct": 30.0,
+       "r5": 6,
+       "r5_pct": 60.0,
+       "r10": 7,
+       "r10_pct": 70.0,
+       "mrr": 0.428
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 8,
+       "r1": 2,
+       "r1_pct": 25.0,
+       "r5": 4,
+       "r5_pct": 50.0,
+       "r10": 6,
+       "r10_pct": 75.0,
+       "mrr": 0.356
+      },
+      "photo": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "screenshot": {
+       "n": 32,
+       "r1": 12,
+       "r1_pct": 37.5,
+       "r5": 21,
+       "r5_pct": 65.6,
+       "r10": 26,
+       "r10_pct": 81.2,
+       "mrr": 0.504
+      },
+      "text": {
+       "n": 2,
+       "r1": 1,
+       "r1_pct": 50.0,
+       "r5": 1,
+       "r5_pct": 50.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 0.583
+      }
+     },
+     "set": {
+      "private": {
+       "n": 31,
+       "r1": 13,
+       "r1_pct": 41.9,
+       "r5": 22,
+       "r5_pct": 71.0,
+       "r10": 27,
+       "r10_pct": 87.1,
+       "mrr": 0.548
+      },
+      "public": {
+       "n": 13,
+       "r1": 4,
+       "r1_pct": 30.8,
+       "r5": 6,
+       "r5_pct": 46.2,
+       "r10": 9,
+       "r10_pct": 69.2,
+       "mrr": 0.398
+      }
+     }
+    }
+   },
+   "divider": {
+    "median_above": 10.0,
+    "all_correct_above": 37,
+    "of": 44,
+    "set": {
+     "private": {
+      "median_above": 9,
+      "all_correct_above": 27,
+      "of": 31
+     },
+     "public": {
+      "median_above": 14,
+      "all_correct_above": 10,
+      "of": 13
+     }
+    }
+   },
+   "latency_ms": {
+    "p50": 232.0,
+    "p95": 406.5
+   }
+  }
+ },
+ "final_vs_scale": {
+  "tune": {
+   "final": {
+    "overall": {
+     "n": 22,
+     "r1": 17,
+     "r1_pct": 77.3,
+     "r5": 19,
+     "r5_pct": 86.4,
+     "r10": 20,
+     "r10_pct": 90.9,
+     "mrr": 0.812
+    },
+    "set": {
+     "private": {
+      "n": 15,
+      "r1": 12,
+      "r1_pct": 80.0,
+      "r5": 14,
+      "r5_pct": 93.3,
+      "r10": 14,
+      "r10_pct": 93.3,
+      "mrr": 0.85
+     },
+     "public": {
+      "n": 7,
+      "r1": 5,
+      "r1_pct": 71.4,
+      "r5": 5,
+      "r5_pct": 71.4,
+      "r10": 6,
+      "r10_pct": 85.7,
+      "mrr": 0.73
+     }
+    },
+    "divider": {
+     "median_above": 19.0,
+     "all_correct_above": 20,
+     "of": 22,
+     "set": {
+      "private": {
+       "median_above": 19,
+       "all_correct_above": 14,
+       "of": 15
+      },
+      "public": {
+       "median_above": 28,
+       "all_correct_above": 6,
+       "of": 7
+      }
+     }
+    }
+   },
+   "at scale": {
+    "overall": {
+     "n": 22,
+     "r1": 12,
+     "r1_pct": 54.5,
+     "r5": 15,
+     "r5_pct": 68.2,
+     "r10": 19,
+     "r10_pct": 86.4,
+     "mrr": 0.612
+    },
+    "set": {
+     "private": {
+      "n": 15,
+      "r1": 9,
+      "r1_pct": 60.0,
+      "r5": 12,
+      "r5_pct": 80.0,
+      "r10": 14,
+      "r10_pct": 93.3,
+      "mrr": 0.679
+     },
+     "public": {
+      "n": 7,
+      "r1": 3,
+      "r1_pct": 42.9,
+      "r5": 3,
+      "r5_pct": 42.9,
+      "r10": 5,
+      "r10_pct": 71.4,
+      "mrr": 0.468
+     }
+    },
+    "divider": {
+     "median_above": 10.5,
+     "all_correct_above": 20,
+     "of": 22,
+     "set": {
+      "private": {
+       "median_above": 8,
+       "all_correct_above": 14,
+       "of": 15
+      },
+      "public": {
+       "median_above": 18,
+       "all_correct_above": 6,
+       "of": 7
+      }
+     }
+    }
+   }
+  },
+  "heldout": {
+   "final": {
+    "overall": {
+     "n": 22,
+     "r1": 7,
+     "r1_pct": 31.8,
+     "r5": 13,
+     "r5_pct": 59.1,
+     "r10": 16,
+     "r10_pct": 72.7,
+     "mrr": 0.443
+    },
+    "set": {
+     "private": {
+      "n": 16,
+      "r1": 6,
+      "r1_pct": 37.5,
+      "r5": 12,
+      "r5_pct": 75.0,
+      "r10": 14,
+      "r10_pct": 87.5,
+      "mrr": 0.539
+     },
+     "public": {
+      "n": 6,
+      "r1": 1,
+      "r1_pct": 16.7,
+      "r5": 1,
+      "r5_pct": 16.7,
+      "r10": 2,
+      "r10_pct": 33.3,
+      "mrr": 0.185
+     }
+    },
+    "divider": {
+     "median_above": 19.0,
+     "all_correct_above": 18,
+     "of": 22,
+     "set": {
+      "private": {
+       "median_above": 18.5,
+       "all_correct_above": 14,
+       "of": 16
+      },
+      "public": {
+       "median_above": 20.0,
+       "all_correct_above": 4,
+       "of": 6
+      }
+     }
+    }
+   },
+   "at scale": {
+    "overall": {
+     "n": 22,
+     "r1": 5,
+     "r1_pct": 22.7,
+     "r5": 13,
+     "r5_pct": 59.1,
+     "r10": 17,
+     "r10_pct": 77.3,
+     "mrr": 0.395
+    },
+    "set": {
+     "private": {
+      "n": 16,
+      "r1": 4,
+      "r1_pct": 25.0,
+      "r5": 10,
+      "r5_pct": 62.5,
+      "r10": 13,
+      "r10_pct": 81.2,
+      "mrr": 0.425
+     },
+     "public": {
+      "n": 6,
+      "r1": 1,
+      "r1_pct": 16.7,
+      "r5": 3,
+      "r5_pct": 50.0,
+      "r10": 4,
+      "r10_pct": 66.7,
+      "mrr": 0.315
+     }
+    },
+    "divider": {
+     "median_above": 9.5,
+     "all_correct_above": 17,
+     "of": 22,
+     "set": {
+      "private": {
+       "median_above": 9.5,
+       "all_correct_above": 13,
+       "of": 16
+      },
+      "public": {
+       "median_above": 10.0,
+       "all_correct_above": 4,
+       "of": 6
+      }
+     }
+    }
+   }
+  },
+  "all": {
+   "final": {
+    "overall": {
+     "n": 44,
+     "r1": 24,
+     "r1_pct": 54.5,
+     "r5": 32,
+     "r5_pct": 72.7,
+     "r10": 36,
+     "r10_pct": 81.8,
+     "mrr": 0.627
+    },
+    "set": {
+     "private": {
+      "n": 31,
+      "r1": 18,
+      "r1_pct": 58.1,
+      "r5": 26,
+      "r5_pct": 83.9,
+      "r10": 28,
+      "r10_pct": 90.3,
+      "mrr": 0.69
+     },
+     "public": {
+      "n": 13,
+      "r1": 6,
+      "r1_pct": 46.2,
+      "r5": 6,
+      "r5_pct": 46.2,
+      "r10": 8,
+      "r10_pct": 61.5,
+      "mrr": 0.479
+     }
+    },
+    "divider": {
+     "median_above": 19.0,
+     "all_correct_above": 38,
+     "of": 44,
+     "set": {
+      "private": {
+       "median_above": 19,
+       "all_correct_above": 28,
+       "of": 31
+      },
+      "public": {
+       "median_above": 21,
+       "all_correct_above": 10,
+       "of": 13
+      }
+     }
+    }
+   },
+   "at scale": {
+    "overall": {
+     "n": 44,
+     "r1": 17,
+     "r1_pct": 38.6,
+     "r5": 28,
+     "r5_pct": 63.6,
+     "r10": 36,
+     "r10_pct": 81.8,
+     "mrr": 0.503
+    },
+    "set": {
+     "private": {
+      "n": 31,
+      "r1": 13,
+      "r1_pct": 41.9,
+      "r5": 22,
+      "r5_pct": 71.0,
+      "r10": 27,
+      "r10_pct": 87.1,
+      "mrr": 0.548
+     },
+     "public": {
+      "n": 13,
+      "r1": 4,
+      "r1_pct": 30.8,
+      "r5": 6,
+      "r5_pct": 46.2,
+      "r10": 9,
+      "r10_pct": 69.2,
+      "mrr": 0.398
+     }
+    },
+    "divider": {
+     "median_above": 10.0,
+     "all_correct_above": 37,
+     "of": 44,
+     "set": {
+      "private": {
+       "median_above": 9,
+       "all_correct_above": 27,
+       "of": 31
+      },
+      "public": {
+       "median_above": 14,
+       "all_correct_above": 10,
+       "of": 13
+      }
+     }
+    }
+   }
+  }
+ }
+}

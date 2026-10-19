@@ -513,6 +513,19 @@ def compare(base: dict, data: dict, before: str = "baseline", after: str = "fina
     return md + [""], out
 
 
+def with_current_divider(final: dict) -> dict:
+    """The final run's report with the divider's numbers from the rerun made after its rule changed, if there was one
+    (the ranking is the same), so a later run compares like with like."""
+    changed = final.get("divider_changed_after_final")
+    if not changed:
+        return final
+    out = {**final, "splits": {k: dict(v) for k, v in final["splits"].items()}}
+    for name, v in changed["splits"].items():
+        if name in out["splits"]:
+            out["splits"][name]["divider"] = v["divider"]
+    return out
+
+
 def divider_rerun(run: Run, final: dict, splits: Sequence[str]) -> tuple[str, dict]:
     """The divider's numbers only, for a run whose ranking must equal the final run's (a divider change moves no
     rank): each split's R@1/5/10 and MRR and every query's rank are checked against `final`."""

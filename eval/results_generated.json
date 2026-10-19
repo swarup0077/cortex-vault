@@ -1754,5 +1754,29 @@
     }
    }
   }
+ },
+ "divider_changed_after_final": {
+  "when": "2026-10-19T17:39:36",
+  "commit": "1cd19ad",
+  "from": 0.31,
+  "to": 0.5,
+  "why": "owner: protect every correct file in the top 20 (page_results), not every correct file; a correct file at #43 is a miss either way",
+  "ranking_identical": true,
+  "splits": {
+   "guard": {
+    "divider": {
+     "median_above": 9.5,
+     "all_correct_above": 32,
+     "of": 32,
+     "set": {
+      "public": {
+       "median_above": 9.5,
+       "all_correct_above": 32,
+       "of": 32
+      }
+     }
+    }
+   }
+  }
  }
 }
