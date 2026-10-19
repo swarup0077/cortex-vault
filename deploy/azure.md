@@ -132,10 +132,15 @@ From the **laptop**:
 ```powershell
 curl.exe -s -o NUL -w "%{http_code}\n" "https://swarup-vault.indiasouthcentral.cloudapp.azure.com/?q=error%200x80070005"
 curl.exe -s -o NUL -w "%{http_code} %{content_type}\n" https://swarup-vault.indiasouthcentral.cloudapp.azure.com/thumb/1
-.venv\Scripts\python -c "from gradio_client import Client; c = Client('https://swarup-vault.indiasouthcentral.cloudapp.azure.com/', verbose=False); print('0x80070005' in c.predict('error 0x80070005', [], 'Sample files', False, api_name='/search'))"
+.venv\Scripts\python deploy\check.py https://swarup-vault.indiasouthcentral.cloudapp.azure.com/ "error 0x80070005" "Screenshot 2026-10-12 101530.png"
 ```
 
-Expect `200`, `200 image/webp` and `True`. Then open the URL on a phone.
+Expect `200`, `200 image/webp` and `OK "error 0x80070005": #1 Screenshot 2026-10-12 101530.png (50 results, …)`.
+Then open the URL on a phone.
+
+`deploy/check.py` sends the search the way the page does: the search box's submit event with the query as event data
+(`{q, scope, select}`), through Gradio's queue. Since the M6 re-skin the `search` endpoint takes no inputs, so a
+`gradio_client` call with positional inputs fails (open item ab).
 
 ## Updating after a change
 
