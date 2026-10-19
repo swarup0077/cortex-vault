@@ -126,12 +126,20 @@ class Config:
     # is neither quoted nor code-like, and CLIP's top hit is a strong outlier, BM25's weight is multiplied by
     # visual_bm25_factor and each *strong* CLIP hit's by visual_clip_factor; weaker gated hits keep the normal
     # weight. CLIP's #1 then scores 2/61, above the 0.5/61 + 1/61 of a file that only BM25 #1 and dense #1 found.
-    # Strong: z >= clip_strong_z, or with fewer than clip_gate_min_candidates images, cosine >= clip_strong_cosine.
+    # Strong: z >= clip_strong_z and a cosine lead of clip_strong_gap over the next image (a run from CLIP's #1), or
+    # with fewer than clip_gate_min_candidates images, cosine >= clip_strong_cosine.
     # All provisional (bench/calibrate.py rule: 12 drawn scenes, 35 paraphrase queries, real CLIP and bge). With
     # the rule off, 1 of 12 scenes was #1 (a file sharing one word with the query beat it). At z 3.25: 10/12 among
     # 36 images and 11/12 among 200, for no paraphrase #1 lost at 36 and one at 200 (every level 3.0-4.0 lost
     # that one). Under 20 images, cosine 0.28: 12/12, and the rule fired on no paraphrase.
+    # The gap (open item z; bench/calibrate.py gap): z grows with the library (36 → 700 images: 5 → 16 of 51
+    # queries no picture answers over the z bar, mostly a look-alike phone chat), the lead doesn't. Scenes led their
+    # runner-up by 0.039-0.101, the no-match queries over the z bar by at most 0.0325; 0.035 is the lowest gap with
+    # none of those firing at 36, 200 or 700 images, and it loses no scene. Its limit: a near-copy of the picture
+    # (a forwarded copy, a second shot) cuts the lead to under 0.025, and image-to-image cosine can't tell a copy
+    # (0.94-1.0) from a distinct generated look-alike (up to 0.99), so the rule doesn't fire for a picture with one.
     clip_strong_z: float = 3.25
+    clip_strong_gap: float = 0.035
     clip_strong_cosine: float = 0.28
     visual_bm25_factor: float = 0.5
     visual_clip_factor: float = 2.0

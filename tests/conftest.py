@@ -262,6 +262,35 @@ def draw_checkerboard(w: int = 640, h: int = 480, n: int = 8) -> Image.Image:
     return img
 
 
+_CHAT_WORDS = "okay see you at five then bring the blue folder lunch was great call me back later sure".split()
+
+
+def draw_phone_chat(seed: int, w: int = 720, h: int = 1600) -> Image.Image:
+    """A phone chat screen (status bar, header, message bubbles, input box). Distinct seeds draw look-alikes that
+    real CLIP ranks close together for text queries no picture answers (open item z)."""
+    import random
+
+    rnd = random.Random(seed)
+    words = lambda n: " ".join(rnd.choice(_CHAT_WORDS) for _ in range(n))  # noqa: E731
+    img = Image.new("RGB", (w, h), (236, 229, 221))
+    d = ImageDraw.Draw(img)
+    d.rectangle((0, 0, w, 150), fill=(7, 94, 84))
+    d.text((20, 12), "09:41", fill="white", font=font(24))
+    d.text((110, 80), words(2), fill="white", font=font(34))
+    y = 180
+    while y < h - 200:
+        left = rnd.random() < 0.5
+        bw = rnd.randint(int(w * 0.45), int(w * 0.75))
+        x0 = 24 if left else w - 24 - bw
+        d.rounded_rectangle((x0, y, x0 + bw, y + 110), 18, fill="white" if left else (220, 248, 198))
+        d.text((x0 + 18, y + 16), words(4), fill="black", font=font(26))
+        d.text((x0 + 18, y + 56), words(3), fill="black", font=font(26))
+        y += 140
+    d.rounded_rectangle((20, h - 110, w - 120, h - 30), 40, fill="white")
+    d.ellipse((w - 100, h - 110, w - 20, h - 30), fill=(7, 94, 84))
+    return img
+
+
 def camera_exif(taken: str | None = None, gps: GpsDms | None = None, make: str | None = "TestCam",
                 model: str | None = "Model 1") -> Image.Exif:
     """EXIF written by Pillow: Make/Model (a camera photo), optionally DateTimeOriginal (`2025:03:12 10:15:30`)

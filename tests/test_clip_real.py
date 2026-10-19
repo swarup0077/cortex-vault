@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from conftest import (camera_exif, draw_checkerboard, draw_desktop_ui, draw_sunset_beach, draw_text_image,
-                      save_image)
+from conftest import (camera_exif, draw_checkerboard, draw_desktop_ui, draw_phone_chat, draw_sunset_beach,
+                      draw_text_image, save_image)
 from vault.ingest.pipeline import index_paths
 from vault.search.engine import search
 
@@ -65,6 +65,38 @@ def test_visual_query_beats_a_file_sharing_one_word(conn, cfg, real_clip, scenes
     assert resp.clip["visual"] and resp.weights["bm25"] == 0.5
     text = search(conn, "electricity invoice", cfg)  # a file holds every word: the rule stays off
     assert text.results[0].filename == "household.docx" and not text.clip["visual"]
+
+
+def test_a_look_alike_picture_doesnt_turn_a_text_query_visual(conn, cfg, real_clip, tmp_path) -> None:
+    """Open item z on generated files: in a bigger library CLIP's z-scores grow, so a phone chat that only looks like
+    the topic of a text query cleared the strong-outlier bar, the visual-query rule halved BM25, and the chat beat
+    the document that answers the query. Its lead over the next chat is tiny; a real visual match's isn't."""
+    from dataclasses import replace
+
+    from conftest import build_docx, draw_label_photo
+
+    root = tmp_path / "library"
+    save_image(draw_sunset_beach(), root / "IMG_0101.jpg", exif=camera_exif())
+    save_image(draw_checkerboard(), root / "IMG_0102.jpg", exif=camera_exif())
+    for i in range(90):
+        cover = draw_label_photo((640, 480), (160, 120, 480, 360), [(190, 210, f"NOTE {i}", 40)], seed=i)
+        save_image(cover, root / f"cover_{i}.png")
+    for i in range(30):
+        lines = [(30, 30 + 40 * k, f"Settings item {i}-{k} enabled") for k in range(8)]
+        save_image(draw_text_image((800, 400), lines, 24), root / f"Screenshot ({i}).png")
+    for i in range(6):
+        save_image(draw_phone_chat(i), root / f"chat_{i}.png")
+    build_docx(root / "office.docx", ["The weekly team sync moves to Thursday because of the holiday."])
+    index_paths(conn, [root], cfg)
+
+    query = "team meeting postponed"  # no file holds every word: the rule may fire
+    before = search(conn, query, replace(cfg, clip_strong_gap=0.0))  # the z bar alone, as before item z
+    assert before.clip["visual"] and before.results[0].filename.startswith("chat_")
+    resp = search(conn, query, cfg)
+    assert resp.clip["kept"] >= 1 and resp.clip["strong"] == 0 and not resp.clip["visual"]
+    assert resp.results[0].filename == "office.docx"
+    sunset = search(conn, "sunset at the beach", cfg)  # a real visual match still leads by far
+    assert sunset.clip["visual"] and sunset.results[0].filename == "IMG_0101.jpg"
 
 
 def test_gate_keeps_clip_out_of_an_error_code(conn, cfg, fake_embedder, real_clip, scenes) -> None:

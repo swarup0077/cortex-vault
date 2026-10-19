@@ -68,13 +68,41 @@ def test_few_candidates_keep_only_hits_above_the_min_cosine() -> None:
 def test_strong_hits_are_the_ones_far_above_the_rest() -> None:
     """The visual-query rule boosts only hits with z >= clip_strong_z; weaker gated hits are kept but not strong."""
     scores = np.full(100, 0.20)
-    scores[:3] = [0.40, 0.30, 0.28]
+    scores[:3] = [0.40, 0.33, 0.29]  # each leads the next by more than the gap
     g = gate(ids(100), scores, Q, CFG)
     z = (scores - scores.mean()) / scores.std()
     assert [f for f, _ in g.hits] == [100, 101, 102] and all(z[:3] >= CFG.clip_gate_z)
     assert g.strong == frozenset(100 + i for i in range(3) if z[i] >= CFG.clip_strong_z)
-    assert gate(ids(100), scores, Q, Config(clip_strong_z=5.0)).strong == {100}  # z ≈ 8.4, 4.1, 3.3
+    assert gate(ids(100), scores, Q, Config(clip_strong_z=6.0)).strong == {100}  # z ≈ 7.8, 5.0, 3.4
     assert gate(ids(100), scores, Q, Config(clip_strong_z=float(z[2]))).strong == {100, 101, 102}  # inclusive
+
+
+def test_a_strong_hit_leads_the_next_image_by_the_gap() -> None:
+    """Open item z: in a big library a look-alike's z clears the bar for text queries, but it leads the next
+    look-alike by little. The lead is inclusive, and a gap of 0 is the z bar alone."""
+    scores = np.full(700, 0.20)
+    scores[:3] = [0.40, 0.39, 0.30]  # z ≈ 18, 17, 9: all over the z bar
+    assert gate(ids(700), scores, Q, CFG).strong == frozenset()  # #1 leads #2 by 0.01
+    assert gate(ids(700), scores, Q, Config(clip_strong_gap=0.01)).strong == {100, 101, 102}
+    assert gate(ids(700), scores, Q, Config(clip_strong_gap=0.0)).strong == {100, 101, 102}
+    scores[1] = 0.36  # #1 leads by 0.04 now, #2 leads #3 by 0.06
+    assert gate(ids(700), scores, Q, CFG).strong == {100, 101, 102}
+
+
+def test_strong_hits_run_from_the_top() -> None:
+    """A hit whose lead is too small ends the run: the one below it isn't strong even if it leads its own next,
+    so the rule's boost never lifts a hit above a better one."""
+    scores = np.full(700, 0.20)
+    scores[:3] = [0.40, 0.39, 0.30]  # #2 leads #3 by 0.09, but #1 leads #2 by only 0.01
+    assert 101 not in gate(ids(700), scores, Q, CFG).strong
+    scores[:3] = [0.45, 0.35, 0.34]  # #1 leads by 0.10, #2 by only 0.01: #1 alone
+    assert gate(ids(700), scores, Q, CFG).strong == {100}
+
+
+def test_the_gap_leaves_the_small_library_rule_alone() -> None:
+    """Under 20 images there's no z-score; strong is cosine >= clip_strong_cosine, whatever the lead."""
+    scores = np.array([0.31, 0.30, 0.20])
+    assert gate(ids(3), scores, Q, CFG).strong == {100, 101}
 
 
 def test_few_candidates_are_strong_by_cosine() -> None:

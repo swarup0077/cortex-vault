@@ -55,5 +55,20 @@ def gate(ids: np.ndarray, scores: np.ndarray, pq: ParsedQuery, cfg: Config) -> G
         return Gated([], True, factor, n)
     z = (scores - scores.mean()) / std
     keep = [i for i in order if z[i] >= cfg.clip_gate_z][: cfg.clip_gate_max]
-    strong = frozenset(int(ids[i]) for i in keep if z[i] >= cfg.clip_strong_z)
+    strong = _strong(ids, scores, z, order, keep, cfg)
     return Gated([(int(ids[i]), float(scores[i])) for i in keep], True, factor, n, strong)
+
+
+def _strong(ids: np.ndarray, scores: np.ndarray, z: np.ndarray, order: np.ndarray, keep: list, cfg: Config
+            ) -> frozenset[int]:
+    """Kept hits, best first, while each is over the z bar and leads the next image by `clip_strong_gap` (open
+    item z: z grows with the library, the lead doesn't). The first hit that fails ends the run, so the rule's boost
+    never lifts a hit above a better one."""
+    strong = []
+    for rank, i in enumerate(keep):
+        if z[i] < cfg.clip_strong_z:
+            break
+        if rank + 1 < len(order) and scores[i] - scores[order[rank + 1]] < cfg.clip_strong_gap:
+            break
+        strong.append(int(ids[i]))
+    return frozenset(strong)
