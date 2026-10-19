@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import json
 import logging
 import re
 import signal
@@ -107,6 +108,12 @@ def cmd_eval(console: Console, cfg: Config, args: argparse.Namespace) -> int:
         title = {"baseline": "Generated-file set: baseline", "final": "Generated-file set: final settings"}.get(
             args.purpose, "Generated-file set")
     md, data = ev.report(run, splits=splits, detail=detail, title=title)
+    baseline = args.baseline or (paths.out / ("results_generated_baseline.json" if args.queries == "generated"
+                                              else "results_baseline.json"))
+    if args.purpose == "final" and baseline.exists():
+        lines, data["baseline_vs_final"] = ev.compare(json.loads(baseline.read_text(encoding="utf-8")), data)
+        head, sep, rest = md.partition("\n## ")  # before the first half's section
+        md = head + "\n" + "\n".join(lines) + sep + rest
     ev.write_report(md, data, args.out)
     if "heldout" in splits:
         finals = ev.log_heldout(paths, args.purpose, overrides)
@@ -278,6 +285,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--set", action="append", default=[], metavar="NAME=VALUE", help="a setting to change")
     p.add_argument("--rows", choices=("app", "all"), default="all", help="the app only, or every ablation row")
     p.add_argument("--no-index", action="store_true", help="use data/eval_index as it is")
+    p.add_argument("--baseline", type=Path, help="a final run compares with this report's .json (default: "
+                   "eval/results_baseline.json, or results_generated_baseline.json)")
     return parser
 
 

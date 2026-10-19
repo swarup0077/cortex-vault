@@ -393,10 +393,15 @@ def summary(run: Run, qs: Sequence[Query]) -> dict:
     app = run.outcomes(APP, qs)
     return {
         "rows": rows,
-        "divider": {"median_above": statistics.median([o.above for o in app]) if app else 0,
-                    "all_correct_above": sum(o.all_above for o in app), "of": len(app)},
+        "divider": {**_divider(app), "set": {name: _divider(run.outcomes(APP, g))
+                                             for name, g in sorted(run.groups(qs)["set"].items())}},
         "latency_ms": {"p50": percentile([o.ms for o in app], 0.5), "p95": percentile([o.ms for o in app], 0.95)},
     }
+
+
+def _divider(app: Sequence[Outcome]) -> dict:
+    return {"median_above": statistics.median([o.above for o in app]) if app else 0,
+            "all_correct_above": sum(o.all_above for o in app), "of": len(app)}
 
 
 def per_query(run: Run, qs: Sequence[Query]) -> list[dict]:
@@ -455,21 +460,54 @@ def report(run: Run, *, splits: Sequence[str], detail: Sequence[str], title: str
         for by in ("search type", "file type", "set"):
             md += _table(f"App, by {by}", app[by]) + [""]
         d = s["divider"]
+        by_set = "; ".join(f"{k} {v['median_above']}, {v['all_correct_above']} of {v['of']}" for k, v in d["set"].items())
         md += [f"Weaker-matches divider (app): median {d['median_above']} results above it; every correct file above "
-               f"it for {d['all_correct_above']} of {d['of']} queries. Latency: p50 {s['latency_ms']['p50']:.0f} ms, "
-               f"p95 {s['latency_ms']['p95']:.0f} ms (engine stage timers).", ""]
+               f"it for {d['all_correct_above']} of {d['of']} queries ({by_set}). Latency: p50 "
+               f"{s['latency_ms']['p50']:.0f} ms, p95 {s['latency_ms']['p95']:.0f} ms (engine stage timers).", ""]
         if "queries" in entry:
             misses = [q for q in entry["queries"] if q["rank"] != 1]
-            md += [f"Queries without a correct file at #1 ({len(misses)}):", "",
-                   "| id | set | search type | query | rank | found by (app) | single-method rank |",
-                   "|---|---|---|---|---|---|---|"]
+            md += [f"Queries without a correct file at #1 ({len(misses)}). Found by: each method's rank for the first "
+                   "correct file in the app (for a weaker match, in the method's full list); single-method rank: its "
+                   "rank with that method alone.", "",
+                   "| id | set | search type | query | rank | above the divider | found by (app) | single-method rank |",
+                   "|---|---|---|---|---|---|---|---|"]
             for q in misses:
                 found = ", ".join(f"{m} #{r}" for m, r in q["found_by"].items()) or "–"
                 single = ", ".join(f"{m} {r if r else '–'}" for m, r in q["single_method_rank"].items())
                 md.append(f"| {q['id']} | {q['set']} | {q['search_type']} | {q['query'] or '(private)'} | "
-                          f"{q['rank'] or 'not in 50'} | {found} | {single} |")
+                          f"{q['rank'] or 'not in 50'} | {'yes' if q['all_correct_above'] else 'no'} | {found} | "
+                          f"{single} |")
             md.append("")
     return "\n".join(md), data
+
+
+def compare(base: dict, data: dict) -> tuple[list[str], dict]:
+    """Baseline vs this run, the app's row: each half overall and by set, and the divider."""
+    md = ["## Baseline vs final", "",
+          f"Baseline run {base['when']} at commit {base['commit']}; this run {data['when']} at commit {data['commit']}. "
+          "The divider by set wasn't recorded by the baseline.", "",
+          "| half | queries | n | R@1 | R@5 | R@10 | MRR@10 | above the divider (median) | every correct file above it |",
+          "|---|---|---|---|---|---|---|---|---|"]
+    out: dict = {}
+    names = {"tune": "Tuning half", "heldout": "Held-out half", "all": "Both halves", GUARD: "Generated-file set"}
+    for name, entry in data["splits"].items():
+        b = base["splits"].get(name)
+        if not b:
+            continue
+        app, b_app = entry["rows"][APP], b["rows"][APP]
+        out[name] = {"baseline": {"overall": b_app["overall"], "set": b_app["set"], "divider": b["divider"]},
+                     "final": {"overall": app["overall"], "set": app["set"], "divider": entry["divider"]}}
+        for label, m, bm in [("all", app["overall"], b_app["overall"]),
+                             *[(k, app["set"][k], b_app["set"].get(k)) for k in sorted(app["set"])]]:
+            if bm is None:
+                continue
+            cells = [f"{bm[f'r{k}']} → {m[f'r{k}']} ({bm[f'r{k}_pct']:.0f}% → {m[f'r{k}_pct']:.0f}%)" for k in CUTOFFS]
+            d, bd = entry["divider"], b["divider"]
+            div = ([f"{bd['median_above']} → {d['median_above']}",
+                    f"{bd['all_correct_above']} → {d['all_correct_above']} of {d['of']}"] if label == "all" else ["", ""])
+            md.append(f"| {names.get(name, name)} | {label} | {m['n']} | " + " | ".join(cells)
+                      + f" | {bm['mrr']:.3f} → {m['mrr']:.3f} | " + " | ".join(div) + " |")
+    return md + [""], out
 
 
 def _models() -> dict[str, str]:

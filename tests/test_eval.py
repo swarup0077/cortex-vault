@@ -132,6 +132,12 @@ def test_a_run_end_to_end_names_private_files_by_id_only(tmp_path, fake_embedder
     s = data["splits"]["tune"]
     assert s["rows"][ev.APP]["overall"]["r1"] == 2 and s["rows"][ev.APP]["set"]["private"]["n"] == 1
     assert s["divider"]["of"] == 2 and s["divider"]["all_correct_above"] == 2
+    assert s["divider"]["set"]["private"] == {"median_above": s["divider"]["set"]["private"]["median_above"],
+                                              "all_correct_above": 1, "of": 1}
+    lines, cmp = ev.compare(data, data)  # a final run against its baseline: each half, overall and by set
+    table = "\n".join(lines)
+    assert "| Tuning half | all | 2 | 2 → 2 (100% → 100%) |" in table and "| Tuning half | private | 1 |" in table
+    assert cmp["tune"]["final"]["divider"]["all_correct_above"] == 2 and "secret" not in table
 
 
 def test_the_ungated_ablation_keeps_every_clip_candidate() -> None:
