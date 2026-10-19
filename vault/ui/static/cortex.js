@@ -1,5 +1,5 @@
 /* Cortex Vault behaviour (SPEC §8), "The Brass Index" look: the combobox search box, selection and the detail view,
-   the type filter, recent searches, the theme toggle, the dial, uploads.
+   the type filter, recent searches, the theme toggle, the dial, uploads and the upload bar.
 
    The decisions (when to search, what Enter and Esc do, which results the type filter and "Show more" leave
    visible, what the count line says, how recent searches are kept) are pure functions, exported for the tests
@@ -87,8 +87,40 @@
     }
   }
 
+  /* ------------------------------------------------------------------ the upload bar (SPEC §8) */
+  /* Its line for a stage: real numbers only, never a time estimate. `upload` is the browser-to-server transfer
+     (`pct` null when the browser can't measure it), `list` and `read` the server's two indexing phases. */
+  function barText(state) {
+    const { stage, done = 0, total = 0, pct = null } = state;
+    const at = Math.min(done + 1, total);
+    if (stage === 'upload') {
+      return `Uploading ${at} of ${total} file${total === 1 ? '' : 's'}${pct === null ? '' : ` · ${pct}%`}`;
+    }
+    if (stage === 'list') return total ? `Listing ${at} of ${total} file${total === 1 ? '' : 's'}` : 'Listing files';
+    if (stage === 'read') return total ? `Reading ${at} of ${total} · names searchable now` : 'Reading · names searchable now';
+    if (stage === 'done') return state.summary ? `Upload done: ${state.summary}` : 'Upload done';
+    return state.text || '';
+  }
+
+  /* The bar's value from 0 to 1, or null when there's no real number (an indeterminate bar). */
+  function barValue(state) {
+    if (state.stage === 'upload') return state.pct === null || state.pct === undefined ? null : state.pct / 100;
+    if (state.stage === 'list' || state.stage === 'read') return state.total ? state.done / state.total : null;
+    return state.stage === 'done' ? 1 : null;
+  }
+
+  /* Bytes sent as a whole percentage, never 100 before the last byte. */
+  function percent(sent, total) {
+    return total > 0 ? Math.min(100, Math.floor((100 * sent) / total)) : 0;
+  }
+
+  /* The results on screen are older than the index: files were listed or read since they were found. */
+  function stale(resultsVersion, indexVersion) {
+    return Number(indexVersion) > Number(resultsVersion);
+  }
+
   const api = { MIN_CHARS, DELAY_MS, PAGE, SAVE_MS, RECENT_MAX, PLURALS, normalize, searchFor, enterAction, escAction,
-    visibility, countWords, remember, forget, parseRecent };
+    visibility, countWords, remember, forget, parseRecent, barText, barValue, percent, stale };
   if (!win) return api;
 
   /* ------------------------------------------------------------------ browser */
@@ -100,6 +132,7 @@
     scope: 'Both', last: '', shown: null, timer: 0, filter: 'all', expanded: false,
     selected: null, text: '', toast: null, toastTimer: 0, saveTimer: 0, turn: 0, recent: [], status: null,
     uploadsFull: false, busyText: '', lastRender: null,
+    transfer: null, notSent: 0, dismissed: '', reportOpen: false, said: '', homeFor: '', awaiting: null,
   };
 
   const $ = (sel, el) => (el || doc).querySelector(sel);
@@ -146,11 +179,11 @@
     doc.documentElement.style.setProperty('--cv-turn', `${S.turn}deg`);
   }
 
-  function search(q) {
+  function search(q, select) {
     S.last = q;
     win.clearTimeout(S.saveTimer);
     if (q) turnDial();
-    if (S.topTrigger) S.topTrigger('submit', { q, scope: effectiveScope() });
+    if (S.topTrigger) S.topTrigger('submit', { q, scope: effectiveScope(), select: select || '' });
   }
 
   function typed() {
@@ -420,20 +453,91 @@
     const slot = S.top && $('[data-status]', S.top);
     if (slot) {
       $('[data-status-text]', slot).textContent = st.text;
-      $('.cv-dot', slot).classList.toggle('cv-dot--busy', st.busy);
-      slot.classList.toggle('is-busy', st.busy);
     }
     const dial = S.top && $('[data-dial-state]', S.top);
     if (dial) dial.textContent = st.dial;
-    doc.body.classList.toggle('cv-reading', st.busy);
     const line = $('[data-index-line]');
     if (line) line.textContent = st.index;
-    const box = S.main && $('[data-progress]', S.main);
-    if (box) {
-      box.hidden = !st.busy;
-      $('[data-progress-pct]', box).textContent = `${st.pct}%`;
-      $('[data-progress-bar]', box).style.width = `${st.pct}%`;
+    paintBar();
+  }
+
+  /* ------------------------------------------------------------------ the upload bar */
+  function barState() {
+    if (S.transfer) {
+      const t = S.transfer;
+      return { stage: 'upload', done: t.done, total: t.total, pct: t.exact ? t.pct : null };
     }
+    const st = S.status;
+    if (S.awaiting !== null) return { stage: 'list', done: 0, total: 0 };  // sent; the server's first word is due
+    if (!st || !st.upload || st.upload === S.dismissed) return null;
+    if (st.message) return { stage: 'message', text: st.message };
+    if (st.stage === 'idle') return null;
+    return { stage: st.stage, done: st.done, total: st.total, summary: st.summary };
+  }
+
+  function paintBar() {
+    const bar = S.top && $('[data-bar]', S.top);
+    if (!bar) return;
+    const state = barState();
+    const reading = !!state && ['upload', 'list', 'read'].includes(state.stage);
+    doc.body.classList.toggle('cv-reading', reading);
+    const dot = $('[data-status] .cv-dot', S.top);
+    if (dot) dot.classList.toggle('cv-dot--busy', reading);
+    bar.hidden = !state;
+    if (!state) return;
+    let text = barText(state);
+    if (state.stage === 'done' && S.notSent) text += ` · ${S.notSent} not sent`;
+    $('[data-bar-text]', bar).textContent = text;
+    const track = $('[data-bar-track]', bar);
+    const value = barValue(state);
+    track.hidden = state.stage === 'message';
+    track.classList.toggle('is-indeterminate', value === null);
+    $('[data-bar-fill]', bar).style.width = value === null ? '' : `${Math.round(value * 1000) / 10}%`;
+    if (value === null) {
+      ['aria-valuenow', 'aria-valuemin', 'aria-valuemax'].forEach((a) => track.removeAttribute(a));
+    } else if (state.stage === 'upload') {
+      track.setAttribute('aria-valuemin', '0');
+      track.setAttribute('aria-valuemax', '100');
+      track.setAttribute('aria-valuenow', String(state.pct));
+    } else {  // real counts: files listed or read
+      track.setAttribute('aria-valuemin', '0');
+      track.setAttribute('aria-valuemax', String(state.total || 1));
+      track.setAttribute('aria-valuenow', String(state.stage === 'done' ? state.total || 1 : state.done));
+    }
+    track.setAttribute('aria-valuetext', text);
+    const st = S.status || {};
+    const root = viewRoot();
+    const update = $('[data-act="update-results"]', bar);
+    update.hidden = !(root && root.dataset.view === 'results' && stale(root.dataset.version, st.version));
+    const report = $('[data-act="report"]', bar);
+    const tpl = S.statusEl && $('template[data-report]', S.statusEl);
+    report.hidden = !tpl || state.stage === 'upload';
+    report.textContent = S.reportOpen ? 'Hide report' : 'Upload report';
+    report.setAttribute('aria-expanded', String(S.reportOpen));
+    const panel = $('[data-bar-report]', bar);
+    panel.hidden = !S.reportOpen || !tpl;
+    if (S.reportOpen && tpl && panel.dataset.upload !== st.upload + st.stage) {  // rows as the server wrote them
+      panel.replaceChildren(tpl.content.cloneNode(true));
+      panel.dataset.upload = st.upload + st.stage;
+    }
+    $('[data-act="dismiss"]', bar).hidden = reading;
+    const said = state.stage === 'upload' ? 'upload' : state.stage;
+    if (said !== S.said) {  // announce stage changes only, not every percent
+      S.said = said;
+      $('[data-bar-say]', S.top).textContent = state.stage === 'read' ? 'Reading the files. Their names are searchable now.'
+        : text;
+    }
+  }
+
+  /* After the first upload of a session, home switches to My uploads and lists them (results never move). */
+  function afterUpload() {
+    const st = S.status;
+    const root = viewRoot();
+    if (!st || !st.newSession || st.upload === S.homeFor || !root || root.dataset.view !== 'home') return;
+    if (normalize(input().value)) return;
+    S.homeFor = st.upload;
+    setScope('My uploads', false);
+    search('');
   }
 
   /* ------------------------------------------------------------------ uploads */
@@ -443,19 +547,71 @@
     if (picker) picker.click();
   }
 
+  /* One file to Gradio's upload endpoint, reporting the bytes sent (the helper Gradio hands to js_on_load can't). */
+  function sendFile(file, onBytes) {
+    return new Promise((resolve, reject) => {
+      const xhr = new win.XMLHttpRequest();
+      xhr.open('POST', 'gradio_api/upload');
+      xhr.upload.onprogress = (e) => onBytes(e.loaded);
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try { resolve(JSON.parse(xhr.responseText)[0]); } catch (e) { reject(e); }
+        } else {
+          reject(Object.assign(new Error(`HTTP ${xhr.status}`), { status: xhr.status }));
+        }
+      };
+      xhr.onerror = () => reject(new Error('network'));
+      const form = new win.FormData();
+      form.append('files', file, file.name);
+      xhr.send(form);
+    });
+  }
+
   async function uploadFiles(files) {
     const list = Array.from(files || []);
-    if (!list.length || !S.upload || !S.topTrigger) return;
+    if (!list.length || !S.topTrigger || S.transfer) return;
     if (S.uploadsFull) { say(S.busyText); return; }
-    say(`Uploading ${list.length} file${list.length === 1 ? '' : 's'}…`);
+    const limit = Number((win.gradio_config || {}).max_file_size) || 0;  // the server refuses larger files anyway
+    const send = list.filter((f) => !limit || f.size <= limit);
+    const t = { done: 0, total: send.length, sent: 0, bytes: send.reduce((a, f) => a + f.size, 0), pct: 0, exact: true,
+      failed: list.length - send.length };
+    S.transfer = t;
+    S.reportOpen = false;
+    S.dismissed = '';
+    paintBar();
     const paths = [];
-    for (const file of list) {
+    for (const file of send) {
+      const base = t.sent;
       try {
-        const res = await S.upload(file);
-        if (res && res.path) paths.push(res.path);
-      } catch (e) { /* the server lists what arrived */ }
+        let path = null;
+        if (t.exact) {
+          try {
+            path = await sendFile(file, (loaded) => { t.pct = percent(base + loaded, t.bytes); paintBar(); });
+          } catch (e) {
+            if (e.status !== 404 && e.status !== 405) throw e;
+            t.exact = false;  // no endpoint to measure: Gradio's helper, and an indeterminate bar
+          }
+        }
+        if (!t.exact && S.upload) {
+          const res = await S.upload(file);
+          path = res && res.path;
+        }
+        if (path) paths.push(path); else t.failed += 1;
+      } catch (e) {
+        t.failed += 1;  // too large, or the connection dropped: said in the bar when the upload is done
+      }
+      t.sent = base + file.size;
+      t.done += 1;
+      t.pct = percent(t.sent, t.bytes);
+      paintBar();
     }
-    if (paths.length) S.topTrigger('upload', { paths, scope: effectiveScope() });
+    S.transfer = null;
+    S.notSent = t.failed;
+    if (paths.length) {
+      S.awaiting = (S.status && S.status.upload) || '';
+      S.topTrigger('upload', { paths, scope: effectiveScope() });
+    } else say(`No file could be sent${limit ? ` (each must be under ${Math.round(limit / 1048576)} MB)` : ''}`);
+    paintBar();
   }
 
   /* ------------------------------------------------------------------ keys */
@@ -512,7 +668,18 @@
       const act = t.closest('[data-act]');
       const q = t.closest('[data-q]');
       if (drop) keepRecent(forget(S.recent, drop.dataset.forget));
-      else if (act && act.dataset.act === 'theme') toggleTheme();
+      else if (act && act.dataset.act === 'update-results') {
+        const sel = current();
+        search(normalize(input().value), sel ? sel.dataset.id : '');
+      } else if (act && act.dataset.act === 'report') { S.reportOpen = !S.reportOpen; paintBar(); }
+      else if (act && act.dataset.act === 'dismiss') {
+        S.dismissed = (S.status && S.status.upload) || '';
+        S.reportOpen = false;
+        paintBar();
+      } else if (t.closest('[data-bar-report] [data-more-btn]')) {
+        $$('[data-bar-report] [data-more]', element).forEach((x) => { x.hidden = false; });
+        t.closest('[data-more-btn]').hidden = true;
+      } else if (act && act.dataset.act === 'theme') toggleTheme();
       else if (act && act.dataset.act === 'clear') { clearBox(); box.focus(); }
       else if (act && act.dataset.act === 'go') searchNow();
       else if (act && act.dataset.act === 'forget-all') keepRecent([]);
@@ -557,6 +724,7 @@
       if (options().length) S.saveTimer = win.setTimeout(rememberShown, SAVE_MS);
     }
     paintStatus();
+    afterUpload();
   }
 
   function mountMain(element, trigger) {
@@ -613,11 +781,17 @@
     const sync = () => {
       const src = $('[data-status-src]', element);
       if (!src) return;
-      S.status = { text: src.dataset.text || '', index: src.dataset.index || '', dial: src.dataset.dial || '',
-        busy: src.dataset.busy === 'true', pct: Number(src.dataset.pct) || 0 };
-      S.uploadsFull = src.dataset.uploads === 'full';
-      S.busyText = src.dataset.busyText || '';
+      const d = src.dataset;
+      S.statusEl = src;
+      S.status = { text: d.text || '', index: d.index || '', dial: d.dial || '', busy: d.busy === 'true',
+        stage: d.stage || 'idle', done: Number(d.done) || 0, total: Number(d.total) || 0,
+        version: Number(d.version) || 0, upload: d.upload || '', summary: d.summary || '', message: d.message || '',
+        newSession: d.newSession === 'true' };
+      S.uploadsFull = d.uploads === 'full';
+      S.busyText = d.busyText || '';
+      if (S.awaiting !== null && S.status.upload && S.status.upload !== S.awaiting) S.awaiting = null;
       paintStatus();
+      afterUpload();
     };
     new win.MutationObserver(sync).observe(element, { childList: true, subtree: true, attributes: true });
     sync();

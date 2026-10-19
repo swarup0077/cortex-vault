@@ -283,6 +283,14 @@ class Library:
                 f"SELECT count(*) FROM files f WHERE f.status = 'ok' AND EXISTS (SELECT 1 FROM paths p WHERE "
                 f"p.file_id = f.id AND p.root IN ({','.join('?' * len(roots))}))", roots).fetchone()[0]
 
+    def version(self) -> int:
+        """Grows whenever indexing lists or reads a file (files + files read), so the UI can tell that results on
+        screen are older than the index ("Update results", SPEC §8)."""
+        with self.connect() as conn:
+            files, ready = conn.execute("SELECT count(*), coalesce(sum(stage = 'ready'), 0) FROM files "
+                                        "WHERE status = 'ok'").fetchone()
+        return files + ready
+
     def type_counts(self) -> dict[str, int]:
         """Files per type for The Archive (SPEC §8): the kinds, with plain-text docs (`.txt`, `.md`) as "text"."""
         out = dict.fromkeys(TYPES, 0)

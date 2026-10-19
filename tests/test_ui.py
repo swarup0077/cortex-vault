@@ -3,6 +3,7 @@ safety, no query logging, and the handlers, without a browser and without real m
 
 import logging
 import re
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -59,8 +60,7 @@ def test_a_hostile_file_name_shows_as_plain_text_everywhere() -> None:
     pages = [
         views.results(response([r], weaker=[result(2, filename=EVIL, weaker=True)]), DEMO, place, query=EVIL),
         views.results(response([visual(3, filename=EVIL)]), DEMO, place, query="q"),
-        views.upload_outcome([FileStatus(EVIL, "indexed"), FileStatus(EVIL, "rejected", EVIL)], DEMO, views.Archive(),
-                             received=2),
+        views.upload_report([FileStatus(EVIL, "indexed"), FileStatus(EVIL, "rejected", EVIL)], DEMO, received=2),
         views.home(DEMO, views.Archive(), recent=[Recent(1, EVIL, "photo", "2026-10-18T10:00:00")]),
         views.empty(response([]), DEMO, query=EVIL),
     ]
@@ -205,7 +205,7 @@ def test_the_upload_lifetime_comes_from_the_config(tmp_path, fake_embedder) -> N
     lib = Library(cfg)
     ctx = UiContext("demo", lib, sessions=SessionManager(lib, cfg, tmp_path / "sessions"))
     texts = [views.footer(ctx.view_mode), layout.home_html(ctx, None),
-             views.upload_outcome([], ctx.view_mode, views.Archive(), received=0)]
+             views.upload_report([], ctx.view_mode, received=0)]
     for text in texts:
         assert "45 minutes after your last search or upload" in text and "60 minutes" not in text
     assert "Demo server · no cloud services" in views.top(ctx.view_mode)
@@ -263,8 +263,9 @@ def gradio_file(ctx: UiContext, name: str, text: str) -> str:
 
 
 def upload(ctx: UiContext, files: dict[str, str], sid=None):
-    *_, (main, status, sid) = layout.handle_upload(ctx, sid, [gradio_file(ctx, n, t) for n, t in files.items()])
-    return main, status, sid
+    """→ (the last status, the session id): the upload bar's last word on this upload."""
+    *_, (status, sid) = layout.handle_upload(ctx, sid, [gradio_file(ctx, n, t) for n, t in files.items()])
+    return status, sid
 
 
 def test_file_route_sends_attachments_and_refuses_anything_path_like(demo_ctx) -> None:
@@ -282,8 +283,8 @@ def test_file_route_sends_attachments_and_refuses_anything_path_like(demo_ctx) -
 def test_another_sessions_upload_is_a_404_not_a_403(demo_ctx) -> None:
     """Session A has two uploads, session B one: A's second file id doesn't exist in B's index."""
     client = TestClient(make_app(build_blocks(demo_ctx), demo_ctx.resolve, demo=True))
-    _, _, a = upload(demo_ctx, {"one.txt": "Robotics club budget.", "two.txt": "Robotics club minutes, October."})
-    _, _, b = upload(demo_ctx, {"other.txt": "A recipe for flatbread."})
+    _, a = upload(demo_ctx, {"one.txt": "Robotics club budget.", "two.txt": "Robotics club minutes, October."})
+    _, b = upload(demo_ctx, {"other.txt": "A recipe for flatbread."})
     lib_a = demo_ctx.session(a).library
     ids_a = {r.filename: r.file_id for r in lib_a.search("robotics club", roots=[demo_ctx.session(a).root]).results}
     with demo_ctx.session(b).library.connect() as conn:
@@ -346,10 +347,11 @@ def test_search_handler_home_results_and_empty(demo_ctx) -> None:
     assert "Nothing uploaded yet" in layout.run_search(demo_ctx, None, "diffusion", "My uploads")
 
 
-def test_upload_outcome_then_scopes(demo_ctx) -> None:
-    main, status, sid = upload(demo_ctx, {"minutes.txt": "Minutes: the diffusion reading group meets Friday."})
-    assert sid and "1</span> file received · 1 added" in main and "minutes.txt" in main
-    assert views._e(demo_ctx.view_mode.upload_notice) in main and 'data-index="3 files · up to date"' in status
+def test_upload_report_then_scopes(demo_ctx) -> None:
+    status, sid = upload(demo_ctx, {"minutes.txt": "Minutes: the diffusion reading group meets Friday."})
+    assert sid and 'data-stage="done"' in status and 'data-summary="1 added"' in status and "minutes.txt" in status
+    assert "1 file received." in status and views._e(demo_ctx.view_mode.upload_notice) in status
+    assert 'data-index="3 files · up to date"' in status and 'data-new-session="true"' in status
     assert layout.archive(demo_ctx, sid).counts["text"] == 1  # The Archive counts the upload with the samples
     mine = layout.run_search(demo_ctx, sid, "diffusion", "My uploads")
     samples = layout.run_search(demo_ctx, sid, "diffusion", "Samples")
@@ -357,9 +359,10 @@ def test_upload_outcome_then_scopes(demo_ctx) -> None:
     assert "diffusion.pdf" in samples and "minutes.txt" not in samples and f"s={sid}" in mine
 
 
-def test_upload_outcome_shows_while_the_files_are_still_read(demo_ctx, monkeypatch) -> None:
-    """Two-phase indexing (SPEC §6.1): the per-file outcome appears once the files are listed; the header then
-    reports "Reading X of Y uploads" until phase 2 is done."""
+def test_the_bar_reports_listing_then_reading_with_real_counts(demo_ctx, monkeypatch) -> None:
+    """The upload bar's server stages (SPEC §8): "Listing" as soon as the server has the files (no count until it
+    knows one), the per-file report once they're listed, "Reading N of M" with real counts, then done. The upload
+    never renders the main part, so results on screen don't move."""
     def slow(session, files, upload_dir, progress, on_listed=None):
         statuses = [FileStatus(Path(f).name, "indexed") for f in files]
         for i, f in enumerate(files):
@@ -372,12 +375,62 @@ def test_upload_outcome_shows_while_the_files_are_still_read(demo_ctx, monkeypat
 
     monkeypatch.setattr(demo_ctx.sessions, "add_files", slow)
     steps = list(layout.handle_upload(demo_ctx, None, [gradio_file(demo_ctx, f"n{i}.txt", "x") for i in range(3)]))
-    first_main = next(i for i, (main, _, _) in enumerate(steps) if isinstance(main, str))
-    assert "3</span> files received · 3 added" in steps[first_main][0] and first_main < len(steps) - 1
-    busy = [status for _, status, _ in steps[first_main:-1]]
-    assert any("Reading 2 of 3 uploads" in s for s in busy) and all('data-busy="true"' in s for s in busy[1:])
-    assert any('data-dial="Reading 2 of 3"' in s and 'data-pct="33"' in s for s in busy)  # the dial and progress bar
-    assert 'data-busy="false"' in steps[-1][1]
+    assert all(len(step) == 2 for step in steps)  # (status, session): never the main part
+    stages = [re.search(r'data-stage="(\w+)"', status).group(1) for status, _ in steps]
+    assert stages[0] == "list" and 'data-total="0"' in steps[0][0] and stages[-1] == "done"
+    assert stages.index("read") > 0 and "list" not in stages[stages.index("read"):]
+    first_report = next(i for i, (status, _) in enumerate(steps) if "<template data-report>" in status)
+    assert first_report < len(steps) - 1  # shown while the files are still read
+    reading = [status for status, _ in steps if 'data-stage="read"' in status]
+    assert any('data-done="1" data-total="3"' in r and 'data-dial="Reading 2 of 3"' in r for r in reading)
+    assert all('data-busy="true"' in r for r in reading)
+    assert 'data-busy="false"' in steps[-1][0] and 'data-summary="3 added"' in steps[-1][0]
+
+
+def test_a_search_runs_and_returns_while_an_upload_is_being_read(demo_ctx, monkeypatch) -> None:
+    """Owner's rule (SPEC §8): the bar never blocks the page. Phase 2 is held on its first file while a search for
+    the uploaded file runs: it returns, and finds the file by its name and native text (listed in phase 1)."""
+    reading, searched = threading.Event(), threading.Event()
+    real = demo_ctx.sessions.add_files
+
+    def held(session, files, upload_dir, progress=None, on_listed=None):
+        def hold(done, total, path, phase="read"):
+            if progress:
+                progress(done, total, path, phase=phase)
+            if phase == "read" and not reading.is_set():
+                reading.set()
+                assert searched.wait(30)
+        return real(session, files, upload_dir, hold, on_listed)
+
+    monkeypatch.setattr(demo_ctx.sessions, "add_files", held)
+    steps: list = []
+    path = gradio_file(demo_ctx, "robotics minutes.txt", "Robotics club minutes: the servo budget was approved.")
+    worker = threading.Thread(target=lambda: steps.extend(layout.handle_upload(demo_ctx, None, [path])))
+    worker.start()
+    try:
+        assert reading.wait(30), "phase 2 never started"
+        sid = next(iter(demo_ctx.sessions.sessions))
+        started = time.monotonic()
+        page = layout.run_search(demo_ctx, sid, "servo budget", "My uploads")
+        assert "robotics minutes.txt" in page and time.monotonic() - started < 10
+    finally:
+        searched.set()
+        worker.join(30)
+    assert any('data-stage="read"' in status for status, _ in steps) and 'data-stage="done"' in steps[-1][0]
+
+
+def test_results_know_their_index_version_and_update_keeps_the_selection(demo_ctx) -> None:
+    """"Update results" (SPEC §8): results carry the index version they were found in; listing and reading a file
+    each raise it, so the bar can tell the results are older. Re-running the search with `select` keeps the
+    selected result."""
+    before = layout.run_search(demo_ctx, None, "denoising diffusion")
+    v0 = int(re.search(r'data-version="(\d+)"', before).group(1))
+    status, sid = upload(demo_ctx, {"diffusion notes.txt": "Notes on denoising diffusion models."})
+    v1 = int(re.search(r'data-version="(\d+)"', status).group(1))
+    assert v1 == v0 + 2  # one file listed, one file read
+    hit = demo_ctx.library.search("denoising diffusion").results[0]
+    again = layout.run_search(demo_ctx, sid, "denoising diffusion", "Both", select=hit.file_id)
+    assert f'data-select="{hit.file_id}"' in again and f'data-version="{v1}"' in again
 
 
 def test_the_server_logs_no_queries_in_either_mode(demo_ctx, tmp_path, make_search_corpus, caplog) -> None:
@@ -390,7 +443,7 @@ def test_the_server_logs_no_queries_in_either_mode(demo_ctx, tmp_path, make_sear
     hit = demo_ctx.library.search("denoising diffusion").results[0]
     layout.run_search(demo_ctx, None, secret)
     client.get(f"/detail/{hit.file_id}?chunk={hit.chunk_id}&q=" + secret.replace(" ", "+"))
-    _, _, sid = upload(demo_ctx, {"notes.txt": "Robotics club notes."})
+    _, sid = upload(demo_ctx, {"notes.txt": "Robotics club notes."})
     layout.run_search(demo_ctx, sid, secret, "My uploads")
     local = Library(Config(data_dir=tmp_path / "local"))
     local.index([make_search_corpus(tmp_path / "files")])
@@ -408,8 +461,8 @@ def test_the_server_logs_no_queries_in_either_mode(demo_ctx, tmp_path, make_sear
 def test_upload_refuses_paths_outside_gradios_folder(demo_ctx, tmp_path) -> None:
     secret = tmp_path / "secret.txt"
     secret.write_text("private", encoding="utf-8")
-    *_, (main, _, sid) = layout.handle_upload(demo_ctx, None, [str(secret)])
-    assert sid is None and "not an uploaded file" in main
+    *_, (status, sid) = layout.handle_upload(demo_ctx, None, [str(secret)])
+    assert sid is None and "not an uploaded file" in status
 
 
 def test_open_file_is_local_only(tmp_path, fake_embedder, make_search_corpus, monkeypatch) -> None:
@@ -445,7 +498,7 @@ def test_opening_or_searching_the_page_never_creates_a_session(demo_ctx) -> None
     layout.run_search(demo_ctx, None, "denoising diffusion", "My uploads")
     for route in ("thumb", "preview", "detail", "file"):
         client.get(f"/{route}/1?s={uuid.uuid4()}")
-    *_, (_, _, sid) = layout.handle_upload(demo_ctx, None, [gradio_file(demo_ctx, "notes.zip", "not supported")])
+    *_, (_, sid) = layout.handle_upload(demo_ctx, None, [gradio_file(demo_ctx, "notes.zip", "not supported")])
     assert sid is None and demo_ctx.sessions.sessions == {}
 
 
@@ -454,7 +507,7 @@ def test_with_all_sessions_open_uploads_say_busy_and_search_still_works(demo_ctx
     busy; searching the sample files works for everyone, and a visitor who has a session can still add to it."""
     cap = demo_ctx.sessions.cfg.max_sessions
     assert cap == 5
-    _, _, first = upload(demo_ctx, {"first.txt": "Notes from the first visitor about robotics."})
+    _, first = upload(demo_ctx, {"first.txt": "Notes from the first visitor about robotics."})
     for _ in range(cap - 1):
         demo_ctx.sessions._create()
     assert demo_ctx.sessions.full and len(demo_ctx.sessions.sessions) == cap
@@ -463,12 +516,12 @@ def test_with_all_sessions_open_uploads_say_busy_and_search_still_works(demo_ctx
     assert views._e(views.DEMO_BUSY) in home and 'data-act="add"' not in home  # neither Add files nor the drop zone
     assert 'data-uploads="full"' in layout.status_html(demo_ctx, None)
     path = gradio_file(demo_ctx, "late.txt", "A latecomer's file.")
-    *_, (main, status, sid) = layout.handle_upload(demo_ctx, None, [path])
-    assert sid is None and views._e(views.DEMO_BUSY) in main and "late.txt" not in main
+    *_, (status, sid) = layout.handle_upload(demo_ctx, None, [path])
+    assert sid is None and views._e(views.DEMO_BUSY) in status and "late.txt" not in status
     assert not Path(path).exists()  # nothing kept, Gradio's copy included
     assert "diffusion.pdf" in layout.run_search(demo_ctx, None, "denoising diffusion")
 
     assert 'data-uploads="open"' in layout.status_html(demo_ctx, first)  # the first visitor can still add files
-    main, _, again = upload(demo_ctx, {"second.txt": "More robotics notes."}, sid=first)
-    assert again == first and "1 added" in main
+    status, again = upload(demo_ctx, {"second.txt": "More robotics notes."}, sid=first)
+    assert again == first and 'data-summary="1 added"' in status
     assert "second.txt" in layout.run_search(demo_ctx, first, "robotics notes", "My uploads")

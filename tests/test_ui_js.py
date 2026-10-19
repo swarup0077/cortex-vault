@@ -1,10 +1,11 @@
 """cortex.js decisions (SPEC §8), run in Node: search as you type, Enter, Esc, the type filter and "Show more", the
-count line, and recent searches.
+count line, recent searches, and the upload bar.
 
 Skipped where Node isn't installed; the browser behaviour itself is checked by hand in headless Edge.
 """
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -88,3 +89,25 @@ def test_normalize_matches_the_server() -> None:
 
     for text in ["  error   0x80070005 ", "dice\ton a\ntable", ""]:
         assert run(f"C.normalize({json.dumps(text)})") == normalize(text)
+
+
+def test_the_upload_bar_says_real_numbers_only() -> None:
+    """Owner's rule (SPEC §8): the transfer's percentage only when the browser measured it, real counts while the
+    server lists and reads, an indeterminate bar (null) where there's no number, and never a time estimate."""
+    assert run("C.barText({stage: 'upload', done: 2, total: 10, pct: 27})") == "Uploading 3 of 10 files · 27%"
+    assert run("C.barText({stage: 'upload', done: 0, total: 1, pct: null})") == "Uploading 1 of 1 file"
+    assert run("C.barText({stage: 'list', done: 0, total: 0})") == "Listing files"
+    assert run("C.barText({stage: 'list', done: 4, total: 12})") == "Listing 5 of 12 files"
+    assert run("C.barText({stage: 'read', done: 11, total: 12})") == "Reading 12 of 12 · names searchable now"
+    assert run("C.barText({stage: 'done', summary: '3 added · 1 not added'})") == "Upload done: 3 added · 1 not added"
+    assert run("[C.barValue({stage: 'upload', pct: null}), C.barValue({stage: 'upload', pct: 27}), "
+               "C.barValue({stage: 'list', done: 0, total: 0}), C.barValue({stage: 'read', done: 3, total: 12})]") \
+        == [None, 0.27, None, 0.25]
+    assert run("[C.percent(0, 100), C.percent(999, 1000), C.percent(1000, 1000), C.percent(5, 0)]") == [0, 99, 100, 0]
+    body = re.search(r"function barText\(state\) \{(.*?)\n  \}", JS.read_text(encoding="utf-8"), re.S).group(1)
+    shown = " ".join(re.findall(r"'[^']*'|`[^`]*`", body))  # the words the bar can display
+    assert "Uploading" in shown and not re.search(r"remaining|left|eta|minute|second|\bsec\b|\bmin\b", shown, re.I)
+
+
+def test_update_results_shows_only_when_the_index_is_newer() -> None:
+    assert run("[C.stale('6', 8), C.stale(8, 8), C.stale('', 0), C.stale(9, '8')]") == [True, False, False, False]

@@ -112,6 +112,26 @@ body {
 .dark .cv-app .cv-ico--sun { display: block; }
 .dark .cv-app .cv-ico--moon { display: none; }
 
+/* ---------- The upload bar: a strip under the header, in the page flow (never an overlay) ---------- */
+.cv-bar { border-bottom: 1px solid var(--cv-line); background: color-mix(in srgb, var(--cv-brass) 7%, var(--cv-paper)); }
+.cv-bar__in { min-height: 42px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; padding-block: 6px;
+  font-size: 12.5px; color: var(--cv-ink); }
+.cv-bar__text { min-width: 0; font-variant-numeric: tabular-nums; }
+.cv-bar__track { position: relative; flex: 1 1 160px; min-width: 80px; max-width: 420px; height: 4px; border-radius: 4px;
+  background: var(--cv-line); overflow: hidden; }
+.cv-bar__track i { display: block; height: 100%; width: 0; border-radius: 4px; background: var(--cv-brass);
+  transition: width 0.3s ease; }
+.cv-bar__track.is-indeterminate i { width: 30%; animation: cv-sweep 1.4s ease-in-out infinite; }
+@keyframes cv-sweep { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+.cv-bar__actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.cv-app .cv-bar__btn { padding: 5px 12px; border: 1px solid var(--cv-ink); border-radius: 5px; background: var(--cv-ink);
+  color: var(--cv-paper); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.cv-app .cv-bar__link { padding: 4px 2px; border: 0; background: transparent; color: var(--cv-brass-ink); font-size: 12px;
+  text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.cv-app .cv-bar__close { width: 28px; height: 28px; color: var(--cv-muted); }
+.cv-bar__report { padding-bottom: 12px; }
+.cv-bar__report .cv-note { margin-top: 4px !important; }
+
 /* ---------- The dial (SVG face + our logo at the hub) ---------- */
 .cv-dial { position: relative; display: block; width: 154px; height: 154px; margin: 15px 0 12px; flex: none;
   filter: drop-shadow(0 12px 24px rgba(79, 50, 29, 0.18)); }
@@ -207,12 +227,6 @@ body.cv-query .cv-queries, body.cv-off-home .cv-queries { display: none; }
   border: 1px solid var(--cv-brass); border-radius: 5px; background: transparent; color: var(--cv-brass-ink); font-size: 13px; }
 .cv-app .cv-add:hover, .cv-add.is-over { background: var(--cv-active); }
 .cv-app .cv-add--busy { border-style: dashed; color: var(--cv-muted); text-align: center; font-size: 12px; cursor: default; }
-.cv-progress { margin-top: 14px; color: var(--cv-muted); font-size: 11px; }
-.cv-progress__top { display: flex; justify-content: space-between; }
-.cv-progress strong { color: var(--cv-brass-ink); }
-.cv-progress__track { height: 3px; border-radius: 3px; background: var(--cv-line); margin-top: 7px; overflow: hidden; }
-.cv-progress__track i { display: block; height: 100%; width: 0; background: var(--cv-brass); transition: width 0.4s ease; }
-.cv-progress p { margin-top: 7px !important; font-size: 10.5px; }
 
 /* File-type glyph: tinted square with a file icon. */
 .cv-glyph { width: 34px; height: 34px; display: inline-grid; place-items: center; flex: none; border-radius: 6px;
@@ -398,7 +412,6 @@ body.cv-query .cv-queries, body.cv-off-home .cv-queries { display: none; }
   .cv-header__in { height: 64px; }
   .cv-brand__name { font-size: 14px; }
   .cv-status { display: none; }
-  .cv-status.is-busy { display: flex; }  /* "Reading X of Y uploads" still shows */
   .cv-header__end { gap: 8px; }
   .cv-top { padding-top: 35px; }
   .cv-hero { min-height: 0; padding-bottom: 28px; }
@@ -448,12 +461,18 @@ body.cv-query .cv-queries, body.cv-off-home .cv-queries { display: none; }
   .cv-app .cv-detail__actions button { padding: 13px 6px; }
   .cv-keys { display: none; }
   .cv-footer__in { padding-block: 14px 22px; }
+  .cv-bar__text { flex: 1 1 100%; }
+  .cv-bar__track { flex: 1 1 auto; max-width: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .cv-app *, .cv-app *::before, .cv-app *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
   .cv-dial__face { transform: rotate(22deg) !important; }  /* the dial stays still */
   .cv-reading .cv-dial__spin, .cv-dot--busy { animation: none !important; }
+  /* No sweep: an indeterminate bar is a still, striped track. */
+  .cv-bar__track.is-indeterminate i { animation: none !important; width: 100%; opacity: 0.45;
+    background: repeating-linear-gradient(90deg, var(--cv-brass) 0 8px, transparent 8px 14px); }
+  .cv-bar__track i { transition: none !important; }
   .cv-top, .cv-hero { transition: none !important; }
 }
 

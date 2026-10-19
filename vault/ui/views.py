@@ -348,6 +348,7 @@ def top(mode: Mode, suggestions: Sequence[Suggestion] = ()) -> str:
         f'<span data-status-text>{_e(mode.status)}</span></span>{dial(compact=True)}'
         '<button type="button" class="cv-iconbtn" data-act="theme" aria-label="Dark theme" aria-pressed="false">'
         f'{icon("moon", "cv-ico cv-ico--moon")}{icon("sun", "cv-ico cv-ico--sun")}</button></div></div></header>'
+        f"{upload_bar() if mode.demo else ''}"
         '<div class="cv-wrap cv-top">'
         '<section class="cv-hero" data-hero><div class="cv-hero__copy">'
         f'<p class="cv-eyebrow">{icon("shield")}Your files, remembered</p>'
@@ -380,15 +381,38 @@ def footer(mode: Mode) -> str:
             "<span><b>esc</b> clear</span></span></div></footer>")
 
 
-def status(text: str, *, index: str = "", dial_state: str = "Ready", busy: bool = False, done: int = 0,
-           total: int = 0, uploads_full: bool = False) -> str:
-    """The header's status line, the dial's state, the footer's index line and the upload progress, copied into
-    place by cortex.js. `uploads_full`: no new upload session can open, so Add files and the drop zone say so
-    instead of uploading."""
-    pct = round(100 * done / total) if busy and total else 0
+def upload_bar() -> str:
+    """The upload progress bar (SPEC §8): a slim strip under the header, in the page flow, so search, the type
+    filter and the detail view stay usable. cortex.js fills it from its own transfer counts (stage 1) and from the
+    status part (listing and reading); the report rows come from the status part, rendered here on the server."""
+    return ('<div class="cv-bar" data-bar hidden><div class="cv-wrap cv-bar__in">'
+            '<span class="cv-bar__text" data-bar-text></span>'
+            '<span class="cv-bar__track" role="progressbar" aria-label="Upload progress" data-bar-track>'
+            '<i data-bar-fill></i></span><span class="cv-bar__actions">'
+            '<button type="button" class="cv-bar__btn" data-act="update-results" hidden>Update results</button>'
+            '<button type="button" class="cv-bar__link" data-act="report" aria-expanded="false" hidden></button>'
+            f'<button type="button" class="cv-iconbtn cv-bar__close" data-act="dismiss" aria-label="Hide" hidden>'
+            f'{icon("x")}</button></span></div>'
+            '<div class="cv-wrap cv-bar__report" data-bar-report hidden></div></div>'
+            '<span class="cv-sr" role="status" aria-live="polite" data-bar-say></span>')
+
+
+def status(text: str, *, index: str = "", dial_state: str = "Ready", stage: str = "idle", done: int = 0,
+           total: int = 0, version: int = 0, uploads_full: bool = False, upload_id: str = "", report: str = "",
+           summary: str = "", message: str = "", new_session: bool = False) -> str:
+    """What cortex.js copies into place: the header status, the dial's state, the footer's index line, and the
+    upload bar's server stages. `stage`: "list" or "read" while an upload is indexed (`done` of `total`, real
+    counts), "done" after it, else "idle". `version`: the index's `Library.version()`, so results older than the
+    index offer "Update results". `upload_id` names one upload; `report` is its per-file outcome (server-rendered
+    rows) and `summary` the line that opens it; `message` says why nothing was kept. `uploads_full`: no new upload
+    session can open, so Add files and the drop zone say so instead of uploading."""
+    busy = stage in ("list", "read")
     return (f'<div class="cv-app cv-part" data-status-src data-busy="{str(busy).lower()}" data-text="{_e(text)}" '
-            f'data-index="{_e(index)}" data-dial="{_e(dial_state)}" data-pct="{pct}" '
-            f'data-uploads="{"full" if uploads_full else "open"}" data-busy-text="{_e(DEMO_BUSY)}"></div>')
+            f'data-index="{_e(index)}" data-dial="{_e(dial_state)}" data-stage="{_e(stage)}" data-done="{int(done)}" '
+            f'data-total="{int(total)}" data-version="{int(version)}" data-upload="{_e(upload_id)}" '
+            f'data-summary="{_e(summary)}" data-message="{_e(message)}" data-new-session="{str(new_session).lower()}" '
+            f'data-uploads="{"full" if uploads_full else "open"}" data-busy-text="{_e(DEMO_BUSY)}">'
+            f'{f"<template data-report>{report}</template>" if report else ""}</div>')
 
 
 # ---------------------------------------------------------------- The Archive (sidebar)
@@ -414,10 +438,6 @@ def rail(mode: Mode, archive: Archive) -> str:
         action = f'<div class="cv-add cv-add--busy" role="status">{_e(DEMO_BUSY)}</div>'
     else:
         action = f'<button type="button" class="cv-add" data-act="add">{icon("upload")}Add files</button>'
-    progress = ('<div class="cv-progress" data-progress hidden><div class="cv-progress__top">'
-                '<span>Files still being read</span><strong data-progress-pct></strong></div>'
-                '<div class="cv-progress__track"><i data-progress-bar></i></div>'
-                "<p>OCR · meaning · picture index</p></div>" if mode.demo else "")
     return (
         '<aside class="cv-rail" aria-label="The Archive">'
         '<div class="cv-rail__head"><h2>The Archive</h2>'
@@ -425,7 +445,7 @@ def rail(mode: Mode, archive: Archive) -> str:
         '<div class="cv-rail__types"><div class="cv-rail__label" id="cv-types-l">Filter by type</div>'
         f'<div class="cv-filters" role="group" aria-labelledby="cv-types-l">{"".join(filters)}</div></div>'
         f'<div class="cv-rail__rest"><div class="cv-rail__note"><div class="cv-rail__note-title">{icon("shield")}'
-        f'Private by design</div><p>{_e(mode.private_note)}</p></div>{action}{progress}</div></aside>'
+        f'Private by design</div><p>{_e(mode.private_note)}</p></div>{action}</div></aside>'
     )
 
 
@@ -577,10 +597,11 @@ def row(r: SearchResult, query: str, mode: Mode, session: str | None, hidden: bo
 
 
 def results(resp: SearchResponse, mode: Mode, place: Place, archive: Archive | None = None, *, query: str,
-            session: str | None = None, select: int | None = None, page: int = PAGE) -> str:
+            session: str | None = None, select: int | None = None, page: int = PAGE, version: int = 0) -> str:
     """The results view: the count line, one numbered list in fused order with the weaker matches after a
     divider, "Show N more", and the detail view. `query` is the text in the box (normalised) these results
-    belong to; Enter only opens a result when the box still holds it."""
+    belong to; Enter only opens a result when the box still holds it. `version`: the index's version they were
+    found in (`Library.version()`); a newer index makes the upload bar offer "Update results"."""
     archive = archive or Archive()
     items = [*resp.results, *resp.weaker]
     if not items:
@@ -619,7 +640,7 @@ def results(resp: SearchResponse, mode: Mode, place: Place, archive: Archive | N
         f'<div hidden data-templates>{templates}</div>'
     )
     return _page("results", mode, archive, content, query=query, select=select or "", page=page,
-                 matches=n, weaker=w)
+                 matches=n, weaker=w, version=version)
 
 
 def empty(resp: SearchResponse, mode: Mode, archive: Archive | None = None, *, query: str) -> str:
@@ -655,19 +676,23 @@ UPLOAD_ICONS = {"indexed": ("ok", "check", "added"), "duplicate": ("skip", "same
                 "rejected": ("bad", "x", None), "error": ("bad", "x", None)}
 
 
-def demo_busy(mode: Mode, archive: Archive) -> str:
-    """An upload that found every session slot taken: nothing was kept."""
-    return _message("upload", mode, archive, DEMO_BUSY,
-                    "Your files weren't kept. Searching the sample files works as usual.")
+UPLOAD_KEPT_NONE = "Your files weren't kept. Searching the sample files works as usual."
+UPLOAD_FAILED = "The upload couldn't be read. Please try again."
 
 
-def upload_failed(mode: Mode, archive: Archive) -> str:
-    return _message("upload", mode, archive, "The upload couldn't be read", "Please try again.")
-
-
-def upload_outcome(files: Sequence, mode: Mode, archive: Archive, *, received: int) -> str:
-    """After an upload: each file as added, already in your uploads, or why it wasn't (`vault.session.FileStatus`)."""
+def upload_summary(files: Sequence) -> str:
+    """The upload bar's line for one upload's outcome: "3 added · 1 already in your uploads · 1 not added"."""
     added = sum(f.status == "indexed" for f in files)
+    same = sum(f.status == "duplicate" for f in files)
+    parts = [f"{added} added"] + ([f"{same} already in your uploads"] if same else [])
+    if rest := len(files) - added - same:
+        parts.append(f"{rest} not added")
+    return " · ".join(parts)
+
+
+def upload_report(files: Sequence, mode: Mode, *, received: int) -> str:
+    """The rows behind the bar's summary: each file as added, already in your uploads, or why it wasn't
+    (`vault.session.FileStatus`), under the upload notice. cortex.js copies them into the bar when it's opened."""
     rows = []
     for i, f in enumerate(files):
         cls, ico, why = UPLOAD_ICONS.get(f.status, ("bad", "x", None))
@@ -677,10 +702,8 @@ def upload_outcome(files: Sequence, mode: Mode, archive: Archive, *, received: i
                     f'<span class="cv-upl__why">{_e(reason)}</span></div>')
     more = (f'<button type="button" class="cv-more" data-more-btn>Show all {len(files)}</button>'
             if len(files) > UPLOAD_ROWS else "")
-    content = (f'<div class="cv-toolbar"><div class="cv-count"><span class="cv-count__n">{received}</span> '
-               f'file{"s" if received != 1 else ""} received · {added} added</div></div>'
-               f'<p class="cv-note">{_e(mode.upload_notice)}</p><div class="cv-upls">{"".join(rows)}</div>{more}')
-    return _page("upload", mode, archive, content)
+    return (f'<p class="cv-note">{received} file{"s" if received != 1 else ""} received. {_e(mode.upload_notice)}</p>'
+            f'<div class="cv-upls">{"".join(rows)}</div>{more}')
 
 
 # ---------------------------------------------------------------- local Folders panel

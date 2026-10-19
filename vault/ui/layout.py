@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import functools
 import logging
+import secrets
 import threading
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
@@ -105,8 +106,12 @@ def uploads_full(ctx: UiContext, session: str | None) -> bool:
     return bool(ctx.sessions) and ctx.session(session) is None and ctx.sessions.full
 
 
-def status_html(ctx: UiContext, session: str | None, *, busy: tuple[int, int] | None = None) -> str:
-    """The header status, the dial's state, the footer's index line and the upload progress (SPEC §8)."""
+def status_html(ctx: UiContext, session: str | None, *, busy: tuple[str, int, int] | None = None,
+                upload_id: str = "", files: Sequence | None = None, received: int = 0, message: str = "",
+                new_session: bool = False) -> str:
+    """The header status, the dial's state, the footer's index line, and the upload bar's server stages (SPEC §8):
+    `busy` = (phase, done, total) while an upload is listed or read, with real counts (total 0: not known yet);
+    `files` is its per-file outcome once listed; `message` says why nothing was kept."""
     full = uploads_full(ctx, session)
     lib, _, _ = ctx.target(session, "Both")
     n = lib.count()
@@ -115,12 +120,17 @@ def status_html(ctx: UiContext, session: str | None, *, busy: tuple[int, int] | 
     else:
         last = ctx.library.stats().last_indexed
         index = f"{n} files · " + (f"indexed {views.ago(last)}" if last else "not indexed yet")
+    kw: dict = dict(index=index, version=lib.version(), uploads_full=full, upload_id=upload_id, message=message,
+                    new_session=new_session)
+    if files is not None:
+        kw.update(report=views.upload_report(files, ctx.view_mode, received=received),
+                  summary=views.upload_summary(files))
     if busy is not None:
-        done, total = busy
-        reading = f"Reading {min(done + 1, total)} of {total}"
-        return views.status(f"{reading} uploads", index=index, dial_state=reading, busy=True, done=done, total=total,
-                            uploads_full=full)
-    return views.status(ctx.view_mode.status, index=index, uploads_full=full)
+        phase, done, total = busy
+        verb = "Reading" if phase == "read" else "Listing"
+        dial = f"{verb} {min(done + 1, total)} of {total}" if total else verb
+        return views.status(ctx.view_mode.status, dial_state=dial, stage=phase, done=done, total=total, **kw)
+    return views.status(ctx.view_mode.status, stage="done" if upload_id and not message else "idle", **kw)
 
 
 def archive(ctx: UiContext, session: str | None, scope: str = "Both") -> views.Archive:
@@ -147,68 +157,64 @@ def run_search(ctx: UiContext, session: str | None, query: object, scope: object
     if ctx.demo and scope == "My uploads" and ctx.session(session) is None:
         return views.nothing_uploaded(ctx.view_mode, archive(ctx, session, scope), q)
     lib, roots, url_session = ctx.target(session, scope)
+    version = lib.version()  # before the search: results never claim to be newer than they are
     try:
         resp = lib.search(q, roots=roots)
     except db.ModelMismatchError as e:
         return views.needs_rebuild(ctx.view_mode, archive(ctx, session, scope), q, str(e))
     return views.results(resp, ctx.view_mode, ctx.place(session), archive(ctx, session, scope), query=q,
-                         session=url_session, select=select, page=ctx.page_results)
+                         session=url_session, select=select, page=ctx.page_results, version=version)
 
 
-def handle_upload(ctx: UiContext, session: str | None, paths: object) -> Iterator[tuple[object, str, str | None]]:
-    """Demo uploads → yields (main part or no change, status, session id) while the files are read, then the
-    per-file outcome. Only files in Gradio's upload folder are read; the session rejects everything else."""
+def handle_upload(ctx: UiContext, session: str | None, paths: object) -> Iterator[tuple[str, str | None]]:
+    """Demo uploads → yields (status, session id) while the files are listed and read: the upload bar's server
+    stages with real counts, then the per-file report (SPEC §8). The main part is never an output, so results on
+    screen don't move; the bar offers "Update results" instead. Only files in Gradio's upload folder are read; the
+    session rejects everything else."""
     if not ctx.sessions or not isinstance(paths, list) or not paths:
-        yield gr.skip(), status_html(ctx, session), session
+        yield status_html(ctx, session), session
         return
     files = [Path(p) for p in paths[:1000] if isinstance(p, str)]
+    upload_id = secrets.token_hex(6)
     progress = {"done": 0, "total": 0, "phase": "list"}
     outcome: dict = {}
 
     def report(done: int, total: int, path: str, phase: str = "read") -> None:
         progress.update(done=done, total=total, phase=phase)
 
-    def listed(result) -> None:  # phase 1 is done: the outcome can show while phase 2 reads the files
+    def listed(result) -> None:  # phase 1 is done: names and native text are searchable, the report can show
         outcome["listed"] = result
 
     def work() -> None:
         try:
             outcome["result"] = ctx.sessions.add_files(session, files, ctx.upload_dir, report, listed)
-        except Exception as e:  # shown as the outcome rather than a status stuck on "Reading"
+        except Exception as e:  # said in the bar rather than a bar stuck on "Reading"
             log.exception("upload failed")
             outcome["error"] = e
 
     worker = threading.Thread(target=work, name="upload", daemon=True)
     worker.start()
-    shown = False
+    yield status_html(ctx, session, busy=("list", 0, 0), upload_id=upload_id), session  # the server has the files
     while worker.is_alive():
         worker.join(ctx.poll_s)
         if not worker.is_alive():
             break
-        main: object = gr.skip()
-        sid = session
-        if "listed" in outcome and not shown:  # the per-file outcome, as soon as the files are listed
-            shown = True
-            sid = outcome["listed"].session_id or session
-            main = views.upload_outcome(outcome["listed"].files, ctx.view_mode,
-                                        archive(ctx, sid, "My uploads" if sid else "Both"), received=len(files))
-        elif shown:
-            sid = outcome["listed"].session_id or session
-        if progress["total"] and progress["phase"] == "read":
-            yield main, status_html(ctx, sid, busy=(progress["done"], progress["total"])), sid
-        elif shown:
-            yield main, status_html(ctx, sid), sid
+        done = outcome.get("listed")
+        sid = (done.session_id if done else None) or session
+        yield status_html(ctx, sid, busy=(progress["phase"], progress["done"], progress["total"]),
+                          upload_id=upload_id, files=done.files if done else None, received=len(files),
+                          new_session=bool(sid) and not session), sid
     if "error" in outcome:
-        yield views.upload_failed(ctx.view_mode, archive(ctx, session)), status_html(ctx, session), session
+        yield status_html(ctx, session, upload_id=upload_id, message=views.UPLOAD_FAILED), session
         return
     _, result = outcome["result"]
     if result.busy:  # every session slot is taken: nothing was kept
-        yield views.demo_busy(ctx.view_mode, archive(ctx, session)), status_html(ctx, session), session
+        yield status_html(ctx, session, upload_id=upload_id,
+                          message=f"{views.DEMO_BUSY}. {views.UPLOAD_KEPT_NONE}"), session
         return
     sid = result.session_id or session
-    main = views.upload_outcome(result.files, ctx.view_mode, archive(ctx, sid, "My uploads" if sid else "Both"),
-                                received=len(files))
-    yield main, status_html(ctx, sid), sid
+    yield status_html(ctx, sid, upload_id=upload_id, files=result.files, received=len(files),
+                      new_session=bool(sid) and not session), sid
 
 
 def open_file(ctx: UiContext, file_id: object) -> str:
@@ -305,7 +311,9 @@ def build_blocks(ctx: UiContext) -> gr.Blocks:
         gr.HTML(views.footer(ctx.view_mode), elem_id="cv-foot", **part)
 
         def on_search(sid, evt: gr.EventData):
-            return run_search(ctx, sid, _event(evt, "q", ""), _event(evt, "scope", "Both"))
+            raw = str(_event(evt, "select", "") or "")  # "Update results" keeps the selected result
+            return run_search(ctx, sid, _event(evt, "q", ""), _event(evt, "scope", "Both"),
+                              int(raw) if raw.isdigit() else None)
 
         top.submit(on_search, session, main, trigger_mode="always_last", concurrency_limit=8,
                    show_progress="hidden", api_name="search")
@@ -324,7 +332,7 @@ def build_blocks(ctx: UiContext) -> gr.Blocks:
             def on_upload(sid, evt: gr.EventData):
                 yield from handle_upload(ctx, sid, _event(evt, "paths", []))
 
-            top.upload(on_upload, session, [main, status, session], concurrency_limit=1, concurrency_id="index",
+            top.upload(on_upload, session, [status, session], concurrency_limit=1, concurrency_id="index",
                        show_progress="hidden", api_name=False)
         else:
             def on_main_click(evt: gr.EventData):
