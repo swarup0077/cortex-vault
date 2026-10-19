@@ -102,46 +102,50 @@ def cmd_eval(console: Console, cfg: Config, args: argparse.Namespace) -> int:
     else:
         splits = ["tune", "heldout"] if args.split == "all" else [args.split]
     if "heldout" in splits and not args.purpose:
-        console.print("[red]A run on the held-out half needs --purpose baseline or --purpose final (SPEC §9).")
+        console.print(f"[red]A run on the held-out half needs --purpose ({', '.join(ev.PURPOSES)}; SPEC §9).")
         return 2
     if args.extra:
         paths = replace(paths, index=paths.repo / "data" / "eval_scale_index")
     gen = "_generated" if args.queries == "generated" else ""
-    out = args.out or paths.out / ("results" + gen + {"divider-rerun": "_divider", "scale": "_scale"}.get(
-        args.purpose, ""))
+    out = args.out or paths.out / ("results" + gen + ev.REPORT[args.purpose])
     overrides = ev.parse_settings(args.set)
     lib = ev.eval_library(cfg, paths, index=not args.no_index, extra=args.extra)
     queries = [q for q in ev.load_queries(paths, args.queries) if q.split in splits]
     rows = list(ev.ABLATIONS) if args.rows == "all" and args.purpose != "divider-rerun" else [ev.APP]
     run = ev.evaluate(lib, queries, overrides, rows=rows, paths=paths)
     if args.purpose == "divider-rerun":
-        final = json.loads((paths.out / f"results{gen}.json").read_text(encoding="utf-8"))
+        final = json.loads((paths.out / f"results{gen}_final.json").read_text(encoding="utf-8"))
         md, data = ev.divider_rerun(run, final, splits)
         ev.write_report(md, data, out)
         if "heldout" in splits:
-            ev.log_heldout(paths, args.purpose, overrides)
+            ev.log_heldout(paths, args.purpose, overrides, when=run.when, report=out, note=args.note)
+            ev.put_heldout_runs(paths)
         console.print(md)
         console.print(f"wrote {out.with_suffix('.md')} and .json")
         return 0 if data["identical"] else 1
-    detail = splits if args.purpose == "final" else [s for s in splits if s in ("tune", ev.GUARD)]
+    detail = splits if args.purpose in ("final", "post-z") else [s for s in splits if s in ("tune", ev.GUARD)]
     title = {"baseline": "Eval baseline", "final": "Eval: final settings",
+             "post-z": "Eval: current settings (after item z)",
              "scale": "Eval at scale: the eval files plus generated extras"}.get(args.purpose, "Eval (tuning half)")
     if args.queries == "generated":
-        title = {"baseline": "Generated-file set: baseline", "final": "Generated-file set: final settings"}.get(
-            args.purpose, "Generated-file set")
-    md, data = ev.report(run, splits=splits, detail=detail, title=title)
-    if args.purpose == "scale" and (paths.out / f"results{gen}.json").exists():
-        final = ev.with_current_divider(json.loads((paths.out / f"results{gen}.json").read_text(encoding="utf-8")))
-        lines, data["final_vs_scale"] = ev.compare(final, data, before="final", after="at scale")
-        md = _before_first_section(md, lines)
-    baseline = args.baseline or (paths.out / ("results_generated_baseline.json" if args.queries == "generated"
-                                              else "results_baseline.json"))
-    if args.purpose == "final" and baseline.exists():
-        lines, data["baseline_vs_final"] = ev.compare(json.loads(baseline.read_text(encoding="utf-8")), data)
-        md = _before_first_section(md, lines)
+        title = {"baseline": "Generated-file set: baseline", "final": "Generated-file set: final settings",
+                 "post-z": "Generated-file set: current settings (after item z)"}.get(args.purpose,
+                                                                                      "Generated-file set")
+    md, data = ev.report(run, splits=splits, detail=detail, title=title, purpose=args.purpose)
+    # An earlier report to compare with: a final run's baseline, a post-z run's final run, and at scale the current
+    # settings' report on the eval files alone.
+    if args.purpose in ev.COMPARE_WITH:
+        base_file = args.baseline or paths.out / f"results{gen}{ev.COMPARE_WITH[args.purpose]}.json"
+        if base_file.exists():
+            base = ev.with_current_divider(json.loads(base_file.read_text(encoding="utf-8")))
+            before = base.get("purpose") or ("baseline" if args.purpose == "final" else "final")
+            after = "at scale" if args.purpose == "scale" else args.purpose
+            lines, data[f"{before}_vs_{args.purpose}"] = ev.compare(base, data, before=before, after=after)
+            md = _before_first_section(md, lines)
     ev.write_report(md, data, out)
     if "heldout" in splits:
-        finals = ev.log_heldout(paths, args.purpose, overrides)
+        finals = ev.log_heldout(paths, args.purpose, overrides, when=run.when, report=out, note=args.note)
+        ev.put_heldout_runs(paths)
         if args.purpose == "final" and finals > 1:
             console.print(f"[yellow]This is final run number {finals} on the held-out half (see "
                           f"{paths.heldout_log.relative_to(paths.repo).as_posix()}).")
@@ -306,16 +310,18 @@ def build_parser() -> argparse.ArgumentParser:
                    help="the owner's set (headline numbers) or the generated-file set (a guardrail, reported apart)")
     p.add_argument("--split", choices=("tune", "heldout", "all"), default="tune")
     p.add_argument("--purpose", choices=ev.PURPOSES, help="required when the held-out half runs: baseline, final, "
-                   "divider-rerun (divider numbers only, ranks checked against the final run) or scale")
-    p.add_argument("--out", type=Path, help="report path without suffix (default: eval/results, "
-                   "eval/results_divider for divider-rerun, eval/results_scale for scale)")
+                   "divider-rerun (divider numbers only, ranks checked against the final run), scale or post-z "
+                   "(after item z; its report is eval/results, the current settings')")
+    p.add_argument("--note", default="", help="what the run measures, in a few words, kept in the held-out log")
+    p.add_argument("--out", type=Path, help="report path without suffix (default: eval/results, or eval/results_"
+                   "<baseline|final|divider|scale> for those purposes)")
     p.add_argument("--set", action="append", default=[], metavar="NAME=VALUE", help="a setting to change")
     p.add_argument("--rows", choices=("app", "all"), default="all", help="the app only, or every ablation row")
     p.add_argument("--no-index", action="store_true", help="use the eval index as it is")
     p.add_argument("--extra", type=Path, nargs="*", default=[], help="more folders indexed with the eval files "
                    "(the scale test); the index then lives in data/eval_scale_index/")
-    p.add_argument("--baseline", type=Path, help="a final run compares with this report's .json (default: "
-                   "eval/results_baseline.json, or results_generated_baseline.json)")
+    p.add_argument("--baseline", type=Path, help="the earlier report's .json a final, post-z or scale run compares "
+                   "with (default: results_baseline, results_final and results, with _generated for that set)")
     return parser
 
 

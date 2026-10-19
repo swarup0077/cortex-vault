@@ -12,8 +12,9 @@ A run indexes `corpus/` and the private files into `data/eval_index/` (increment
 app's settings and the ablation rows, and writes `<out>.md` and `<out>.json`: Recall@1/5/10 and MRR@10 overall, by
 search type, by file type and by set (public, private), the weaker-matches divider (results above it, and whether
 every correct file is), latency, and the queries that missed. Committed output names private files and queries by
-id only. Per-query detail for the held-out half is written only by the final run, and every run that touches that
-half is logged in `eval/heldout_runs.jsonl`.
+id only. Per-query detail for the held-out half is written only by the final and post-z runs, and every run that
+touches that half is logged in `eval/heldout_runs.jsonl`. The report without a suffix (`eval/results.md`) is the
+current settings'; it opens with every logged held-out run side by side.
 """
 
 from __future__ import annotations
@@ -36,7 +37,12 @@ from vault.search.retrievers import load_text_index
 
 SEED = 20261019
 SOURCES = ("owner", "owner-extra")  # queries.csv, then queries_extra.csv: their ids start with q and x
-PURPOSES = ("baseline", "final", "divider-rerun", "scale")  # why a run touched the held-out half (the log says)
+PURPOSES = ("baseline", "final", "divider-rerun", "scale", "post-z")  # why a run touched the held-out half (logged)
+# Each purpose's report, after "results" (and "_generated" for the generated set): the unsuffixed report is the
+# current settings' (post-z since item z, 19 Oct); a final run's is kept apart, and what a run compares with.
+REPORT = {None: "", "baseline": "_baseline", "final": "_final", "divider-rerun": "_divider", "scale": "_scale",
+          "post-z": ""}
+COMPARE_WITH = {"final": "_baseline", "post-z": "_final", "scale": ""}
 GUARD = "guard"  # the split of the generated-file set: reported apart, a guardrail in tuning, never tuned toward
 METHODS = ("bm25", "all_terms", "dense", "clip")
 CUTOFFS = (1, 5, 10)
@@ -434,14 +440,14 @@ def _table(title: str, metrics_by_name: dict[str, dict]) -> list[str]:
     return lines
 
 
-def report(run: Run, *, splits: Sequence[str], detail: Sequence[str], title: str, notes: Sequence[str] = ()) -> tuple[
-        str, dict]:
+def report(run: Run, *, splits: Sequence[str], detail: Sequence[str], title: str, notes: Sequence[str] = (),
+           purpose: str | None = None) -> tuple[str, dict]:
     """Markdown and JSON for `splits` (each, and "all" when there are several); per-query detail only for the
     halves in `detail`."""
     by_split = {s: [q for q in run.queries if q.split == s] for s in splits}
     if len(splits) > 1:
         by_split["all"] = [q for q in run.queries if q.split in splits]
-    data = {"title": title, "when": run.when, "corpus": run.corpus, "settings": run.settings,
+    data = {"title": title, "purpose": purpose, "when": run.when, "corpus": run.corpus, "settings": run.settings,
             "models": _models(), "commit": _commit(), "splits": {}}
     md = [f"# {title}", "", f"Run {run.when} at commit {data['commit']}. Corpus: {run.corpus['files']} files "
           f"({run.corpus['public_paths']} public paths, {run.corpus['private_paths']} private). Models: "
@@ -578,11 +584,86 @@ def write_report(md: str, data: dict, out: Path) -> None:
     out.with_suffix(".json").write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def log_heldout(paths: Paths, purpose: str, settings: dict) -> int:
-    """Append a run that touched the held-out half; returns how many final runs there have been."""
+def log_heldout(paths: Paths, purpose: str, settings: dict, *, when: str | None = None, report: Path | None = None,
+                note: str = "") -> int:
+    """Append a run that touched the held-out half (`when`: the run's own time, which its report carries too);
+    returns how many final runs there have been."""
     paths.out.mkdir(parents=True, exist_ok=True)
+    entry = {"when": when or datetime.now().isoformat(timespec="seconds"), "purpose": purpose, "commit": _commit(),
+             "settings": settings}
+    if report is not None:
+        entry["report"] = report.with_suffix(".json").relative_to(paths.repo).as_posix()
+    if note:
+        entry["note"] = note
     with paths.heldout_log.open("a", encoding="utf-8") as f:
-        f.write(json.dumps({"when": datetime.now().isoformat(timespec="seconds"), "purpose": purpose,
-                            "commit": _commit(), "settings": settings}) + "\n")
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     with paths.heldout_log.open(encoding="utf-8") as f:
         return sum(json.loads(line)["purpose"] == "final" for line in f if line.strip())
+
+
+# What the runs logged before the log took a note measured (their log lines stay as written).
+_EARLY_NOTES = {
+    "2026-10-19T13:10:31": "the settings at the start of M6 item 3",
+    "2026-10-19T17:04:07": "after fixes x, y, n and f; the divider's first bar (0.31)",
+    "2026-10-19T17:39:30": "the divider's bar at 0.50; ranks are the final run's, checked query by query",
+    "2026-10-19T18:39:19": "the final settings, with 1,000 generated files added to the index",
+}
+_SIDE_START, _SIDE_END = "<!-- held-out runs: written by vault eval -->", "<!-- /held-out runs -->"
+
+
+def heldout_runs(paths: Paths) -> list[str]:
+    """Every logged run on the held-out half side by side (SPEC §9), the app's row, from each run's report: the
+    one the log names, else the report with the run's time and commit. A divider rerun reports the divider only."""
+    reports: dict[tuple[str, str], dict] = {}
+    for f in sorted(paths.out.glob("results*.json")):
+        d = json.loads(f.read_text(encoding="utf-8"))
+        if isinstance(d, dict) and "heldout" in d.get("splits", {}):
+            reports[(d["when"], d["commit"])] = d
+    log = [json.loads(line) for line in paths.heldout_log.read_text(encoding="utf-8").splitlines() if line.strip()]
+    md = [_SIDE_START, "## Every run on the held-out half", "",
+          f"Each run that touched the held-out half, in the order of `eval/{paths.heldout_log.name}`; the app's row. "
+          "Picture: the picture queries, R@1 / R@5 / R@10. Divider: the median number of results above it, and the "
+          "queries with every correct file above it.", ""]
+    for split, heading in (("heldout", "Held-out half"), ("all", "Both halves"), ("tune", "Tuning half")):
+        md += [f"**{heading}**", "", "| # | run | when, commit | files | R@1 | R@5 | R@10 | MRR@10 | picture | "
+               "divider (median) | every correct file above it |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+        for i, e in enumerate(log, start=1):
+            d = (json.loads((paths.repo / e["report"]).read_text(encoding="utf-8")) if e.get("report")
+                 else reports.get((e["when"], e["commit"])))
+            run = f"{e['purpose']}: {e.get('note') or _EARLY_NOTES.get(e['when'], '')}".rstrip(": ")
+            when = f"{e['when'][5:16].replace('T', ' ')}, {e['commit']}"
+            if d is None or split not in d["splits"]:
+                md.append(f"| {i} | {run} | {when} | | no report | | | | | | |")
+                continue
+            entry = d["splits"][split]
+            div = entry["divider"]
+            div_cells = f"{div['median_above']} | {div['all_correct_above']} of {div['of']}"
+            if "rows" not in entry:  # a divider rerun: the final run's ranking
+                final = reports.get((d["final_run"]["when"], d["final_run"]["commit"]), {})
+                files = final.get("corpus", {}).get("files", "")
+                md.append(f"| {i} | {run} | {when} | {files} | as the final run | | | | | {div_cells} |")
+                continue
+            app = entry["rows"][APP]
+            m, pic = app["overall"], app["search type"].get("picture")
+            pic_cell = f"{pic['r1']} / {pic['r5']} / {pic['r10']} of {pic['n']}" if pic else ""
+            md.append(f"| {i} | {run} | {when} | {d['corpus']['files']} | {m['r1']} | {m['r5']} | {m['r10']} | "
+                      f"{m['mrr']:.3f} | {pic_cell} | {div_cells} |")
+        md.append("")
+    return md + [_SIDE_END]
+
+
+def put_heldout_runs(paths: Paths) -> Path | None:
+    """Write the side-by-side section into the current settings' report (`eval/results.md`) before its first
+    section, replacing an earlier copy; nothing if that report or the log doesn't exist yet."""
+    target = paths.out / "results.md"
+    if not target.is_file() or not paths.heldout_log.is_file():
+        return None
+    text = target.read_text(encoding="utf-8")
+    if _SIDE_START in text:
+        head, _, rest = text.partition(_SIDE_START)
+        tail = rest.partition(_SIDE_END)[2].lstrip("\n")
+    else:
+        head, sep, tail = text.partition("\n## ")
+        head, tail = head + "\n", (sep.lstrip("\n") + tail) if sep else ""
+    target.write_text(head + "\n".join(heldout_runs(paths)) + "\n\n" + tail, encoding="utf-8")
+    return target

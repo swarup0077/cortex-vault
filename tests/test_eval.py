@@ -161,6 +161,50 @@ def test_a_held_out_run_needs_a_purpose() -> None:
     assert main(["eval", "--split", "all"]) == 2
 
 
+def _half(r1: int) -> dict:
+    return {"rows": {ev.APP: {"overall": {"n": 2, "r1": r1, "r5": 2, "r10": 2, "mrr": 0.75},
+                              "search type": {"picture": {"n": 1, "r1": 0, "r5": 1, "r10": 1}}}},
+            "divider": {"median_above": 3, "all_correct_above": 2, "of": 2}}
+
+
+def test_every_held_out_run_goes_side_by_side_in_the_current_report(tmp_path, monkeypatch) -> None:
+    """Owner, 19 Oct: every logged run on the held-out half side by side in eval/results.md. An early log line is
+    matched to its report by time and commit, a newer one names its report, and a divider rerun shows the
+    divider only."""
+    paths = make_paths(tmp_path)
+    paths.out.mkdir(parents=True)
+    final = {"when": "2026-10-19T17:04:07", "commit": "aaa1111", "corpus": {"files": 95},
+             "splits": {s: _half(1) for s in ("tune", "heldout", "all")}}
+    rerun = {"when": "2026-10-19T17:39:30", "commit": "bbb2222", "final_run": {"when": final["when"],
+                                                                              "commit": final["commit"]},
+             "splits": {s: {"divider": {"median_above": 1.5, "all_correct_above": 1, "of": 2}}
+                        for s in ("tune", "heldout", "all")}}
+    for name, d in (("results_final", final), ("results_divider", rerun)):
+        (paths.out / f"{name}.json").write_text(json.dumps(d), encoding="utf-8")
+    paths.heldout_log.write_text("".join(json.dumps({"when": d["when"], "purpose": p, "commit": d["commit"],
+                                                     "settings": {}}) + "\n"
+                                         for p, d in (("final", final), ("divider-rerun", rerun))), encoding="utf-8")
+    current = {**final, "when": "2026-10-20T09:00:00", "commit": "ccc3333",
+               "splits": {s: _half(2) for s in ("tune", "heldout", "all")}}
+    (paths.out / "results.json").write_text(json.dumps(current), encoding="utf-8")
+    (paths.out / "results.md").write_text("# Eval\n\nRun at ccc3333.\n\n## Tuning half (2 queries)\n\nrows\n",
+                                          encoding="utf-8")
+    monkeypatch.setattr(ev, "_commit", lambda: "ccc3333")  # the log records the commit the run was made at
+    assert ev.log_heldout(paths, "post-z", {}, when=current["when"], report=paths.out / "results",
+                          note="the gap") == 1
+    assert json.loads(paths.heldout_log.read_text(encoding="utf-8").splitlines()[-1])["report"] == "eval/results.json"
+    ev.put_heldout_runs(paths)
+    ev.put_heldout_runs(paths)  # a later run replaces the section
+    md = (paths.out / "results.md").read_text(encoding="utf-8")
+    assert md.count("## Every run on the held-out half") == 1
+    assert md.index("## Every run on the held-out half") < md.index("## Tuning half")
+    held = md.split("**Held-out half**")[1].split("**Both halves**")[0]
+    assert "| 1 | final: after fixes x, y, n and f; the divider's first bar (0.31) | 10-19 17:04, aaa1111 | 95 | 1 |" in held
+    assert "| 2 | divider-rerun: the divider's bar at 0.50" in held and "| 95 | as the final run |" in held
+    assert "| 1.5 | 1 of 2 |" in held
+    assert "| 3 | post-z: the gap | 10-20 09:00, ccc3333 | 95 | 2 | 2 | 2 | 0.750 | 0 / 1 / 1 of 1 | 3 | 2 of 2 |" in held
+
+
 def test_the_generated_set_is_imported_apart_and_never_split(tmp_path) -> None:
     """Owner's rule (19 Oct): the generated-file set is reported apart and is a guardrail in tuning, never tuned
     toward, so it has no tuning or held-out half."""
