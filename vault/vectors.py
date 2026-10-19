@@ -44,6 +44,30 @@ class VectorIndex:
         s = self.matrix @ np.asarray(query, dtype=np.float32)
         return (self.ids, s) if mask is None else (self.ids[mask], s[mask])
 
+    def search_files(self, query: np.ndarray, k: int, mask: np.ndarray | None = None,
+                     per_group: int = 10) -> list[tuple[int, float]]:
+        """(id, cosine) best first, down to the row that brings in the k-th distinct group (file), keeping at most
+        `per_group` rows of each: k files, however many chunks one long document has (open item f)."""
+        if not len(self) or k <= 0:
+            return []
+        if self.groups is None:
+            return self.search(query, k, mask)
+        scores = self.matrix @ np.asarray(query, dtype=np.float32)
+        if mask is not None:
+            scores = np.where(mask, scores, -np.inf)
+        order = np.argsort(-scores, kind="stable")
+        order = order[np.isfinite(scores[order])]
+        groups = self.groups[order]
+        uniq, first = np.unique(groups, return_index=True)  # each group's best row
+        kept = order[np.isin(groups, uniq[np.argsort(first, kind="stable")][:k])]
+        g = self.groups[kept]
+        by_group = np.argsort(g, kind="stable")  # each group's rows together, still best first
+        starts = np.r_[0, np.flatnonzero(g[by_group][1:] != g[by_group][:-1]) + 1]
+        n_in_group = np.arange(len(kept)) - np.repeat(starts, np.diff(np.r_[starts, len(kept)]))
+        keep = np.zeros(len(kept), dtype=bool)
+        keep[by_group[n_in_group < per_group]] = True
+        return [(int(self.ids[i]), float(scores[i])) for i in kept[keep]]
+
     def search(self, query: np.ndarray, k: int, mask: np.ndarray | None = None) -> list[tuple[int, float]]:
         """Top-k (id, cosine) by one matmul and argpartition. `mask` keeps rows where True."""
         if not len(self):

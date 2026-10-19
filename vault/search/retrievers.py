@@ -72,22 +72,27 @@ def fts_all_query(pq: ParsedQuery) -> str | None:
     return " AND ".join([_quote(t) for t in terms] + [_quote(p) for p in pq.phrases])
 
 
-def bm25(conn: sqlite3.Connection, pq: ParsedQuery, k: int, *, all_terms: bool = False,
-         toc_min: int = 0) -> list[Hit]:
-    """BM25 over chunks. With `all_terms`, only chunks containing every content term (the all-terms list). Hits on
-    a contents page (`toc_min` dot-leader entries or more, open item n) are marked."""
+def bm25(conn: sqlite3.Connection, pq: ParsedQuery, k: int, *, all_terms: bool = False, toc_min: int = 0,
+         per_file: int = 10) -> list[Hit]:
+    """BM25 over chunks, for the k files whose best chunk ranks highest (at most `per_file` chunks each): k files,
+    however many chunks one long document has (open item f). With `all_terms`, only chunks containing every content
+    term (the all-terms list). Hits on a contents page (`toc_min` dot-leader entries, open item n) are marked."""
     q = fts_all_query(pq) if all_terms else fts_query(pq)
     if q is None:
         return []
     where, params = filter_sql(pq)
     if toc_min > 0:
         conn.create_function("cv_is_toc", 1, lambda text: is_toc(text, toc_min), deterministic=True)
-    toc = "cv_is_toc(c.text)" if toc_min > 0 else "0"
+    toc = "cv_is_toc(c.text)" if toc_min > 0 else "0"  # only on the rows kept: it reads each chunk's text
     rows = conn.execute(
-        f"SELECT c.id, c.file_id, bm25(chunks_fts) AS s, {toc} FROM chunks_fts "
+        "WITH m AS (SELECT c.id, c.file_id, bm25(chunks_fts) AS s FROM chunks_fts "
         "JOIN chunks c ON c.id = chunks_fts.rowid JOIN files f ON f.id = c.file_id "
-        f"WHERE chunks_fts MATCH ? AND {where} ORDER BY s LIMIT ?",
-        [q, *params, k],
+        f"WHERE chunks_fts MATCH ? AND {where}), "
+        "r AS (SELECT id, file_id, s, row_number() OVER (PARTITION BY file_id ORDER BY s, id) AS n FROM m), "
+        "top AS (SELECT file_id FROM r WHERE n = 1 ORDER BY s, id LIMIT ?) "
+        f"SELECT r.id, r.file_id, r.s, {toc} FROM r JOIN chunks c ON c.id = r.id "
+        "WHERE r.n <= ? AND r.file_id IN (SELECT file_id FROM top) ORDER BY r.s, r.id",
+        [q, *params, k, per_file],
     ).fetchall()
     return [Hit(r[0], r[1], -r[2], bool(r[3])) for r in rows]  # FTS5 bm25 is lower-is-better
 
@@ -125,12 +130,15 @@ def dense(
     index: VectorIndex,
     allowed: set[int] | None,
     min_cosine: float = -1.0,
+    per_file: int = 10,
 ) -> list[Hit]:
-    """Top-k chunks by cosine, dropping any less similar than `min_cosine` (SPEC §7.2)."""
+    """Chunks by cosine for the k most similar files (at most `per_file` chunks each, open item f), dropping any
+    less similar than `min_cosine` (SPEC §7.2)."""
     if not pq.text or not len(index):
         return []
     mask = index.mask_groups(allowed) if allowed is not None else None
-    top = [(cid, s) for cid, s in index.search(embedder.embed_query(pq.text), k, mask) if s >= min_cosine]
+    top = [(cid, s) for cid, s in index.search_files(embedder.embed_query(pq.text), k, mask, per_file)
+           if s >= min_cosine]
     if not top:
         return []
     ids = [cid for cid, _ in top]

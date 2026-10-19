@@ -81,3 +81,32 @@ def test_a_chunk_without_a_word_is_left_out_of_dense_search(tmp_path, fake_embed
     resp = search(conn, "田", cfg)  # still found by its text
     assert [r.filename for r in resp.results] == ["junk.txt"] and resp.results[0].ranks.get("bm25") == 1
     assert not resp.results[0].ranks.get("dense")
+
+
+def test_one_long_document_cannot_crowd_the_others_out_of_a_list(tmp_path, fake_embedder) -> None:
+    """Open item f: the lists rank files by their best chunk, so a document with dozens of matching chunks takes
+    one place in each list, not all of them."""
+    from dataclasses import replace
+
+    from vault import db
+    from vault.config import Config
+    from vault.ingest.pipeline import index_paths
+    from vault.search.retrievers import bm25, dense, load_text_index
+
+    files = tmp_path / "files"
+    files.mkdir()
+    (files / "book.txt").write_text("\n\n".join(f"Section {i}. The gradient of the loss points uphill; step "
+                                                f"against it. " * 8 for i in range(60)), encoding="utf-8")
+    for i in range(5):
+        (files / f"note {i}.txt").write_text(f"Note {i}: check the gradient sign before the update.", encoding="utf-8")
+    cfg = replace(Config(data_dir=tmp_path / "data"), top_k=3)
+    conn = db.connect(cfg.db_path)
+    index_paths(conn, [files], cfg)
+    pq = parse("gradient")
+    book = conn.execute("SELECT file_id FROM paths WHERE path LIKE '%book.txt'").fetchone()[0]
+    assert conn.execute("SELECT count(*) FROM chunks WHERE file_id = ? AND source != 'path'", (book,)).fetchone()[0] > 10
+    for hits in (bm25(conn, pq, cfg.top_k, per_file=cfg.chunks_per_file),
+                 dense(conn, pq, cfg.top_k, fake_embedder, load_text_index(conn, fake_embedder.dim), None,
+                       per_file=cfg.chunks_per_file)):
+        assert len({h.file_id for h in hits}) == 3  # three files, not three chunks of the book
+        assert sum(h.file_id == book for h in hits) <= cfg.chunks_per_file

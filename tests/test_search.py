@@ -141,8 +141,9 @@ def test_common_words_dont_outrank_the_screenshot(conn, cfg, fake_embedder, fake
 
 
 def test_all_terms_list_beats_a_long_loosely_matching_doc(conn, fake_embedder, fake_ocr, tmp_path) -> None:
-    """Owner's pattern (a): a long transcript's 30 chunks fill dense's top k, crowding out the short screenshot
-    that holds every query word, and BM25 alone can't outvote dense #1 + BM25 #2 in RRF."""
+    """Owner's pattern (a): a long transcript matches loosely in BM25 and dense, and BM25 alone can't lift the
+    short screenshot that holds every query word above it in RRF. (Its 30 chunks used to fill dense's top k as well,
+    crowding the screenshot out of that list; since open item f the lists rank files, so it has a dense rank.)"""
     from dataclasses import replace
 
     from conftest import build_docx, draw_text_image, save_image
@@ -162,7 +163,8 @@ def test_all_terms_list_beats_a_long_loosely_matching_doc(conn, fake_embedder, f
     query = "gradient clipping threshold"
     without = search(conn, query, replace(cfg, weights={**cfg.weights, "all_terms": 0.0})).results
     assert [r.filename for r in without] == ["lecture transcript.docx", "Screenshot (5).png"]
-    assert without[1].ranks == {"bm25": 1, "all_terms": None, "dense": None, "clip": None}
+    assert without[1].ranks["bm25"] == 1 and without[1].ranks["all_terms"] is None
+    assert without[1].ranks["dense"] is not None  # no longer crowded out of dense (open item f)
 
     results = search(conn, query, cfg).results
     assert [r.filename for r in results] == ["Screenshot (5).png", "lecture transcript.docx"]

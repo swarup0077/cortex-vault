@@ -86,7 +86,11 @@ class Config:
     chunk_max: int = 1200
 
     # Search (SPEC §7)
+    # Files per ranked list (BM25, every word, dense, CLIP). The lists rank files by their best chunk, so one long
+    # document can't crowd the others out of a list (open item f); `chunks_per_file` bounds the chunks kept per file,
+    # which only feed the choice of the page shown.
     top_k: int = 100
+    chunks_per_file: int = 10
     # Dense hits less similar than this are dropped, at any collection size: dense always returns its top k, so
     # without a floor the only text file in a small collection was dense #1 for any query (open item s).
     # Provisional, on bge-small-en-v1.5's scale (bench/calibrate.py dense): 35 generated matching pairs, 24 of them

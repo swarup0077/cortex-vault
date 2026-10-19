@@ -272,15 +272,16 @@ def search(
     embedder = embedder or models.text_embedder(cfg)
     db.check_text_model(conn, embedder.name)
     sw.lap("load_model")  # ~0 once warm; the first query pays the model load
-    bm25_hits = retrievers.bm25(conn, pq, cfg.top_k, toc_min=cfg.toc_min_entries)
+    bm25_hits = retrievers.bm25(conn, pq, cfg.top_k, toc_min=cfg.toc_min_entries, per_file=cfg.chunks_per_file)
     sw.lap("bm25")
-    all_hits = retrievers.bm25(conn, pq, cfg.top_k, all_terms=True, toc_min=cfg.toc_min_entries)
+    all_hits = retrievers.bm25(conn, pq, cfg.top_k, all_terms=True, toc_min=cfg.toc_min_entries,
+                               per_file=cfg.chunks_per_file)
     sw.lap("all_terms")
     if text_index is None:
         text_index = retrievers.load_text_index(conn, embedder.dim, cfg.dense_min_word, cfg.toc_min_entries)
         sw.lap("load_vectors")
     # The floor applies after top-k, so filtering here is the same as in the retriever; the rest feeds the tail.
-    dense_all = retrievers.dense(conn, pq, cfg.top_k, embedder, text_index, allowed)
+    dense_all = retrievers.dense(conn, pq, cfg.top_k, embedder, text_index, allowed, per_file=cfg.chunks_per_file)
     dense_hits = [h for h in dense_all if h.score >= cfg.dense_min_cosine]
     sw.lap("dense")
 
