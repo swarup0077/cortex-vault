@@ -36,6 +36,7 @@ from vault.search.retrievers import load_text_index
 
 SEED = 20261019
 SOURCES = ("owner", "owner-extra")  # queries.csv, then queries_extra.csv: their ids start with q and x
+PURPOSES = ("baseline", "final", "divider-rerun", "scale")  # why a run touched the held-out half (the log says)
 GUARD = "guard"  # the split of the generated-file set: reported apart, a guardrail in tuning, never tuned toward
 METHODS = ("bm25", "all_terms", "dense", "clip")
 CUTOFFS = (1, 5, 10)
@@ -212,11 +213,12 @@ def key_of(stored: str, paths: Paths, ids: dict[str, str]) -> str:
     return p.name
 
 
-def eval_library(cfg: Config, paths: Paths = Paths(), *, index: bool = True) -> Library:
-    """corpus/ plus the private files (when this machine has them), indexed incrementally into data/eval_index/."""
+def eval_library(cfg: Config, paths: Paths = Paths(), *, index: bool = True, extra: Sequence[Path] = ()) -> Library:
+    """corpus/ plus the private files (when this machine has them), indexed incrementally into `paths.index`; `extra`
+    folders are indexed with them (the scale test's generated files, never a correct file)."""
     lib = Library(replace(cfg, data_dir=paths.index))
     if index:
-        roots = [paths.corpus] + ([paths.private_files] if paths.private_files.is_dir() else [])
+        roots = [paths.corpus] + ([paths.private_files] if paths.private_files.is_dir() else []) + list(extra)
         lib.index(roots)
     return lib
 
@@ -481,11 +483,12 @@ def report(run: Run, *, splits: Sequence[str], detail: Sequence[str], title: str
     return "\n".join(md), data
 
 
-def compare(base: dict, data: dict) -> tuple[list[str], dict]:
-    """Baseline vs this run, the app's row: each half overall and by set, and the divider."""
-    md = ["## Baseline vs final", "",
-          f"Baseline run {base['when']} at commit {base['commit']}; this run {data['when']} at commit {data['commit']}. "
-          "The divider by set wasn't recorded by the baseline.", "",
+def compare(base: dict, data: dict, before: str = "baseline", after: str = "final") -> tuple[list[str], dict]:
+    """An earlier run (`before`) vs this one, the app's row: each half overall and by set, and the divider."""
+    md = [f"## {before[0].upper() + before[1:]} vs {after}", "",
+          f"The {before} run {base['when']} at commit {base['commit']}; this run {data['when']} at commit "
+          f"{data['commit']}." + (" The divider by set wasn't recorded by the baseline." if before == "baseline" else ""),
+          "",
           "| half | queries | n | R@1 | R@5 | R@10 | MRR@10 | above the divider (median) | every correct file above it |",
           "|---|---|---|---|---|---|---|---|---|"]
     out: dict = {}
@@ -495,8 +498,8 @@ def compare(base: dict, data: dict) -> tuple[list[str], dict]:
         if not b:
             continue
         app, b_app = entry["rows"][APP], b["rows"][APP]
-        out[name] = {"baseline": {"overall": b_app["overall"], "set": b_app["set"], "divider": b["divider"]},
-                     "final": {"overall": app["overall"], "set": app["set"], "divider": entry["divider"]}}
+        out[name] = {before: {"overall": b_app["overall"], "set": b_app["set"], "divider": b["divider"]},
+                     after: {"overall": app["overall"], "set": app["set"], "divider": entry["divider"]}}
         for label, m, bm in [("all", app["overall"], b_app["overall"]),
                              *[(k, app["set"][k], b_app["set"].get(k)) for k in sorted(app["set"])]]:
             if bm is None:
@@ -508,6 +511,38 @@ def compare(base: dict, data: dict) -> tuple[list[str], dict]:
             md.append(f"| {names.get(name, name)} | {label} | {m['n']} | " + " | ".join(cells)
                       + f" | {bm['mrr']:.3f} → {m['mrr']:.3f} | " + " | ".join(div) + " |")
     return md + [""], out
+
+
+def divider_rerun(run: Run, final: dict, splits: Sequence[str]) -> tuple[str, dict]:
+    """The divider's numbers only, for a run whose ranking must equal the final run's (a divider change moves no
+    rank): each split's R@1/5/10 and MRR and every query's rank are checked against `final`."""
+    by_split = {s: [q for q in run.queries if q.split == s] for s in splits}
+    if len(splits) > 1:
+        by_split["all"] = [q for q in run.queries if q.split in splits]
+    data: dict = {"title": "Divider rerun", "when": run.when, "commit": _commit(), "settings": run.settings,
+                  "final_run": {"when": final["when"], "commit": final["commit"]}, "splits": {}, "identical": True}
+    md = ["# Divider rerun", "", f"Run {run.when} at commit {data['commit']}, against the final run "
+          f"{final['when']} at commit {final['commit']}. Only the divider's numbers are reported; the ranking is "
+          "checked against the final run's.", "",
+          "| half | queries | R@1, R@5, R@10, MRR@10 as in the final run | every query's rank as in the final run | "
+          "above the divider (median) | every correct file above it |", "|---|---|---|---|---|---|"]
+    names = {"tune": "Tuning half", "heldout": "Held-out half", "all": "Both halves", GUARD: "Generated-file set"}
+    for name, qs in by_split.items():
+        s = summary(run, qs)
+        f = final["splits"][name]
+        same_metrics = s["rows"][APP]["overall"] == f["rows"][APP]["overall"]
+        final_ranks = {q["id"]: q["rank"] for q in f.get("queries", [])}
+        ranks = {q.id: run.rows[APP][q.id].rank for q in qs}
+        same_ranks = bool(final_ranks) and ranks == final_ranks
+        data["identical"] &= same_metrics and same_ranks
+        d = s["divider"]
+        data["splits"][name] = {"divider": d, "same_metrics_as_final": same_metrics, "same_ranks_as_final": same_ranks,
+                                "final_divider": f["divider"]}
+        by_set = "; ".join(f"{k} {v['median_above']}, {v['all_correct_above']} of {v['of']}" for k, v in d["set"].items())
+        md.append(f"| {names.get(name, name)} | {len(qs)} | {'yes' if same_metrics else 'NO'} | "
+                  f"{'yes' if same_ranks else 'NO'} | {f['divider']['median_above']} → {d['median_above']} | "
+                  f"{f['divider']['all_correct_above']} → {d['all_correct_above']} of {d['of']} ({by_set}) |")
+    return "\n".join(md), data
 
 
 def _models() -> dict[str, str]:

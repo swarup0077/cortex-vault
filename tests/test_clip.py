@@ -188,7 +188,8 @@ def test_visual_rule_boosts_only_the_strong_hits(conn, cfg, fake_embedder, tmp_p
     ids = dict(conn.execute("SELECT substr(p.path, -9), p.file_id FROM paths p").fetchall())
     a, b = ids["IMG_A.jpg"], ids["IMG_B.jpg"]
     monkeypatch.setattr(engine, "gate", lambda *args: Gated([(a, 0.31), (b, 0.27)], True, 1.0, 30, frozenset({a})))
-    by_name = {r.filename: r for r in search(conn, "red", cfg).results}
+    resp = search(conn, "red", cfg)
+    by_name = {r.filename: r for r in resp.results + resp.weaker}  # B's 1/62 is under the divider's bar
     assert by_name["IMG_A.jpg"].rrf_score == pytest.approx(2 / 61)
     assert by_name["IMG_B.jpg"].rrf_score == pytest.approx(1 / 62)
 

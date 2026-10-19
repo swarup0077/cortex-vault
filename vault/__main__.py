@@ -13,6 +13,7 @@ import sys
 import threading
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 
 from rich.console import Console
@@ -68,6 +69,12 @@ def _run_index(console: Console, conn: sqlite3.Connection, cfg: Config, folders:
         return index_paths(conn, folders, cfg, stop=stop, progress=progress)
 
 
+def _before_first_section(md: str, lines: list[str]) -> str:
+    """`lines` inserted into a report before its first half's section."""
+    head, sep, rest = md.partition("\n## ")
+    return head + "\n" + "\n".join(lines) + sep + rest
+
+
 def cmd_eval(console: Console, cfg: Config, args: argparse.Namespace) -> int:
     """`vault eval` (SPEC §9): import the owner's queries, or run them and write the report."""
     paths = ev.Paths()
@@ -97,24 +104,42 @@ def cmd_eval(console: Console, cfg: Config, args: argparse.Namespace) -> int:
     if "heldout" in splits and not args.purpose:
         console.print("[red]A run on the held-out half needs --purpose baseline or --purpose final (SPEC §9).")
         return 2
+    if args.extra:
+        paths = replace(paths, index=paths.repo / "data" / "eval_scale_index")
+    gen = "_generated" if args.queries == "generated" else ""
+    out = args.out or paths.out / ("results" + gen + {"divider-rerun": "_divider", "scale": "_scale"}.get(
+        args.purpose, ""))
     overrides = ev.parse_settings(args.set)
-    lib = ev.eval_library(cfg, paths, index=not args.no_index)
+    lib = ev.eval_library(cfg, paths, index=not args.no_index, extra=args.extra)
     queries = [q for q in ev.load_queries(paths, args.queries) if q.split in splits]
-    rows = list(ev.ABLATIONS) if args.rows == "all" else [ev.APP]
+    rows = list(ev.ABLATIONS) if args.rows == "all" and args.purpose != "divider-rerun" else [ev.APP]
     run = ev.evaluate(lib, queries, overrides, rows=rows, paths=paths)
+    if args.purpose == "divider-rerun":
+        final = json.loads((paths.out / f"results{gen}.json").read_text(encoding="utf-8"))
+        md, data = ev.divider_rerun(run, final, splits)
+        ev.write_report(md, data, out)
+        if "heldout" in splits:
+            ev.log_heldout(paths, args.purpose, overrides)
+        console.print(md)
+        console.print(f"wrote {out.with_suffix('.md')} and .json")
+        return 0 if data["identical"] else 1
     detail = splits if args.purpose == "final" else [s for s in splits if s in ("tune", ev.GUARD)]
-    title = {"baseline": "Eval baseline", "final": "Eval: final settings"}.get(args.purpose, "Eval (tuning half)")
+    title = {"baseline": "Eval baseline", "final": "Eval: final settings",
+             "scale": "Eval at scale: the eval files plus generated extras"}.get(args.purpose, "Eval (tuning half)")
     if args.queries == "generated":
         title = {"baseline": "Generated-file set: baseline", "final": "Generated-file set: final settings"}.get(
             args.purpose, "Generated-file set")
     md, data = ev.report(run, splits=splits, detail=detail, title=title)
+    if args.purpose == "scale" and (paths.out / f"results{gen}.json").exists():
+        lines, data["final_vs_scale"] = ev.compare(json.loads((paths.out / f"results{gen}.json").read_text(
+            encoding="utf-8")), data, before="final", after="at scale")
+        md = _before_first_section(md, lines)
     baseline = args.baseline or (paths.out / ("results_generated_baseline.json" if args.queries == "generated"
                                               else "results_baseline.json"))
     if args.purpose == "final" and baseline.exists():
         lines, data["baseline_vs_final"] = ev.compare(json.loads(baseline.read_text(encoding="utf-8")), data)
-        head, sep, rest = md.partition("\n## ")  # before the first half's section
-        md = head + "\n" + "\n".join(lines) + sep + rest
-    ev.write_report(md, data, args.out)
+        md = _before_first_section(md, lines)
+    ev.write_report(md, data, out)
     if "heldout" in splits:
         finals = ev.log_heldout(paths, args.purpose, overrides)
         if args.purpose == "final" and finals > 1:
@@ -127,7 +152,7 @@ def cmd_eval(console: Console, cfg: Config, args: argparse.Namespace) -> int:
             table.add_row(name, row, str(m["n"]), str(m["r1"]), str(m["r5"]), str(m["r10"]), f"{m['mrr']:.3f}",
                           str(entry["divider"]["median_above"]) if row == ev.APP else "")
     console.print(table)
-    console.print(f"wrote {args.out.with_suffix('.md')} and .json")
+    console.print(f"wrote {out.with_suffix('.md')} and .json")
     return 0
 
 
@@ -280,11 +305,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--queries", choices=("owner", "generated"), default="owner",
                    help="the owner's set (headline numbers) or the generated-file set (a guardrail, reported apart)")
     p.add_argument("--split", choices=("tune", "heldout", "all"), default="tune")
-    p.add_argument("--purpose", choices=("baseline", "final"), help="required when the held-out half runs")
-    p.add_argument("--out", type=Path, default=ev.Paths().out / "results")
+    p.add_argument("--purpose", choices=ev.PURPOSES, help="required when the held-out half runs: baseline, final, "
+                   "divider-rerun (divider numbers only, ranks checked against the final run) or scale")
+    p.add_argument("--out", type=Path, help="report path without suffix (default: eval/results, "
+                   "eval/results_divider for divider-rerun, eval/results_scale for scale)")
     p.add_argument("--set", action="append", default=[], metavar="NAME=VALUE", help="a setting to change")
     p.add_argument("--rows", choices=("app", "all"), default="all", help="the app only, or every ablation row")
-    p.add_argument("--no-index", action="store_true", help="use data/eval_index as it is")
+    p.add_argument("--no-index", action="store_true", help="use the eval index as it is")
+    p.add_argument("--extra", type=Path, nargs="*", default=[], help="more folders indexed with the eval files "
+                   "(the scale test); the index then lives in data/eval_scale_index/")
     p.add_argument("--baseline", type=Path, help="a final run compares with this report's .json (default: "
                    "eval/results_baseline.json, or results_generated_baseline.json)")
     return parser

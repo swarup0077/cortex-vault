@@ -1,15 +1,18 @@
 """Tune the provisional values on the eval's tuning half (SPEC §9, open item o; M6 item 3 step 5).
 
-    python bench/tune.py [--only NAME ...]
+    python bench/tune.py [--only NAME ...] [--protect shown|all]
 
 One parameter at a time, on a small grid around its value, starting from the app's settings and keeping each
 accepted change for the next parameter. A value is kept only if, against the settings it would replace:
   - at least 2 more tuning-half queries have a correct file in the top 5;
   - no tuning-half query loses its top-5 place (so no search type loses one);
   - fewer than 2 generated-set queries lose their top-5 place (a guardrail, never a target).
-Then the divider's two candidate rules: each bar is raised as far as it goes without pushing below the divider any
-correct tuning-half file that is above it without the bar; the generated guardrail applies too. If the candidates
-tie on the median count above the divider, the simpler rule (share) wins.
+Then the divider's two candidate rules, from no bar: each bar is raised as far as it goes without pushing below the
+divider a protected correct tuning-half file, and while fewer than 2 generated queries have one pushed below. Protected
+(`--protect`): "shown", every correct file in the first `page_results` (20, the results shown before Show more) that
+is above the divider without the bar (the owner's rule since 19 Oct, after the final run); "all", every correct file
+above it (the first rule). If the candidates tie on the median count above the divider, the simpler rule (share)
+wins.
 
 Only the tuning half and the generated set are read; a held-out query never reaches this script. Results go to
 bench/generated/tune.json and tune.md (git-ignored) and are copied into SPEC §19 by hand. Query ids only, never a
@@ -60,6 +63,7 @@ class Result:
     rank: dict[str, int | None]  # query id → rank of its first correct file (results, then weaker)
     above: dict[str, int]  # query id → results above the divider
     correct_above: dict[str, frozenset[str]]  # query id → its correct files above the divider
+    correct_shown: dict[str, frozenset[str]]  # ...of those, the ones in the first `page_results`
 
 
 class Bench:
@@ -86,13 +90,15 @@ class Bench:
             if sees not in self._index_for:
                 self._index_for[sees] = load_text_index(self.conn, self.text_index.matrix.shape[1], *sees)
             text_index = self._index_for[sees]
-        res = Result({}, {}, {})
+        res = Result({}, {}, {}, {})
         for q in queries:
             resp = search(self.conn, q.text, cfg, text_index=text_index, image_index=self.image_index)
             res.rank[q.id] = ev.outcome(resp, q.relevant, self.key).rank
             res.above[q.id] = len(resp.results)
             above_keys = {self.key(p) for r in resp.results for p in r.paths}
             res.correct_above[q.id] = frozenset(k for k in q.relevant if k in above_keys)
+            shown = {self.key(p) for r in resp.results[: cfg.page_results] for p in r.paths}
+            res.correct_shown[q.id] = frozenset(k for k in q.relevant if k in shown)
         return res
 
 
@@ -118,18 +124,22 @@ def compare(base_t: Result, t: Result, base_g: Result, g: Result) -> dict:
             "keep": len(top5(t)) - len(top5(base_t)) >= 2 and not lost and len(g_lost) < 2}
 
 
-def pushed_below(base: Result, r: Result) -> list[str]:
-    """Correct files above the divider without the bar and below it with it, as `query:file` (ids only)."""
-    return [f"{q}:{k}" for q in base.correct_above for k in sorted(base.correct_above[q] - r.correct_above[q])]
+def pushed_below(base: Result, r: Result, protect: str = "shown") -> list[str]:
+    """Protected correct files (above the divider without the bar; with "shown", also in the first page) that are
+    below it with the bar, as `query:file` (ids only)."""
+    kept = base.correct_shown if protect == "shown" else base.correct_above
+    return [f"{q}:{k}" for q in kept for k in sorted(kept[q] - r.correct_above[q])]
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--only", nargs="*", default=None, help="parameters to try (default: all, then the divider)")
+    ap.add_argument("--protect", choices=("shown", "all"), default="shown",
+                    help="the divider's protected correct files: those in the first page (default) or all")
     args = ap.parse_args()
     b = Bench()
     log: list[dict] = []
-    settings: dict = {}
+    settings: dict = {"divider_min_share": 0.0, "divider_min_terms": 0}  # from no bar
     t0 = time.perf_counter()
     base_t, base_g = b.run(settings, b.tune), b.run(settings, b.guard)
     start = {"tune": scores(base_t, b.tune), "guard": scores(base_g, b.guard)}
@@ -170,8 +180,9 @@ def main() -> int:
             trial = {**settings, name: value}
             t, g = b.run(trial, b.tune), b.run(trial, b.guard)
             c = compare(base_t, t, base_g, g)
-            pushed, g_pushed = pushed_below(base_t, t), pushed_below(base_g, g)
-            ok = not pushed and not c["lost"] and len(c["guard_lost"]) < 2
+            pushed, g_pushed = pushed_below(base_t, t, args.protect), pushed_below(base_g, g, args.protect)
+            ok = (not pushed and not c["lost"] and len(c["guard_lost"]) < 2
+                  and len({x.split(":", 1)[0] for x in g_pushed}) < 2)
             s = {"value": value, "tune": scores(t, b.tune), "guard": scores(g, b.guard), **c, "pushed_below": pushed,
                  "guard_pushed_below": g_pushed, "ok": ok}
             tried.append(s)
@@ -194,7 +205,7 @@ def main() -> int:
             choice = "divider_min_share" if "divider_min_share" in tied else tied[0]
             settings[choice] = cands[choice]["best"]
     final_t, final_g = b.run(settings, b.tune), b.run(settings, b.guard)
-    out = {"start": start, "params": log, "divider": divider, "divider_choice": choice, "settings": settings,
+    out = {"protect": args.protect, "start": start, "params": log, "divider": divider, "divider_choice": choice, "settings": settings,
            "final": {"tune": scores(final_t, b.tune), "guard": scores(final_g, b.guard)},
            "minutes": round((time.perf_counter() - t0) / 60, 1)}
     OUT.mkdir(parents=True, exist_ok=True)

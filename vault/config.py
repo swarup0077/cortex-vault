@@ -155,9 +155,10 @@ class Config:
     # The divider's bar (M6 item 3): fused results that fail it go below the divider, as weaker matches, in order.
     # Two candidate rules, 0 = off. Share: a result scoring under this share of the top result's RRF score (a cut;
     # the order doesn't change). Provisional (bench/tune.py, SPEC §19): raised in 0.01 steps on the eval's tuning
-    # half until a correct file above the divider would fall below it (0.32: one found by dense alone at #43);
-    # median results above it 50 → 40, generated set 50 → 23.
-    divider_min_share: float = 0.31
+    # half until a correct file in the first `page_results` that was above the divider would fall below it (0.51: one
+    # at #4); median results above it 50 → 19, generated set 50 → 9.5. The owner's rule since 19 Oct, after the final
+    # run: a correct file below #20 is a miss either way (the first rule, every correct file, stopped at 0.31).
+    divider_min_share: float = 0.50
     # Terms: a result found by keyword search alone whose chunks hold fewer than this many of the query's terms
     # (the other candidate; off: at its best, 2-5, the median above the divider moved only 50 → 49.5).
     divider_min_terms: int = 0

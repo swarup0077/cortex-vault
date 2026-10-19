@@ -138,6 +138,9 @@ def test_a_run_end_to_end_names_private_files_by_id_only(tmp_path, fake_embedder
     table = "\n".join(lines)
     assert "| Tuning half | all | 2 | 2 → 2 (100% → 100%) |" in table and "| Tuning half | private | 1 |" in table
     assert cmp["tune"]["final"]["divider"]["all_correct_above"] == 2 and "secret" not in table
+    _, both = ev.report(run, splits=["tune", "heldout"], detail=["tune", "heldout"], title="final")
+    md, rerun = ev.divider_rerun(run, both, ["tune", "heldout"])  # same settings: the ranking must match
+    assert rerun["identical"] and "queries" not in json.dumps(rerun) and "| Held-out half | 1 | yes | yes |" in md
 
 
 def test_the_ungated_ablation_keeps_every_clip_candidate() -> None:
