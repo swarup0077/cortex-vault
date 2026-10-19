@@ -84,7 +84,7 @@ holds the current settings' report, with every held-out run side by side. The cu
 
 Before that fix, on the same 95 files: 24 / 32 / 36, MRR 0.627, and pictures 5 / 6 / 7 of 10
 ([`eval/results_final.md`](eval/results_final.md)). Here the fix costs two picture queries and lifts one query about
-text in a scan to #1; it pays off in a larger library (Scale test, below).
+text in a scan to #1. In a larger library it gains a lot at #1 and loses some of the top 10 (Scale test, below).
 
 What each list adds (all 44 queries, R@5 / R@10): exact and every word alone 24 / 25, meaning alone 27 / 34,
 picture alone 22 / 29, words + meaning 25 / 31, all three with the picture gate (the app) 30 / 35. Without the gate
@@ -123,12 +123,24 @@ with the current settings ([`eval/results_scale.md`](eval/results_scale.md)); no
 | Held-out half (22) | 6 → 9 | 12 → 12 | 16 → 14 | 0.402 → 0.466 | 19.5 → 21.5 |
 | Generated-file set (32) | 28 → 26 | 32 → 31 | 32 → 31 | 0.924 → 0.875 | 10 → 4.5 |
 
-The top of the list holds at this size; two queries leave the top 10. Before the fix to the visual-query rule it
-didn't hold: all 44, R@1 24 → 17 and MRR 0.627 → 0.503
-([`eval/results_scale_before_z.md`](eval/results_scale_before_z.md)). With 713 images instead of 63, CLIP's best
-image passed the rule's outlier test far more often, so the rule fired on text queries and lifted the evaluation's
-own screenshots above the correct files (on 12 of the 17 tuning-half queries that aren't picture queries). The rule
-now also asks for a clear lead over the next image, and fires on none of them.
+With the current settings the top of the list holds from 95 to 1,095 files, and two queries leave the top 10.
+
+**The fix to the visual-query rule is a trade-off.** Before it, the top of the list didn't hold at this size: with
+713 images instead of 63, CLIP's best image passed the rule's outlier test far more often, so the rule fired on text
+queries and lifted the evaluation's own screenshots above the correct files (on 12 of the 17 tuning-half queries
+that aren't picture queries). The rule now also asks for a clear lead over the next image, and fires on none of
+them. At 1,095 files, before → after the fix
+([`eval/results_scale_before_z.md`](eval/results_scale_before_z.md), [`eval/results_scale.md`](eval/results_scale.md)):
+
+| Queries | R@1 | R@5 | R@10 | MRR@10 |
+|---|---|---|---|---|
+| All 44 | 17 → 25 | 28 → 29 | 36 → 33 | 0.503 → 0.610 |
+| Held-out half (22) | 5 → 9 | 13 → 12 | 17 → 14 | 0.395 → 0.466 |
+| Picture queries (10) | 3 → 3 | 6 → 4 | 7 → 6 | 0.428 → 0.357 |
+
+A big gain at #1: 8 more of the 44 queries have a correct file first, 4 more in the held-out half. The cost: a few
+picture matches rank lower, because the rule now rarely fires for a real picture (see Known limitations), and 3
+fewer held-out queries have a correct file in the top 10 (17 → 14).
 
 ### Speed
 
@@ -184,9 +196,9 @@ ones, which are OCR'd page by page): text and Word 5.2, PowerPoint 8.8, PDF 0.20
   for real photos and screenshots: on the author's files, for none of the tuning half's picture queries, and two
   pictures that CLIP alone ranks first (one in each half) dropped to #10 and #11. Drawn test scenes lead the next
   image by 0.039 or more; the real picture the rule used to fire for in the tuning half leads by 0.029, under the
-  0.035 required. A picture with
-  a near-copy in the library (a forwarded copy, a second shot) never gets the extra weight, because the copy is the
-  next image.
+  0.035 required. With 1,000 more files the fix still gains 8 queries at #1, but 3 fewer held-out queries have a
+  correct file in the top 10 (Scale test). A picture with a near-copy in the library (a forwarded copy, a second
+  shot) never gets the extra weight, because the copy is the next image.
 - **No date queries.** "Screenshots from last week" searches for those words; it doesn't filter by date. Kind words
   (screenshot, photo, pdf, slides, notes) do filter.
 - **Supported files:** PNG, JPEG and WebP images (HEIC with the optional `pillow-heif`), PDF, `.docx`, `.pptx`,
