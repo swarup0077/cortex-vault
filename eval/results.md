@@ -2,6 +2,17 @@
 
 Run 2026-10-19T17:04:07 at commit 6d4c860. Corpus: 95 files (71 public paths, 24 private). Models: BAAI/bge-small-en-v1.5, Qdrant/clip-ViT-B-32-vision+Qdrant/clip-ViT-B-32-text, PP-OCRv6_det_small.onnx+PP-OCRv6_rec_small.onnx.
 
+## Divider rule changed after the final run (19 Oct)
+
+After reading this report, the owner changed the divider's protection rule from "every correct file above the divider stays above it" to "every correct file in the top 20 (the results shown before Show more) stays above it": a correct file at #43 is a miss either way. Under the new rule the bar was set on the tuning half (`bench/tune.py --protect shown`): `divider_min_share` 0.31 → 0.50; the generated guardrail lost nothing. The divider moves no rank, so the held-out half was run once more, logged as `divider-rerun`, for the divider's numbers only (`eval/results_divider.md`): R@1, R@5, R@10, MRR and every query's rank are identical to this run's. The divider numbers below in this report are the final run's (bar 0.31); with 0.50:
+
+| half | above the divider (median), 0.31 → 0.50 | every correct file above it |
+|---|---|---|
+| Tuning half | 40.0 → 19.0 | 22 → 20 of 22 |
+| Held-out half | 37.0 → 19.0 | 21 → 18 of 22 |
+| Both halves | 39.5 → 19.0 | 43 → 38 of 44 |
+| Generated-file set | 23.0 → 9.5 | 32 → 32 of 32 |
+
 ## Baseline vs final
 
 Baseline run 2026-10-19T13:10:31 at commit d8744d2; this run 2026-10-19T17:04:07 at commit 6d4c860. The divider by set wasn't recorded by the baseline.

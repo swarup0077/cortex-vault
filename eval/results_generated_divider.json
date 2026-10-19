@@ -1,0 +1,41 @@
+{
+ "title": "Divider rerun",
+ "when": "2026-10-19T17:39:36",
+ "commit": "1cd19ad",
+ "settings": {},
+ "final_run": {
+  "when": "2026-10-19T17:04:39",
+  "commit": "6d4c860"
+ },
+ "splits": {
+  "guard": {
+   "divider": {
+    "median_above": 9.5,
+    "all_correct_above": 32,
+    "of": 32,
+    "set": {
+     "public": {
+      "median_above": 9.5,
+      "all_correct_above": 32,
+      "of": 32
+     }
+    }
+   },
+   "same_metrics_as_final": true,
+   "same_ranks_as_final": true,
+   "final_divider": {
+    "median_above": 23.0,
+    "all_correct_above": 32,
+    "of": 32,
+    "set": {
+     "public": {
+      "median_above": 23.0,
+      "all_correct_above": 32,
+      "of": 32
+     }
+    }
+   }
+  }
+ },
+ "identical": true
+}

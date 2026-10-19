@@ -1,0 +1,127 @@
+{
+ "title": "Divider rerun",
+ "when": "2026-10-19T17:39:30",
+ "commit": "1cd19ad",
+ "settings": {},
+ "final_run": {
+  "when": "2026-10-19T17:04:07",
+  "commit": "6d4c860"
+ },
+ "splits": {
+  "tune": {
+   "divider": {
+    "median_above": 19.0,
+    "all_correct_above": 20,
+    "of": 22,
+    "set": {
+     "private": {
+      "median_above": 19,
+      "all_correct_above": 14,
+      "of": 15
+     },
+     "public": {
+      "median_above": 28,
+      "all_correct_above": 6,
+      "of": 7
+     }
+    }
+   },
+   "same_metrics_as_final": true,
+   "same_ranks_as_final": true,
+   "final_divider": {
+    "median_above": 40.0,
+    "all_correct_above": 22,
+    "of": 22,
+    "set": {
+     "private": {
+      "median_above": 33,
+      "all_correct_above": 15,
+      "of": 15
+     },
+     "public": {
+      "median_above": 43,
+      "all_correct_above": 7,
+      "of": 7
+     }
+    }
+   }
+  },
+  "heldout": {
+   "divider": {
+    "median_above": 19.0,
+    "all_correct_above": 18,
+    "of": 22,
+    "set": {
+     "private": {
+      "median_above": 18.5,
+      "all_correct_above": 14,
+      "of": 16
+     },
+     "public": {
+      "median_above": 20.0,
+      "all_correct_above": 4,
+      "of": 6
+     }
+    }
+   },
+   "same_metrics_as_final": true,
+   "same_ranks_as_final": true,
+   "final_divider": {
+    "median_above": 37.0,
+    "all_correct_above": 21,
+    "of": 22,
+    "set": {
+     "private": {
+      "median_above": 37.0,
+      "all_correct_above": 16,
+      "of": 16
+     },
+     "public": {
+      "median_above": 34.5,
+      "all_correct_above": 5,
+      "of": 6
+     }
+    }
+   }
+  },
+  "all": {
+   "divider": {
+    "median_above": 19.0,
+    "all_correct_above": 38,
+    "of": 44,
+    "set": {
+     "private": {
+      "median_above": 19,
+      "all_correct_above": 28,
+      "of": 31
+     },
+     "public": {
+      "median_above": 21,
+      "all_correct_above": 10,
+      "of": 13
+     }
+    }
+   },
+   "same_metrics_as_final": true,
+   "same_ranks_as_final": true,
+   "final_divider": {
+    "median_above": 39.5,
+    "all_correct_above": 43,
+    "of": 44,
+    "set": {
+     "private": {
+      "median_above": 35,
+      "all_correct_above": 31,
+      "of": 31
+     },
+     "public": {
+      "median_above": 43,
+      "all_correct_above": 12,
+      "of": 13
+     }
+    }
+   }
+  }
+ },
+ "identical": true
+}

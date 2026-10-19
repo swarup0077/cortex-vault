@@ -4839,5 +4839,86 @@
     }
    }
   }
+ },
+ "divider_changed_after_final": {
+  "when": "2026-10-19T17:39:30",
+  "commit": "1cd19ad",
+  "from": 0.31,
+  "to": 0.5,
+  "why": "owner: protect every correct file in the top 20 (page_results), not every correct file; a correct file at #43 is a miss either way",
+  "ranking_identical": true,
+  "splits": {
+   "tune": {
+    "divider": {
+     "median_above": 19.0,
+     "all_correct_above": 20,
+     "of": 22,
+     "set": {
+      "private": {
+       "median_above": 19,
+       "all_correct_above": 14,
+       "of": 15
+      },
+      "public": {
+       "median_above": 28,
+       "all_correct_above": 6,
+       "of": 7
+      }
+     }
+    }
+   },
+   "heldout": {
+    "divider": {
+     "median_above": 19.0,
+     "all_correct_above": 18,
+     "of": 22,
+     "set": {
+      "private": {
+       "median_above": 18.5,
+       "all_correct_above": 14,
+       "of": 16
+      },
+      "public": {
+       "median_above": 20.0,
+       "all_correct_above": 4,
+       "of": 6
+      }
+     }
+    }
+   },
+   "all": {
+    "divider": {
+     "median_above": 19.0,
+     "all_correct_above": 38,
+     "of": 44,
+     "set": {
+      "private": {
+       "median_above": 19,
+       "all_correct_above": 28,
+       "of": 31
+      },
+      "public": {
+       "median_above": 21,
+       "all_correct_above": 10,
+       "of": 13
+      }
+     }
+    }
+   }
+  },
+  "generated": {
+   "divider": {
+    "median_above": 9.5,
+    "all_correct_above": 32,
+    "of": 32,
+    "set": {
+     "public": {
+      "median_above": 9.5,
+      "all_correct_above": 32,
+      "of": 32
+     }
+    }
+   }
+  }
  }
 }
