@@ -1,0 +1,481 @@
+{
+ "margin": 0.04,
+ "prompts": [
+  [
+   "a screenshot of a computer or phone screen"
+  ],
+  [
+   "a photograph"
+  ]
+ ],
+ "results": {
+  "all/screenshot": {
+   "n": 12,
+   "right": 0,
+   "pct": 0.0,
+   "lead": [
+    0.0035,
+    0.01715,
+    0.0351
+   ]
+  },
+  "all/photo": {
+   "n": 0,
+   "right": 0,
+   "pct": null,
+   "lead": null
+  },
+  "all/both": {
+   "n": 12,
+   "right": 0,
+   "pct": 0.0,
+   "lead": [
+    0.0035,
+    0.01715,
+    0.0351
+   ]
+  },
+  "public/screenshot": {
+   "n": 3,
+   "right": 0,
+   "pct": 0.0,
+   "lead": [
+    0.0111,
+    0.0201,
+    0.0216
+   ]
+  },
+  "public/photo": {
+   "n": 0,
+   "right": 0,
+   "pct": null,
+   "lead": null
+  },
+  "public/both": {
+   "n": 3,
+   "right": 0,
+   "pct": 0.0,
+   "lead": [
+    0.0111,
+    0.0201,
+    0.0216
+   ]
+  },
+  "private/screenshot": {
+   "n": 9,
+   "right": 0,
+   "pct": 0.0,
+   "lead": [
+    0.0035,
+    0.0154,
+    0.0351
+   ]
+  },
+  "private/photo": {
+   "n": 0,
+   "right": 0,
+   "pct": null,
+   "lead": null
+  },
+  "private/both": {
+   "n": 9,
+   "right": 0,
+   "pct": 0.0,
+   "lead": [
+    0.0035,
+    0.0154,
+    0.0351
+   ]
+  }
+ },
+ "unlabelled": {
+  "n": 18,
+  "clip_screenshot": 5,
+  "by_set": {
+   "public": 14,
+   "private": 4
+  }
+ },
+ "wrong": [
+  {
+   "file": "corpus/real/Screenshot 2025-11-17 193345.png",
+   "set": "public",
+   "label": "screenshot",
+   "lead": 0.0201,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "corpus/real/Screenshot 2025-11-17 192036.png",
+   "set": "public",
+   "label": "screenshot",
+   "lead": 0.0111,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "corpus/real/Screenshot 2025-11-17 191854.png",
+   "set": "public",
+   "label": "screenshot",
+   "lead": 0.0216,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-19",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0078,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-18",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0035,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-17",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0041,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-16",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0189,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-15",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0341,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-14",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0258,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-13",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0154,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-12",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0351,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-11",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0052,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  }
+ ],
+ "files": [
+  {
+   "file": "corpus/real/WhatsApp Image 2026-10-19 at 10.24.54 (2).jpeg",
+   "set": "public",
+   "label": null,
+   "lead": -0.0028,
+   "clip": "photo",
+   "app_kind": "photo",
+   "app_reason": "clip"
+  },
+  {
+   "file": "corpus/real/WhatsApp Image 2026-10-19 at 10.24.54.jpeg",
+   "set": "public",
+   "label": null,
+   "lead": -0.0321,
+   "clip": "photo",
+   "app_kind": "photo",
+   "app_reason": "clip"
+  },
+  {
+   "file": "corpus/real/WhatsApp Image 2026-10-19 at 10.24.53 (2).jpeg",
+   "set": "public",
+   "label": null,
+   "lead": 0.1055,
+   "clip": "screenshot",
+   "app_kind": "screenshot",
+   "app_reason": "clip"
+  },
+  {
+   "file": "corpus/real/WhatsApp Image 2026-10-19 at 10.24.53 (1).jpeg",
+   "set": "public",
+   "label": null,
+   "lead": -0.0381,
+   "clip": "photo",
+   "app_kind": "photo",
+   "app_reason": "clip"
+  },
+  {
+   "file": "corpus/real/WhatsApp Image 2026-10-19 at 10.24.52 (1).jpeg",
+   "set": "public",
+   "label": null,
+   "lead": -0.0257,
+   "clip": "photo",
+   "app_kind": "photo",
+   "app_reason": "clip"
+  },
+  {
+   "file": "private-23",
+   "set": "private",
+   "label": null,
+   "lead": 0.0161,
+   "clip": "photo",
+   "app_kind": "photo",
+   "app_reason": "clip"
+  },
+  {
+   "file": "corpus/real/WhatsApp Image 2026-10-19 at 10.24.51 (1).jpeg",
+   "set": "public",
+   "label": null,
+   "lead": 0.0255,
+   "clip": "photo",
+   "app_kind": "photo",
+   "app_reason": "clip"
+  },
+  {
+   "file": "private-22",
+   "set": "private",
+   "label": null,
+   "lead": 0.0878,
+   "clip": "screenshot",
+   "app_kind": "screenshot",
+   "app_reason": "clip"
+  },
+  {
+   "file": "private-21",
+   "set": "private",
+   "label": null,
+   "lead": 0.0836,
+   "clip": "screenshot",
+   "app_kind": "screenshot",
+   "app_reason": "clip"
+  },
+  {
+   "file": "corpus/real/WhatsApp Image 2026-10-19 at 10.24.49 (1).jpeg",
+   "set": "public",
+   "label": null,
+   "lead": 0.0851,
+   "clip": "screenshot",
+   "app_kind": "screenshot",
+   "app_reason": "clip"
+  },
+  {
+   "file": "corpus/real/Screenshot 2025-11-17 193345.png",
+   "set": "public",
+   "label": "screenshot",
+   "lead": 0.0201,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "corpus/real/Screenshot 2025-11-17 192036.png",
+   "set": "public",
+   "label": "screenshot",
+   "lead": 0.0111,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "corpus/real/Screenshot 2025-11-17 191854.png",
+   "set": "public",
+   "label": "screenshot",
+   "lead": 0.0216,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-19",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0078,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-18",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0035,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-17",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0041,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-16",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0189,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-15",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0341,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-14",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0258,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-13",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0154,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-12",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0351,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "private-11",
+   "set": "private",
+   "label": "screenshot",
+   "lead": 0.0052,
+   "clip": "photo",
+   "app_kind": "screenshot",
+   "app_reason": "filename"
+  },
+  {
+   "file": "corpus/real/image.jpg",
+   "set": "public",
+   "label": null,
+   "lead": -0.0271,
+   "clip": "photo",
+   "app_kind": "photo",
+   "app_reason": "clip"
+  },
+  {
+   "file": "corpus/real/WhatsApp Image 2026-10-19 at 12.25.06 (1).jpeg",
+   "set": "public",
+   "label": null,
+   "lead": -0.0273,
+   "clip": "photo",
+   "app_kind": "photo",
+   "app_reason": "clip"
+  },
+  {
+   "file": "corpus/real/WhatsApp Image 2026-10-19 at 12.25.05 (2).jpeg",
+   "set": "public",
+   "label": null,
+   "lead": -0.0203,
+   "clip": "photo",
+   "app_kind": "photo",
+   "app_reason": "clip"
+  },
+  {
+   "file": "corpus/real/WhatsApp Image 2026-10-19 at 12.25.05 (1).jpeg",
+   "set": "public",
+   "label": null,
+   "lead": -0.0345,
+   "clip": "photo",
+   "app_kind": "photo",
+   "app_reason": "clip"
+  },
+  {
+   "file": "corpus/real/WhatsApp Image 2026-10-19 at 12.25.05.jpeg",
+   "set": "public",
+   "label": null,
+   "lead": 0.0513,
+   "clip": "screenshot",
+   "app_kind": "screenshot",
+   "app_reason": "clip"
+  },
+  {
+   "file": "private-24",
+   "set": "private",
+   "label": null,
+   "lead": -0.038,
+   "clip": "photo",
+   "app_kind": "photo",
+   "app_reason": "clip"
+  },
+  {
+   "file": "corpus/real/WhatsApp Image 2026-10-19 at 12.25.04.jpeg",
+   "set": "public",
+   "label": null,
+   "lead": 0.0192,
+   "clip": "photo",
+   "app_kind": "photo",
+   "app_reason": "clip"
+  },
+  {
+   "file": "corpus/real/WhatsApp Image 2026-10-19 at 12.25.03.jpeg",
+   "set": "public",
+   "label": null,
+   "lead": 0.0152,
+   "clip": "photo",
+   "app_kind": "photo",
+   "app_reason": "clip"
+  }
+ ]
+}
