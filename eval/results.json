@@ -1,0 +1,4843 @@
+{
+ "title": "Eval: final settings",
+ "when": "2026-10-19T17:04:07",
+ "corpus": {
+  "files": 95,
+  "private_paths": 24,
+  "public_paths": 71
+ },
+ "settings": {},
+ "models": {
+  "text": "BAAI/bge-small-en-v1.5",
+  "clip": "Qdrant/clip-ViT-B-32-vision+Qdrant/clip-ViT-B-32-text",
+  "ocr": "PP-OCRv6_det_small.onnx+PP-OCRv6_rec_small.onnx"
+ },
+ "commit": "6d4c860",
+ "splits": {
+  "tune": {
+   "rows": {
+    "6. All three, CLIP gated (the app)": {
+     "overall": {
+      "n": 22,
+      "r1": 17,
+      "r1_pct": 77.3,
+      "r5": 19,
+      "r5_pct": 86.4,
+      "r10": 20,
+      "r10_pct": 90.9,
+      "mrr": 0.812
+     },
+     "search type": {
+      "exact word": {
+       "n": 5,
+       "r1": 5,
+       "r1_pct": 100.0,
+       "r5": 5,
+       "r5_pct": 100.0,
+       "r10": 5,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "inside a scan": {
+       "n": 3,
+       "r1": 1,
+       "r1_pct": 33.3,
+       "r5": 3,
+       "r5_pct": 100.0,
+       "r10": 3,
+       "r10_pct": 100.0,
+       "mrr": 0.583
+      },
+      "meaning": {
+       "n": 9,
+       "r1": 8,
+       "r1_pct": 88.9,
+       "r5": 8,
+       "r5_pct": 88.9,
+       "r10": 8,
+       "r10_pct": 88.9,
+       "mrr": 0.889
+      },
+      "picture": {
+       "n": 5,
+       "r1": 3,
+       "r1_pct": 60.0,
+       "r5": 3,
+       "r5_pct": 60.0,
+       "r10": 4,
+       "r10_pct": 80.0,
+       "mrr": 0.622
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 4,
+       "r1": 2,
+       "r1_pct": 50.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.688
+      },
+      "photo": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "screenshot": {
+       "n": 15,
+       "r1": 12,
+       "r1_pct": 80.0,
+       "r5": 12,
+       "r5_pct": 80.0,
+       "r10": 13,
+       "r10_pct": 86.7,
+       "mrr": 0.807
+      },
+      "text": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "private": {
+       "n": 15,
+       "r1": 12,
+       "r1_pct": 80.0,
+       "r5": 14,
+       "r5_pct": 93.3,
+       "r10": 14,
+       "r10_pct": 93.3,
+       "mrr": 0.85
+      },
+      "public": {
+       "n": 7,
+       "r1": 5,
+       "r1_pct": 71.4,
+       "r5": 5,
+       "r5_pct": 71.4,
+       "r10": 6,
+       "r10_pct": 85.7,
+       "mrr": 0.73
+      }
+     }
+    },
+    "1. BM25 only": {
+     "overall": {
+      "n": 22,
+      "r1": 14,
+      "r1_pct": 63.6,
+      "r5": 15,
+      "r5_pct": 68.2,
+      "r10": 16,
+      "r10_pct": 72.7,
+      "mrr": 0.657
+     },
+     "search type": {
+      "exact word": {
+       "n": 5,
+       "r1": 4,
+       "r1_pct": 80.0,
+       "r5": 4,
+       "r5_pct": 80.0,
+       "r10": 4,
+       "r10_pct": 80.0,
+       "mrr": 0.8
+      },
+      "inside a scan": {
+       "n": 3,
+       "r1": 2,
+       "r1_pct": 66.7,
+       "r5": 3,
+       "r5_pct": 100.0,
+       "r10": 3,
+       "r10_pct": 100.0,
+       "mrr": 0.778
+      },
+      "meaning": {
+       "n": 9,
+       "r1": 8,
+       "r1_pct": 88.9,
+       "r5": 8,
+       "r5_pct": 88.9,
+       "r10": 8,
+       "r10_pct": 88.9,
+       "mrr": 0.889
+      },
+      "picture": {
+       "n": 5,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 1,
+       "r10_pct": 20.0,
+       "mrr": 0.025
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 4,
+       "r1": 3,
+       "r1_pct": 75.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.833
+      },
+      "photo": {
+       "n": 1,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "screenshot": {
+       "n": 15,
+       "r1": 9,
+       "r1_pct": 60.0,
+       "r5": 9,
+       "r5_pct": 60.0,
+       "r10": 10,
+       "r10_pct": 66.7,
+       "mrr": 0.608
+      },
+      "text": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "private": {
+       "n": 15,
+       "r1": 12,
+       "r1_pct": 80.0,
+       "r5": 13,
+       "r5_pct": 86.7,
+       "r10": 13,
+       "r10_pct": 86.7,
+       "mrr": 0.822
+      },
+      "public": {
+       "n": 7,
+       "r1": 2,
+       "r1_pct": 28.6,
+       "r5": 2,
+       "r5_pct": 28.6,
+       "r10": 3,
+       "r10_pct": 42.9,
+       "mrr": 0.304
+      }
+     }
+    },
+    "2. Dense only": {
+     "overall": {
+      "n": 22,
+      "r1": 13,
+      "r1_pct": 59.1,
+      "r5": 16,
+      "r5_pct": 72.7,
+      "r10": 19,
+      "r10_pct": 86.4,
+      "mrr": 0.654
+     },
+     "search type": {
+      "exact word": {
+       "n": 5,
+       "r1": 3,
+       "r1_pct": 60.0,
+       "r5": 3,
+       "r5_pct": 60.0,
+       "r10": 5,
+       "r10_pct": 100.0,
+       "mrr": 0.656
+      },
+      "inside a scan": {
+       "n": 3,
+       "r1": 2,
+       "r1_pct": 66.7,
+       "r5": 3,
+       "r5_pct": 100.0,
+       "r10": 3,
+       "r10_pct": 100.0,
+       "mrr": 0.833
+      },
+      "meaning": {
+       "n": 9,
+       "r1": 8,
+       "r1_pct": 88.9,
+       "r5": 8,
+       "r5_pct": 88.9,
+       "r10": 8,
+       "r10_pct": 88.9,
+       "mrr": 0.889
+      },
+      "picture": {
+       "n": 5,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 2,
+       "r5_pct": 40.0,
+       "r10": 3,
+       "r10_pct": 60.0,
+       "mrr": 0.123
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 4,
+       "r1": 3,
+       "r1_pct": 75.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.875
+      },
+      "photo": {
+       "n": 1,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "screenshot": {
+       "n": 15,
+       "r1": 8,
+       "r1_pct": 53.3,
+       "r5": 10,
+       "r5_pct": 66.7,
+       "r10": 13,
+       "r10_pct": 86.7,
+       "mrr": 0.593
+      },
+      "text": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "private": {
+       "n": 15,
+       "r1": 11,
+       "r1_pct": 73.3,
+       "r5": 12,
+       "r5_pct": 80.0,
+       "r10": 14,
+       "r10_pct": 93.3,
+       "mrr": 0.785
+      },
+      "public": {
+       "n": 7,
+       "r1": 2,
+       "r1_pct": 28.6,
+       "r5": 4,
+       "r5_pct": 57.1,
+       "r10": 5,
+       "r10_pct": 71.4,
+       "mrr": 0.374
+      }
+     }
+    },
+    "3. CLIP only": {
+     "overall": {
+      "n": 22,
+      "r1": 7,
+      "r1_pct": 31.8,
+      "r5": 13,
+      "r5_pct": 59.1,
+      "r10": 15,
+      "r10_pct": 68.2,
+      "mrr": 0.444
+     },
+     "search type": {
+      "exact word": {
+       "n": 5,
+       "r1": 2,
+       "r1_pct": 40.0,
+       "r5": 4,
+       "r5_pct": 80.0,
+       "r10": 4,
+       "r10_pct": 80.0,
+       "mrr": 0.567
+      },
+      "inside a scan": {
+       "n": 3,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "meaning": {
+       "n": 9,
+       "r1": 4,
+       "r1_pct": 44.4,
+       "r5": 5,
+       "r5_pct": 55.6,
+       "r10": 6,
+       "r10_pct": 66.7,
+       "mrr": 0.512
+      },
+      "picture": {
+       "n": 5,
+       "r1": 1,
+       "r1_pct": 20.0,
+       "r5": 4,
+       "r5_pct": 80.0,
+       "r10": 5,
+       "r10_pct": 100.0,
+       "mrr": 0.465
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 4,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "photo": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "screenshot": {
+       "n": 15,
+       "r1": 6,
+       "r1_pct": 40.0,
+       "r5": 12,
+       "r5_pct": 80.0,
+       "r10": 14,
+       "r10_pct": 93.3,
+       "mrr": 0.585
+      },
+      "text": {
+       "n": 2,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      }
+     },
+     "set": {
+      "private": {
+       "n": 15,
+       "r1": 6,
+       "r1_pct": 40.0,
+       "r5": 10,
+       "r5_pct": 66.7,
+       "r10": 10,
+       "r10_pct": 66.7,
+       "mrr": 0.502
+      },
+      "public": {
+       "n": 7,
+       "r1": 1,
+       "r1_pct": 14.3,
+       "r5": 3,
+       "r5_pct": 42.9,
+       "r10": 5,
+       "r10_pct": 71.4,
+       "mrr": 0.319
+      }
+     }
+    },
+    "4. BM25 + dense": {
+     "overall": {
+      "n": 22,
+      "r1": 14,
+      "r1_pct": 63.6,
+      "r5": 16,
+      "r5_pct": 72.7,
+      "r10": 19,
+      "r10_pct": 86.4,
+      "mrr": 0.688
+     },
+     "search type": {
+      "exact word": {
+       "n": 5,
+       "r1": 4,
+       "r1_pct": 80.0,
+       "r5": 4,
+       "r5_pct": 80.0,
+       "r10": 5,
+       "r10_pct": 100.0,
+       "mrr": 0.825
+      },
+      "inside a scan": {
+       "n": 3,
+       "r1": 2,
+       "r1_pct": 66.7,
+       "r5": 3,
+       "r5_pct": 100.0,
+       "r10": 3,
+       "r10_pct": 100.0,
+       "mrr": 0.833
+      },
+      "meaning": {
+       "n": 9,
+       "r1": 8,
+       "r1_pct": 88.9,
+       "r5": 8,
+       "r5_pct": 88.9,
+       "r10": 8,
+       "r10_pct": 88.9,
+       "mrr": 0.889
+      },
+      "picture": {
+       "n": 5,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 1,
+       "r5_pct": 20.0,
+       "r10": 3,
+       "r10_pct": 60.0,
+       "mrr": 0.1
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 4,
+       "r1": 3,
+       "r1_pct": 75.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.875
+      },
+      "photo": {
+       "n": 1,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "screenshot": {
+       "n": 15,
+       "r1": 9,
+       "r1_pct": 60.0,
+       "r5": 10,
+       "r5_pct": 66.7,
+       "r10": 13,
+       "r10_pct": 86.7,
+       "mrr": 0.642
+      },
+      "text": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "private": {
+       "n": 15,
+       "r1": 12,
+       "r1_pct": 80.0,
+       "r5": 13,
+       "r5_pct": 86.7,
+       "r10": 14,
+       "r10_pct": 93.3,
+       "mrr": 0.842
+      },
+      "public": {
+       "n": 7,
+       "r1": 2,
+       "r1_pct": 28.6,
+       "r5": 3,
+       "r5_pct": 42.9,
+       "r10": 5,
+       "r10_pct": 71.4,
+       "mrr": 0.357
+      }
+     }
+    },
+    "5. All three, CLIP ungated": {
+     "overall": {
+      "n": 22,
+      "r1": 14,
+      "r1_pct": 63.6,
+      "r5": 16,
+      "r5_pct": 72.7,
+      "r10": 18,
+      "r10_pct": 81.8,
+      "mrr": 0.686
+     },
+     "search type": {
+      "exact word": {
+       "n": 5,
+       "r1": 4,
+       "r1_pct": 80.0,
+       "r5": 4,
+       "r5_pct": 80.0,
+       "r10": 5,
+       "r10_pct": 100.0,
+       "mrr": 0.829
+      },
+      "inside a scan": {
+       "n": 3,
+       "r1": 1,
+       "r1_pct": 33.3,
+       "r5": 1,
+       "r5_pct": 33.3,
+       "r10": 2,
+       "r10_pct": 66.7,
+       "mrr": 0.375
+      },
+      "meaning": {
+       "n": 9,
+       "r1": 6,
+       "r1_pct": 66.7,
+       "r5": 8,
+       "r5_pct": 88.9,
+       "r10": 8,
+       "r10_pct": 88.9,
+       "mrr": 0.759
+      },
+      "picture": {
+       "n": 5,
+       "r1": 3,
+       "r1_pct": 60.0,
+       "r5": 3,
+       "r5_pct": 60.0,
+       "r10": 3,
+       "r10_pct": 60.0,
+       "mrr": 0.6
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 4,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 2,
+       "r5_pct": 50.0,
+       "r10": 3,
+       "r10_pct": 75.0,
+       "mrr": 0.24
+      },
+      "photo": {
+       "n": 1,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "screenshot": {
+       "n": 15,
+       "r1": 13,
+       "r1_pct": 86.7,
+       "r5": 13,
+       "r5_pct": 86.7,
+       "r10": 13,
+       "r10_pct": 86.7,
+       "mrr": 0.867
+      },
+      "text": {
+       "n": 2,
+       "r1": 1,
+       "r1_pct": 50.0,
+       "r5": 1,
+       "r5_pct": 50.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 0.571
+      }
+     },
+     "set": {
+      "private": {
+       "n": 15,
+       "r1": 10,
+       "r1_pct": 66.7,
+       "r5": 12,
+       "r5_pct": 80.0,
+       "r10": 13,
+       "r10_pct": 86.7,
+       "mrr": 0.731
+      },
+      "public": {
+       "n": 7,
+       "r1": 4,
+       "r1_pct": 57.1,
+       "r5": 4,
+       "r5_pct": 57.1,
+       "r10": 5,
+       "r10_pct": 71.4,
+       "mrr": 0.592
+      }
+     }
+    },
+    "7. All three, gated, no every-word list": {
+     "overall": {
+      "n": 22,
+      "r1": 17,
+      "r1_pct": 77.3,
+      "r5": 19,
+      "r5_pct": 86.4,
+      "r10": 20,
+      "r10_pct": 90.9,
+      "mrr": 0.812
+     },
+     "search type": {
+      "exact word": {
+       "n": 5,
+       "r1": 5,
+       "r1_pct": 100.0,
+       "r5": 5,
+       "r5_pct": 100.0,
+       "r10": 5,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "inside a scan": {
+       "n": 3,
+       "r1": 1,
+       "r1_pct": 33.3,
+       "r5": 3,
+       "r5_pct": 100.0,
+       "r10": 3,
+       "r10_pct": 100.0,
+       "mrr": 0.583
+      },
+      "meaning": {
+       "n": 9,
+       "r1": 8,
+       "r1_pct": 88.9,
+       "r5": 8,
+       "r5_pct": 88.9,
+       "r10": 8,
+       "r10_pct": 88.9,
+       "mrr": 0.889
+      },
+      "picture": {
+       "n": 5,
+       "r1": 3,
+       "r1_pct": 60.0,
+       "r5": 3,
+       "r5_pct": 60.0,
+       "r10": 4,
+       "r10_pct": 80.0,
+       "mrr": 0.622
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 4,
+       "r1": 2,
+       "r1_pct": 50.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.688
+      },
+      "photo": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "screenshot": {
+       "n": 15,
+       "r1": 12,
+       "r1_pct": 80.0,
+       "r5": 12,
+       "r5_pct": 80.0,
+       "r10": 13,
+       "r10_pct": 86.7,
+       "mrr": 0.807
+      },
+      "text": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "private": {
+       "n": 15,
+       "r1": 12,
+       "r1_pct": 80.0,
+       "r5": 14,
+       "r5_pct": 93.3,
+       "r10": 14,
+       "r10_pct": 93.3,
+       "mrr": 0.85
+      },
+      "public": {
+       "n": 7,
+       "r1": 5,
+       "r1_pct": 71.4,
+       "r5": 5,
+       "r5_pct": 71.4,
+       "r10": 6,
+       "r10_pct": 85.7,
+       "mrr": 0.73
+      }
+     }
+    }
+   },
+   "divider": {
+    "median_above": 40.0,
+    "all_correct_above": 22,
+    "of": 22,
+    "set": {
+     "private": {
+      "median_above": 33,
+      "all_correct_above": 15,
+      "of": 15
+     },
+     "public": {
+      "median_above": 43,
+      "all_correct_above": 7,
+      "of": 7
+     }
+    }
+   },
+   "latency_ms": {
+    "p50": 190.5,
+    "p95": 257.8
+   },
+   "queries": [
+    {
+     "id": "q01",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "Find the image of a famous fractal formed by repeatedly applying a complex quadratic recurrence",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 192036.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 43,
+     "above_divider": 44,
+     "all_correct_above": true,
+     "found_by": {
+      "dense": 24
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": 24,
+      "clip": 9
+     }
+    },
+    {
+     "id": "q03",
+     "split": "tune",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-18",
+      "private-19"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 24,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 11,
+      "dense": 9,
+      "clip": 3
+     },
+     "single_method_rank": {
+      "bm25": 11,
+      "dense": 9,
+      "clip": 3
+     }
+    },
+    {
+     "id": "q08",
+     "split": "tune",
+     "search_type": "picture",
+     "set": "public",
+     "query": "Locate the image whose color legend identifies different roots of a polynomial",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 191854.png",
+      "corpus/real/Screenshot 2025-11-17 193345.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 9,
+     "above_divider": 50,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 29,
+      "dense": 6
+     },
+     "single_method_rank": {
+      "bm25": 29,
+      "dense": 6,
+      "clip": 8
+     }
+    },
+    {
+     "id": "q11",
+     "split": "tune",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-14"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 35,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 6,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 6,
+      "clip": 1
+     }
+    },
+    {
+     "id": "q12",
+     "split": "tune",
+     "search_type": "picture",
+     "set": "public",
+     "query": "Locate the visualization with three distinct root-attraction regions in the complex plane",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 193345.png",
+      "corpus/real/Screenshot 2025-11-17 191854.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 20,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 8,
+      "dense": 5,
+      "clip": 2
+     },
+     "single_method_rank": {
+      "bm25": 8,
+      "dense": 5,
+      "clip": 2
+     }
+    },
+    {
+     "id": "q13",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-18"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 24,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     }
+    },
+    {
+     "id": "q22",
+     "split": "tune",
+     "search_type": "picture",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-15"
+     ],
+     "file_type": "screenshot",
+     "rank": 46,
+     "above_divider": 50,
+     "all_correct_above": true,
+     "found_by": {
+      "dense": 26
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": 26,
+      "clip": 5
+     }
+    },
+    {
+     "id": "q23",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-16",
+      "private-17"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 27,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 10,
+      "dense": 3,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     }
+    },
+    {
+     "id": "q26",
+     "split": "tune",
+     "search_type": "inside a scan",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-17"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 42,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 11
+     }
+    },
+    {
+     "id": "q27",
+     "split": "tune",
+     "search_type": "picture",
+     "set": "public",
+     "query": "Find the colorful image showing regions that attract complex-number iterations to different roots",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 191854.png",
+      "corpus/real/Screenshot 2025-11-17 193345.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 43,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 33,
+      "dense": 4,
+      "clip": 3
+     },
+     "single_method_rank": {
+      "bm25": 33,
+      "dense": 4,
+      "clip": 2
+     }
+    },
+    {
+     "id": "q28",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-17",
+      "private-16"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 44,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 2
+     }
+    },
+    {
+     "id": "q29",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-08"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 41,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "q30",
+     "split": "tune",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-11"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 33,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     }
+    },
+    {
+     "id": "q31",
+     "split": "tune",
+     "search_type": "picture",
+     "set": "public",
+     "query": "snowy mountain peaks over autumn valley with winding road and wooden chalets",
+     "relevant": [
+      "corpus/real/image.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 40,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": null,
+      "clip": 1
+     }
+    },
+    {
+     "id": "q32",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "why accuracy is useless for rare-event classification and PR-AUC preference",
+     "relevant": [
+      "corpus/real/Phase 0 — Problem framing (no code).txt"
+     ],
+     "file_type": "text",
+     "rank": 1,
+     "above_divider": 40,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "q33",
+     "split": "tune",
+     "search_type": "inside a scan",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-10"
+     ],
+     "file_type": "pdf",
+     "rank": 2,
+     "above_divider": 48,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 3,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 3,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "q35",
+     "split": "tune",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-12",
+      "private-13"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 24,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 2,
+      "clip": 2
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 2
+     }
+    },
+    {
+     "id": "q38",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-11"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 32,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     }
+    },
+    {
+     "id": "q40",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-09"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 41,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "q41",
+     "split": "tune",
+     "search_type": "inside a scan",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-07"
+     ],
+     "file_type": "pdf",
+     "rank": 4,
+     "above_divider": 32,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 2
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 2,
+      "clip": null
+     }
+    },
+    {
+     "id": "q42",
+     "split": "tune",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "data leakage risks when building time-aware features for transactional fraud models",
+     "relevant": [
+      "corpus/real/Phase 0 — Problem framing (no code).txt"
+     ],
+     "file_type": "text",
+     "rank": 1,
+     "above_divider": 43,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "q44",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-13",
+      "private-12"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 33,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     }
+    }
+   ]
+  },
+  "heldout": {
+   "rows": {
+    "6. All three, CLIP gated (the app)": {
+     "overall": {
+      "n": 22,
+      "r1": 7,
+      "r1_pct": 31.8,
+      "r5": 13,
+      "r5_pct": 59.1,
+      "r10": 16,
+      "r10_pct": 72.7,
+      "mrr": 0.443
+     },
+     "search type": {
+      "exact word": {
+       "n": 4,
+       "r1": 2,
+       "r1_pct": 50.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.675
+      },
+      "inside a scan": {
+       "n": 3,
+       "r1": 1,
+       "r1_pct": 33.3,
+       "r5": 1,
+       "r5_pct": 33.3,
+       "r10": 2,
+       "r10_pct": 66.7,
+       "mrr": 0.375
+      },
+      "meaning": {
+       "n": 10,
+       "r1": 2,
+       "r1_pct": 20.0,
+       "r5": 5,
+       "r5_pct": 50.0,
+       "r10": 7,
+       "r10_pct": 70.0,
+       "mrr": 0.341
+      },
+      "picture": {
+       "n": 5,
+       "r1": 2,
+       "r1_pct": 40.0,
+       "r5": 3,
+       "r5_pct": 60.0,
+       "r10": 3,
+       "r10_pct": 60.0,
+       "mrr": 0.5
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 4,
+       "r1": 3,
+       "r1_pct": 75.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.8
+      },
+      "photo": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "screenshot": {
+       "n": 17,
+       "r1": 3,
+       "r1_pct": 17.6,
+       "r5": 8,
+       "r5_pct": 47.1,
+       "r10": 11,
+       "r10_pct": 64.7,
+       "mrr": 0.326
+      }
+     },
+     "set": {
+      "private": {
+       "n": 16,
+       "r1": 6,
+       "r1_pct": 37.5,
+       "r5": 12,
+       "r5_pct": 75.0,
+       "r10": 14,
+       "r10_pct": 87.5,
+       "mrr": 0.539
+      },
+      "public": {
+       "n": 6,
+       "r1": 1,
+       "r1_pct": 16.7,
+       "r5": 1,
+       "r5_pct": 16.7,
+       "r10": 2,
+       "r10_pct": 33.3,
+       "mrr": 0.185
+      }
+     }
+    },
+    "1. BM25 only": {
+     "overall": {
+      "n": 22,
+      "r1": 7,
+      "r1_pct": 31.8,
+      "r5": 9,
+      "r5_pct": 40.9,
+      "r10": 9,
+      "r10_pct": 40.9,
+      "mrr": 0.364
+     },
+     "search type": {
+      "exact word": {
+       "n": 4,
+       "r1": 3,
+       "r1_pct": 75.0,
+       "r5": 3,
+       "r5_pct": 75.0,
+       "r10": 3,
+       "r10_pct": 75.0,
+       "mrr": 0.75
+      },
+      "inside a scan": {
+       "n": 3,
+       "r1": 1,
+       "r1_pct": 33.3,
+       "r5": 1,
+       "r5_pct": 33.3,
+       "r10": 1,
+       "r10_pct": 33.3,
+       "mrr": 0.333
+      },
+      "meaning": {
+       "n": 10,
+       "r1": 2,
+       "r1_pct": 20.0,
+       "r5": 4,
+       "r5_pct": 40.0,
+       "r10": 4,
+       "r10_pct": 40.0,
+       "mrr": 0.3
+      },
+      "picture": {
+       "n": 5,
+       "r1": 1,
+       "r1_pct": 20.0,
+       "r5": 1,
+       "r5_pct": 20.0,
+       "r10": 1,
+       "r10_pct": 20.0,
+       "mrr": 0.2
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 4,
+       "r1": 3,
+       "r1_pct": 75.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.875
+      },
+      "photo": {
+       "n": 1,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "screenshot": {
+       "n": 17,
+       "r1": 4,
+       "r1_pct": 23.5,
+       "r5": 5,
+       "r5_pct": 29.4,
+       "r10": 5,
+       "r10_pct": 29.4,
+       "mrr": 0.265
+      }
+     },
+     "set": {
+      "private": {
+       "n": 16,
+       "r1": 7,
+       "r1_pct": 43.8,
+       "r5": 9,
+       "r5_pct": 56.2,
+       "r10": 9,
+       "r10_pct": 56.2,
+       "mrr": 0.5
+      },
+      "public": {
+       "n": 6,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      }
+     }
+    },
+    "2. Dense only": {
+     "overall": {
+      "n": 22,
+      "r1": 5,
+      "r1_pct": 22.7,
+      "r5": 11,
+      "r5_pct": 50.0,
+      "r10": 15,
+      "r10_pct": 68.2,
+      "mrr": 0.33
+     },
+     "search type": {
+      "exact word": {
+       "n": 4,
+       "r1": 1,
+       "r1_pct": 25.0,
+       "r5": 3,
+       "r5_pct": 75.0,
+       "r10": 3,
+       "r10_pct": 75.0,
+       "mrr": 0.458
+      },
+      "inside a scan": {
+       "n": 3,
+       "r1": 1,
+       "r1_pct": 33.3,
+       "r5": 2,
+       "r5_pct": 66.7,
+       "r10": 2,
+       "r10_pct": 66.7,
+       "mrr": 0.4
+      },
+      "meaning": {
+       "n": 10,
+       "r1": 2,
+       "r1_pct": 20.0,
+       "r5": 4,
+       "r5_pct": 40.0,
+       "r10": 7,
+       "r10_pct": 70.0,
+       "mrr": 0.293
+      },
+      "picture": {
+       "n": 5,
+       "r1": 1,
+       "r1_pct": 20.0,
+       "r5": 2,
+       "r5_pct": 40.0,
+       "r10": 3,
+       "r10_pct": 60.0,
+       "mrr": 0.262
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 4,
+       "r1": 2,
+       "r1_pct": 50.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.708
+      },
+      "photo": {
+       "n": 1,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "screenshot": {
+       "n": 17,
+       "r1": 3,
+       "r1_pct": 17.6,
+       "r5": 7,
+       "r5_pct": 41.2,
+       "r10": 11,
+       "r10_pct": 64.7,
+       "mrr": 0.261
+      }
+     },
+     "set": {
+      "private": {
+       "n": 16,
+       "r1": 5,
+       "r1_pct": 31.2,
+       "r5": 9,
+       "r5_pct": 56.2,
+       "r10": 11,
+       "r10_pct": 68.8,
+       "mrr": 0.415
+      },
+      "public": {
+       "n": 6,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 2,
+       "r5_pct": 33.3,
+       "r10": 4,
+       "r10_pct": 66.7,
+       "mrr": 0.106
+      }
+     }
+    },
+    "3. CLIP only": {
+     "overall": {
+      "n": 22,
+      "r1": 2,
+      "r1_pct": 9.1,
+      "r5": 9,
+      "r5_pct": 40.9,
+      "r10": 14,
+      "r10_pct": 63.6,
+      "mrr": 0.229
+     },
+     "search type": {
+      "exact word": {
+       "n": 4,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 2,
+       "r5_pct": 50.0,
+       "r10": 2,
+       "r10_pct": 50.0,
+       "mrr": 0.175
+      },
+      "inside a scan": {
+       "n": 3,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 1,
+       "r5_pct": 33.3,
+       "r10": 1,
+       "r10_pct": 33.3,
+       "mrr": 0.167
+      },
+      "meaning": {
+       "n": 10,
+       "r1": 1,
+       "r1_pct": 10.0,
+       "r5": 3,
+       "r5_pct": 30.0,
+       "r10": 8,
+       "r10_pct": 80.0,
+       "mrr": 0.209
+      },
+      "picture": {
+       "n": 5,
+       "r1": 1,
+       "r1_pct": 20.0,
+       "r5": 3,
+       "r5_pct": 60.0,
+       "r10": 3,
+       "r10_pct": 60.0,
+       "mrr": 0.35
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 4,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "photo": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "screenshot": {
+       "n": 17,
+       "r1": 1,
+       "r1_pct": 5.9,
+       "r5": 8,
+       "r5_pct": 47.1,
+       "r10": 13,
+       "r10_pct": 76.5,
+       "mrr": 0.238
+      }
+     },
+     "set": {
+      "private": {
+       "n": 16,
+       "r1": 1,
+       "r1_pct": 6.2,
+       "r5": 7,
+       "r5_pct": 43.8,
+       "r10": 10,
+       "r10_pct": 62.5,
+       "mrr": 0.224
+      },
+      "public": {
+       "n": 6,
+       "r1": 1,
+       "r1_pct": 16.7,
+       "r5": 2,
+       "r5_pct": 33.3,
+       "r10": 4,
+       "r10_pct": 66.7,
+       "mrr": 0.244
+      }
+     }
+    },
+    "4. BM25 + dense": {
+     "overall": {
+      "n": 22,
+      "r1": 7,
+      "r1_pct": 31.8,
+      "r5": 9,
+      "r5_pct": 40.9,
+      "r10": 12,
+      "r10_pct": 54.5,
+      "mrr": 0.373
+     },
+     "search type": {
+      "exact word": {
+       "n": 4,
+       "r1": 3,
+       "r1_pct": 75.0,
+       "r5": 3,
+       "r5_pct": 75.0,
+       "r10": 3,
+       "r10_pct": 75.0,
+       "mrr": 0.75
+      },
+      "inside a scan": {
+       "n": 3,
+       "r1": 1,
+       "r1_pct": 33.3,
+       "r5": 1,
+       "r5_pct": 33.3,
+       "r10": 1,
+       "r10_pct": 33.3,
+       "mrr": 0.333
+      },
+      "meaning": {
+       "n": 10,
+       "r1": 2,
+       "r1_pct": 20.0,
+       "r5": 4,
+       "r5_pct": 40.0,
+       "r10": 6,
+       "r10_pct": 60.0,
+       "mrr": 0.31
+      },
+      "picture": {
+       "n": 5,
+       "r1": 1,
+       "r1_pct": 20.0,
+       "r5": 1,
+       "r5_pct": 20.0,
+       "r10": 2,
+       "r10_pct": 40.0,
+       "mrr": 0.222
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 4,
+       "r1": 3,
+       "r1_pct": 75.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.833
+      },
+      "photo": {
+       "n": 1,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "screenshot": {
+       "n": 17,
+       "r1": 4,
+       "r1_pct": 23.5,
+       "r5": 5,
+       "r5_pct": 29.4,
+       "r10": 8,
+       "r10_pct": 47.1,
+       "mrr": 0.287
+      }
+     },
+     "set": {
+      "private": {
+       "n": 16,
+       "r1": 7,
+       "r1_pct": 43.8,
+       "r5": 9,
+       "r5_pct": 56.2,
+       "r10": 11,
+       "r10_pct": 68.8,
+       "mrr": 0.503
+      },
+      "public": {
+       "n": 6,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 1,
+       "r10_pct": 16.7,
+       "mrr": 0.028
+      }
+     }
+    },
+    "5. All three, CLIP ungated": {
+     "overall": {
+      "n": 22,
+      "r1": 5,
+      "r1_pct": 22.7,
+      "r5": 14,
+      "r5_pct": 63.6,
+      "r10": 16,
+      "r10_pct": 72.7,
+      "mrr": 0.373
+     },
+     "search type": {
+      "exact word": {
+       "n": 4,
+       "r1": 1,
+       "r1_pct": 25.0,
+       "r5": 3,
+       "r5_pct": 75.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.473
+      },
+      "inside a scan": {
+       "n": 3,
+       "r1": 1,
+       "r1_pct": 33.3,
+       "r5": 2,
+       "r5_pct": 66.7,
+       "r10": 2,
+       "r10_pct": 66.7,
+       "mrr": 0.4
+      },
+      "meaning": {
+       "n": 10,
+       "r1": 2,
+       "r1_pct": 20.0,
+       "r5": 6,
+       "r5_pct": 60.0,
+       "r10": 7,
+       "r10_pct": 70.0,
+       "mrr": 0.358
+      },
+      "picture": {
+       "n": 5,
+       "r1": 1,
+       "r1_pct": 20.0,
+       "r5": 3,
+       "r5_pct": 60.0,
+       "r10": 3,
+       "r10_pct": 60.0,
+       "mrr": 0.307
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 4,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 3,
+       "r5_pct": 75.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.269
+      },
+      "photo": {
+       "n": 1,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "screenshot": {
+       "n": 17,
+       "r1": 5,
+       "r1_pct": 29.4,
+       "r5": 11,
+       "r5_pct": 64.7,
+       "r10": 12,
+       "r10_pct": 70.6,
+       "mrr": 0.419
+      }
+     },
+     "set": {
+      "private": {
+       "n": 16,
+       "r1": 3,
+       "r1_pct": 18.8,
+       "r5": 11,
+       "r5_pct": 68.8,
+       "r10": 13,
+       "r10_pct": 81.2,
+       "mrr": 0.375
+      },
+      "public": {
+       "n": 6,
+       "r1": 2,
+       "r1_pct": 33.3,
+       "r5": 3,
+       "r5_pct": 50.0,
+       "r10": 3,
+       "r10_pct": 50.0,
+       "mrr": 0.367
+      }
+     }
+    },
+    "7. All three, gated, no every-word list": {
+     "overall": {
+      "n": 22,
+      "r1": 7,
+      "r1_pct": 31.8,
+      "r5": 13,
+      "r5_pct": 59.1,
+      "r10": 16,
+      "r10_pct": 72.7,
+      "mrr": 0.443
+     },
+     "search type": {
+      "exact word": {
+       "n": 4,
+       "r1": 2,
+       "r1_pct": 50.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.675
+      },
+      "inside a scan": {
+       "n": 3,
+       "r1": 1,
+       "r1_pct": 33.3,
+       "r5": 1,
+       "r5_pct": 33.3,
+       "r10": 2,
+       "r10_pct": 66.7,
+       "mrr": 0.375
+      },
+      "meaning": {
+       "n": 10,
+       "r1": 2,
+       "r1_pct": 20.0,
+       "r5": 5,
+       "r5_pct": 50.0,
+       "r10": 7,
+       "r10_pct": 70.0,
+       "mrr": 0.341
+      },
+      "picture": {
+       "n": 5,
+       "r1": 2,
+       "r1_pct": 40.0,
+       "r5": 3,
+       "r5_pct": 60.0,
+       "r10": 3,
+       "r10_pct": 60.0,
+       "mrr": 0.5
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 4,
+       "r1": 3,
+       "r1_pct": 75.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.8
+      },
+      "photo": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "screenshot": {
+       "n": 17,
+       "r1": 3,
+       "r1_pct": 17.6,
+       "r5": 8,
+       "r5_pct": 47.1,
+       "r10": 11,
+       "r10_pct": 64.7,
+       "mrr": 0.326
+      }
+     },
+     "set": {
+      "private": {
+       "n": 16,
+       "r1": 6,
+       "r1_pct": 37.5,
+       "r5": 12,
+       "r5_pct": 75.0,
+       "r10": 14,
+       "r10_pct": 87.5,
+       "mrr": 0.539
+      },
+      "public": {
+       "n": 6,
+       "r1": 1,
+       "r1_pct": 16.7,
+       "r5": 1,
+       "r5_pct": 16.7,
+       "r10": 2,
+       "r10_pct": 33.3,
+       "mrr": 0.185
+      }
+     }
+    }
+   },
+   "divider": {
+    "median_above": 37.0,
+    "all_correct_above": 21,
+    "of": 22,
+    "set": {
+     "private": {
+      "median_above": 37.0,
+      "all_correct_above": 16,
+      "of": 16
+     },
+     "public": {
+      "median_above": 34.5,
+      "all_correct_above": 5,
+      "of": 6
+     }
+    }
+   },
+   "latency_ms": {
+    "p50": 173.7,
+    "p95": 243.3
+   },
+   "queries": [
+    {
+     "id": "q02",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-17",
+      "private-16"
+     ],
+     "file_type": "screenshot",
+     "rank": 2,
+     "above_divider": 46,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 8
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 8,
+      "clip": null
+     }
+    },
+    {
+     "id": "q04",
+     "split": "heldout",
+     "search_type": "picture",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-15"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 24,
+     "all_correct_above": true,
+     "found_by": {
+      "dense": 19,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": 19,
+      "clip": 1
+     }
+    },
+    {
+     "id": "q05",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-14"
+     ],
+     "file_type": "screenshot",
+     "rank": 11,
+     "above_divider": 33,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 21,
+      "dense": 7
+     },
+     "single_method_rank": {
+      "bm25": 21,
+      "dense": 7,
+      "clip": 7
+     }
+    },
+    {
+     "id": "q06",
+     "split": "heldout",
+     "search_type": "picture",
+     "set": "public",
+     "query": "Search for the picture with a dark central shape surrounded by intricate purple branching boundaries",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 192036.png"
+     ],
+     "file_type": "screenshot",
+     "rank": null,
+     "above_divider": 11,
+     "all_correct_above": false,
+     "found_by": {},
+     "single_method_rank": {
+      "bm25": null,
+      "dense": null,
+      "clip": null
+     }
+    },
+    {
+     "id": "q07",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-17"
+     ],
+     "file_type": "screenshot",
+     "rank": 2,
+     "above_divider": 27,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 8
+     }
+    },
+    {
+     "id": "q09",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-19"
+     ],
+     "file_type": "screenshot",
+     "rank": 18,
+     "above_divider": 35,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 15,
+      "dense": 30
+     },
+     "single_method_rank": {
+      "bm25": 15,
+      "dense": 30,
+      "clip": 9
+     }
+    },
+    {
+     "id": "q10",
+     "split": "heldout",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-16",
+      "private-15"
+     ],
+     "file_type": "screenshot",
+     "rank": 2,
+     "above_divider": 24,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 3
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 3,
+      "clip": 5
+     }
+    },
+    {
+     "id": "q14",
+     "split": "heldout",
+     "search_type": "inside a scan",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-17"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 42,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 14
+     }
+    },
+    {
+     "id": "q15",
+     "split": "heldout",
+     "search_type": "picture",
+     "set": "public",
+     "query": "Which image has horizontal and vertical axes labeled with real and imaginary components?",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 192036.png",
+      "corpus/real/Screenshot 2025-11-17 191854.png",
+      "corpus/real/Screenshot 2025-11-17 193345.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 14,
+     "above_divider": 50,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 32,
+      "dense": 9
+     },
+     "single_method_rank": {
+      "bm25": 31,
+      "dense": 9,
+      "clip": 4
+     }
+    },
+    {
+     "id": "q16",
+     "split": "heldout",
+     "search_type": "picture",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-14"
+     ],
+     "file_type": "screenshot",
+     "rank": 2,
+     "above_divider": 48,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 25,
+      "dense": 5,
+      "clip": 2
+     },
+     "single_method_rank": {
+      "bm25": 25,
+      "dense": 5,
+      "clip": 2
+     }
+    },
+    {
+     "id": "q17",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-16",
+      "private-17"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 47,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 2,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 2,
+      "dense": 1,
+      "clip": 4
+     }
+    },
+    {
+     "id": "q18",
+     "split": "heldout",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-19"
+     ],
+     "file_type": "screenshot",
+     "rank": 5,
+     "above_divider": 22,
+     "all_correct_above": true,
+     "found_by": {
+      "dense": 12,
+      "clip": 2
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": 12,
+      "clip": 2
+     }
+    },
+    {
+     "id": "q19",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "Find the plot showing regions of convergence for an iterative method applied to a cubic polynomial",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 193345.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 21,
+     "above_divider": 25,
+     "all_correct_above": true,
+     "found_by": {
+      "dense": 8
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": 8,
+      "clip": 9
+     }
+    },
+    {
+     "id": "q20",
+     "split": "heldout",
+     "search_type": "inside a scan",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-18"
+     ],
+     "file_type": "screenshot",
+     "rank": 8,
+     "above_divider": 46,
+     "all_correct_above": true,
+     "found_by": {
+      "dense": 15,
+      "clip": 2
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": 15,
+      "clip": 2
+     }
+    },
+    {
+     "id": "q21",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "Search for the plot with a complex function involving a negative power of z",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 191854.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 9,
+     "above_divider": 26,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 11,
+      "dense": 5
+     },
+     "single_method_rank": {
+      "bm25": 11,
+      "dense": 5,
+      "clip": 10
+     }
+    },
+    {
+     "id": "q24",
+     "split": "heldout",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "Search for the image where the function label contains z raised to the third power",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 193345.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 12,
+     "above_divider": 46,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 36,
+      "dense": 5
+     },
+     "single_method_rank": {
+      "bm25": 36,
+      "dense": 5,
+      "clip": 18
+     }
+    },
+    {
+     "id": "q25",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-19"
+     ],
+     "file_type": "screenshot",
+     "rank": 10,
+     "above_divider": 23,
+     "all_correct_above": true,
+     "found_by": {
+      "dense": 16,
+      "clip": 4
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": 16,
+      "clip": 4
+     }
+    },
+    {
+     "id": "q34",
+     "split": "heldout",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-09"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 43,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 2
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 2,
+      "clip": null
+     }
+    },
+    {
+     "id": "q36",
+     "split": "heldout",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-07"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 39,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "q37",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-10"
+     ],
+     "file_type": "pdf",
+     "rank": 5,
+     "above_divider": 20,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 2,
+      "dense": 3
+     },
+     "single_method_rank": {
+      "bm25": 2,
+      "dense": 3,
+      "clip": null
+     }
+    },
+    {
+     "id": "q39",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "alpine landscape with dark forested slopes and isolated farmhouses",
+     "relevant": [
+      "corpus/real/image.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 43,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": null,
+      "clip": 1
+     }
+    },
+    {
+     "id": "q43",
+     "split": "heldout",
+     "search_type": "picture",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-08"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 42,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    }
+   ]
+  },
+  "all": {
+   "rows": {
+    "6. All three, CLIP gated (the app)": {
+     "overall": {
+      "n": 44,
+      "r1": 24,
+      "r1_pct": 54.5,
+      "r5": 32,
+      "r5_pct": 72.7,
+      "r10": 36,
+      "r10_pct": 81.8,
+      "mrr": 0.627
+     },
+     "search type": {
+      "exact word": {
+       "n": 9,
+       "r1": 7,
+       "r1_pct": 77.8,
+       "r5": 9,
+       "r5_pct": 100.0,
+       "r10": 9,
+       "r10_pct": 100.0,
+       "mrr": 0.856
+      },
+      "inside a scan": {
+       "n": 6,
+       "r1": 2,
+       "r1_pct": 33.3,
+       "r5": 4,
+       "r5_pct": 66.7,
+       "r10": 5,
+       "r10_pct": 83.3,
+       "mrr": 0.479
+      },
+      "meaning": {
+       "n": 19,
+       "r1": 10,
+       "r1_pct": 52.6,
+       "r5": 13,
+       "r5_pct": 68.4,
+       "r10": 15,
+       "r10_pct": 78.9,
+       "mrr": 0.601
+      },
+      "picture": {
+       "n": 10,
+       "r1": 5,
+       "r1_pct": 50.0,
+       "r5": 6,
+       "r5_pct": 60.0,
+       "r10": 7,
+       "r10_pct": 70.0,
+       "mrr": 0.561
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 8,
+       "r1": 5,
+       "r1_pct": 62.5,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 0.744
+      },
+      "photo": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "screenshot": {
+       "n": 32,
+       "r1": 15,
+       "r1_pct": 46.9,
+       "r5": 20,
+       "r5_pct": 62.5,
+       "r10": 24,
+       "r10_pct": 75.0,
+       "mrr": 0.551
+      },
+      "text": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "private": {
+       "n": 31,
+       "r1": 18,
+       "r1_pct": 58.1,
+       "r5": 26,
+       "r5_pct": 83.9,
+       "r10": 28,
+       "r10_pct": 90.3,
+       "mrr": 0.69
+      },
+      "public": {
+       "n": 13,
+       "r1": 6,
+       "r1_pct": 46.2,
+       "r5": 6,
+       "r5_pct": 46.2,
+       "r10": 8,
+       "r10_pct": 61.5,
+       "mrr": 0.479
+      }
+     }
+    },
+    "1. BM25 only": {
+     "overall": {
+      "n": 44,
+      "r1": 21,
+      "r1_pct": 47.7,
+      "r5": 24,
+      "r5_pct": 54.5,
+      "r10": 25,
+      "r10_pct": 56.8,
+      "mrr": 0.51
+     },
+     "search type": {
+      "exact word": {
+       "n": 9,
+       "r1": 7,
+       "r1_pct": 77.8,
+       "r5": 7,
+       "r5_pct": 77.8,
+       "r10": 7,
+       "r10_pct": 77.8,
+       "mrr": 0.778
+      },
+      "inside a scan": {
+       "n": 6,
+       "r1": 3,
+       "r1_pct": 50.0,
+       "r5": 4,
+       "r5_pct": 66.7,
+       "r10": 4,
+       "r10_pct": 66.7,
+       "mrr": 0.556
+      },
+      "meaning": {
+       "n": 19,
+       "r1": 10,
+       "r1_pct": 52.6,
+       "r5": 12,
+       "r5_pct": 63.2,
+       "r10": 12,
+       "r10_pct": 63.2,
+       "mrr": 0.579
+      },
+      "picture": {
+       "n": 10,
+       "r1": 1,
+       "r1_pct": 10.0,
+       "r5": 1,
+       "r5_pct": 10.0,
+       "r10": 2,
+       "r10_pct": 20.0,
+       "mrr": 0.113
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 8,
+       "r1": 6,
+       "r1_pct": 75.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 0.854
+      },
+      "photo": {
+       "n": 2,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "screenshot": {
+       "n": 32,
+       "r1": 13,
+       "r1_pct": 40.6,
+       "r5": 14,
+       "r5_pct": 43.8,
+       "r10": 15,
+       "r10_pct": 46.9,
+       "mrr": 0.426
+      },
+      "text": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "private": {
+       "n": 31,
+       "r1": 19,
+       "r1_pct": 61.3,
+       "r5": 22,
+       "r5_pct": 71.0,
+       "r10": 22,
+       "r10_pct": 71.0,
+       "mrr": 0.656
+      },
+      "public": {
+       "n": 13,
+       "r1": 2,
+       "r1_pct": 15.4,
+       "r5": 2,
+       "r5_pct": 15.4,
+       "r10": 3,
+       "r10_pct": 23.1,
+       "mrr": 0.163
+      }
+     }
+    },
+    "2. Dense only": {
+     "overall": {
+      "n": 44,
+      "r1": 18,
+      "r1_pct": 40.9,
+      "r5": 27,
+      "r5_pct": 61.4,
+      "r10": 34,
+      "r10_pct": 77.3,
+      "mrr": 0.492
+     },
+     "search type": {
+      "exact word": {
+       "n": 9,
+       "r1": 4,
+       "r1_pct": 44.4,
+       "r5": 6,
+       "r5_pct": 66.7,
+       "r10": 8,
+       "r10_pct": 88.9,
+       "mrr": 0.568
+      },
+      "inside a scan": {
+       "n": 6,
+       "r1": 3,
+       "r1_pct": 50.0,
+       "r5": 5,
+       "r5_pct": 83.3,
+       "r10": 5,
+       "r10_pct": 83.3,
+       "mrr": 0.617
+      },
+      "meaning": {
+       "n": 19,
+       "r1": 10,
+       "r1_pct": 52.6,
+       "r5": 12,
+       "r5_pct": 63.2,
+       "r10": 15,
+       "r10_pct": 78.9,
+       "mrr": 0.575
+      },
+      "picture": {
+       "n": 10,
+       "r1": 1,
+       "r1_pct": 10.0,
+       "r5": 4,
+       "r5_pct": 40.0,
+       "r10": 6,
+       "r10_pct": 60.0,
+       "mrr": 0.193
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 8,
+       "r1": 5,
+       "r1_pct": 62.5,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 0.792
+      },
+      "photo": {
+       "n": 2,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "screenshot": {
+       "n": 32,
+       "r1": 11,
+       "r1_pct": 34.4,
+       "r5": 17,
+       "r5_pct": 53.1,
+       "r10": 24,
+       "r10_pct": 75.0,
+       "mrr": 0.417
+      },
+      "text": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "private": {
+       "n": 31,
+       "r1": 16,
+       "r1_pct": 51.6,
+       "r5": 21,
+       "r5_pct": 67.7,
+       "r10": 25,
+       "r10_pct": 80.6,
+       "mrr": 0.594
+      },
+      "public": {
+       "n": 13,
+       "r1": 2,
+       "r1_pct": 15.4,
+       "r5": 6,
+       "r5_pct": 46.2,
+       "r10": 9,
+       "r10_pct": 69.2,
+       "mrr": 0.25
+      }
+     }
+    },
+    "3. CLIP only": {
+     "overall": {
+      "n": 44,
+      "r1": 9,
+      "r1_pct": 20.5,
+      "r5": 22,
+      "r5_pct": 50.0,
+      "r10": 29,
+      "r10_pct": 65.9,
+      "mrr": 0.337
+     },
+     "search type": {
+      "exact word": {
+       "n": 9,
+       "r1": 2,
+       "r1_pct": 22.2,
+       "r5": 6,
+       "r5_pct": 66.7,
+       "r10": 6,
+       "r10_pct": 66.7,
+       "mrr": 0.393
+      },
+      "inside a scan": {
+       "n": 6,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 1,
+       "r5_pct": 16.7,
+       "r10": 1,
+       "r10_pct": 16.7,
+       "mrr": 0.083
+      },
+      "meaning": {
+       "n": 19,
+       "r1": 5,
+       "r1_pct": 26.3,
+       "r5": 8,
+       "r5_pct": 42.1,
+       "r10": 14,
+       "r10_pct": 73.7,
+       "mrr": 0.353
+      },
+      "picture": {
+       "n": 10,
+       "r1": 2,
+       "r1_pct": 20.0,
+       "r5": 7,
+       "r5_pct": 70.0,
+       "r10": 8,
+       "r10_pct": 80.0,
+       "mrr": 0.408
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 8,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "photo": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "screenshot": {
+       "n": 32,
+       "r1": 7,
+       "r1_pct": 21.9,
+       "r5": 20,
+       "r5_pct": 62.5,
+       "r10": 27,
+       "r10_pct": 84.4,
+       "mrr": 0.4
+      },
+      "text": {
+       "n": 2,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      }
+     },
+     "set": {
+      "private": {
+       "n": 31,
+       "r1": 7,
+       "r1_pct": 22.6,
+       "r5": 17,
+       "r5_pct": 54.8,
+       "r10": 20,
+       "r10_pct": 64.5,
+       "mrr": 0.358
+      },
+      "public": {
+       "n": 13,
+       "r1": 2,
+       "r1_pct": 15.4,
+       "r5": 5,
+       "r5_pct": 38.5,
+       "r10": 9,
+       "r10_pct": 69.2,
+       "mrr": 0.284
+      }
+     }
+    },
+    "4. BM25 + dense": {
+     "overall": {
+      "n": 44,
+      "r1": 21,
+      "r1_pct": 47.7,
+      "r5": 25,
+      "r5_pct": 56.8,
+      "r10": 31,
+      "r10_pct": 70.5,
+      "mrr": 0.53
+     },
+     "search type": {
+      "exact word": {
+       "n": 9,
+       "r1": 7,
+       "r1_pct": 77.8,
+       "r5": 7,
+       "r5_pct": 77.8,
+       "r10": 8,
+       "r10_pct": 88.9,
+       "mrr": 0.792
+      },
+      "inside a scan": {
+       "n": 6,
+       "r1": 3,
+       "r1_pct": 50.0,
+       "r5": 4,
+       "r5_pct": 66.7,
+       "r10": 4,
+       "r10_pct": 66.7,
+       "mrr": 0.583
+      },
+      "meaning": {
+       "n": 19,
+       "r1": 10,
+       "r1_pct": 52.6,
+       "r5": 12,
+       "r5_pct": 63.2,
+       "r10": 14,
+       "r10_pct": 73.7,
+       "mrr": 0.584
+      },
+      "picture": {
+       "n": 10,
+       "r1": 1,
+       "r1_pct": 10.0,
+       "r5": 2,
+       "r5_pct": 20.0,
+       "r10": 5,
+       "r10_pct": 50.0,
+       "mrr": 0.161
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 8,
+       "r1": 6,
+       "r1_pct": 75.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 0.854
+      },
+      "photo": {
+       "n": 2,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "screenshot": {
+       "n": 32,
+       "r1": 13,
+       "r1_pct": 40.6,
+       "r5": 15,
+       "r5_pct": 46.9,
+       "r10": 21,
+       "r10_pct": 65.6,
+       "mrr": 0.453
+      },
+      "text": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "private": {
+       "n": 31,
+       "r1": 19,
+       "r1_pct": 61.3,
+       "r5": 22,
+       "r5_pct": 71.0,
+       "r10": 25,
+       "r10_pct": 80.6,
+       "mrr": 0.667
+      },
+      "public": {
+       "n": 13,
+       "r1": 2,
+       "r1_pct": 15.4,
+       "r5": 3,
+       "r5_pct": 23.1,
+       "r10": 6,
+       "r10_pct": 46.2,
+       "mrr": 0.205
+      }
+     }
+    },
+    "5. All three, CLIP ungated": {
+     "overall": {
+      "n": 44,
+      "r1": 19,
+      "r1_pct": 43.2,
+      "r5": 30,
+      "r5_pct": 68.2,
+      "r10": 34,
+      "r10_pct": 77.3,
+      "mrr": 0.53
+     },
+     "search type": {
+      "exact word": {
+       "n": 9,
+       "r1": 5,
+       "r1_pct": 55.6,
+       "r5": 7,
+       "r5_pct": 77.8,
+       "r10": 9,
+       "r10_pct": 100.0,
+       "mrr": 0.671
+      },
+      "inside a scan": {
+       "n": 6,
+       "r1": 2,
+       "r1_pct": 33.3,
+       "r5": 3,
+       "r5_pct": 50.0,
+       "r10": 4,
+       "r10_pct": 66.7,
+       "mrr": 0.388
+      },
+      "meaning": {
+       "n": 19,
+       "r1": 8,
+       "r1_pct": 42.1,
+       "r5": 14,
+       "r5_pct": 73.7,
+       "r10": 15,
+       "r10_pct": 78.9,
+       "mrr": 0.548
+      },
+      "picture": {
+       "n": 10,
+       "r1": 4,
+       "r1_pct": 40.0,
+       "r5": 6,
+       "r5_pct": 60.0,
+       "r10": 6,
+       "r10_pct": 60.0,
+       "mrr": 0.453
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 8,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 5,
+       "r5_pct": 62.5,
+       "r10": 7,
+       "r10_pct": 87.5,
+       "mrr": 0.254
+      },
+      "photo": {
+       "n": 2,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "screenshot": {
+       "n": 32,
+       "r1": 18,
+       "r1_pct": 56.2,
+       "r5": 24,
+       "r5_pct": 75.0,
+       "r10": 25,
+       "r10_pct": 78.1,
+       "mrr": 0.629
+      },
+      "text": {
+       "n": 2,
+       "r1": 1,
+       "r1_pct": 50.0,
+       "r5": 1,
+       "r5_pct": 50.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 0.571
+      }
+     },
+     "set": {
+      "private": {
+       "n": 31,
+       "r1": 13,
+       "r1_pct": 41.9,
+       "r5": 23,
+       "r5_pct": 74.2,
+       "r10": 26,
+       "r10_pct": 83.9,
+       "mrr": 0.547
+      },
+      "public": {
+       "n": 13,
+       "r1": 6,
+       "r1_pct": 46.2,
+       "r5": 7,
+       "r5_pct": 53.8,
+       "r10": 8,
+       "r10_pct": 61.5,
+       "mrr": 0.488
+      }
+     }
+    },
+    "7. All three, gated, no every-word list": {
+     "overall": {
+      "n": 44,
+      "r1": 24,
+      "r1_pct": 54.5,
+      "r5": 32,
+      "r5_pct": 72.7,
+      "r10": 36,
+      "r10_pct": 81.8,
+      "mrr": 0.627
+     },
+     "search type": {
+      "exact word": {
+       "n": 9,
+       "r1": 7,
+       "r1_pct": 77.8,
+       "r5": 9,
+       "r5_pct": 100.0,
+       "r10": 9,
+       "r10_pct": 100.0,
+       "mrr": 0.856
+      },
+      "inside a scan": {
+       "n": 6,
+       "r1": 2,
+       "r1_pct": 33.3,
+       "r5": 4,
+       "r5_pct": 66.7,
+       "r10": 5,
+       "r10_pct": 83.3,
+       "mrr": 0.479
+      },
+      "meaning": {
+       "n": 19,
+       "r1": 10,
+       "r1_pct": 52.6,
+       "r5": 13,
+       "r5_pct": 68.4,
+       "r10": 15,
+       "r10_pct": 78.9,
+       "mrr": 0.601
+      },
+      "picture": {
+       "n": 10,
+       "r1": 5,
+       "r1_pct": 50.0,
+       "r5": 6,
+       "r5_pct": 60.0,
+       "r10": 7,
+       "r10_pct": 70.0,
+       "mrr": 0.561
+      }
+     },
+     "file type": {
+      "pdf": {
+       "n": 8,
+       "r1": 5,
+       "r1_pct": 62.5,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 0.744
+      },
+      "photo": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "screenshot": {
+       "n": 32,
+       "r1": 15,
+       "r1_pct": 46.9,
+       "r5": 20,
+       "r5_pct": 62.5,
+       "r10": 24,
+       "r10_pct": 75.0,
+       "mrr": 0.551
+      },
+      "text": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "private": {
+       "n": 31,
+       "r1": 18,
+       "r1_pct": 58.1,
+       "r5": 26,
+       "r5_pct": 83.9,
+       "r10": 28,
+       "r10_pct": 90.3,
+       "mrr": 0.69
+      },
+      "public": {
+       "n": 13,
+       "r1": 6,
+       "r1_pct": 46.2,
+       "r5": 6,
+       "r5_pct": 46.2,
+       "r10": 8,
+       "r10_pct": 61.5,
+       "mrr": 0.479
+      }
+     }
+    }
+   },
+   "divider": {
+    "median_above": 39.5,
+    "all_correct_above": 43,
+    "of": 44,
+    "set": {
+     "private": {
+      "median_above": 35,
+      "all_correct_above": 31,
+      "of": 31
+     },
+     "public": {
+      "median_above": 43,
+      "all_correct_above": 12,
+      "of": 13
+     }
+    }
+   },
+   "latency_ms": {
+    "p50": 187.6,
+    "p95": 257.8
+   },
+   "queries": [
+    {
+     "id": "q01",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "Find the image of a famous fractal formed by repeatedly applying a complex quadratic recurrence",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 192036.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 43,
+     "above_divider": 44,
+     "all_correct_above": true,
+     "found_by": {
+      "dense": 24
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": 24,
+      "clip": 9
+     }
+    },
+    {
+     "id": "q02",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-17",
+      "private-16"
+     ],
+     "file_type": "screenshot",
+     "rank": 2,
+     "above_divider": 46,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 8
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 8,
+      "clip": null
+     }
+    },
+    {
+     "id": "q03",
+     "split": "tune",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-18",
+      "private-19"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 24,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 11,
+      "dense": 9,
+      "clip": 3
+     },
+     "single_method_rank": {
+      "bm25": 11,
+      "dense": 9,
+      "clip": 3
+     }
+    },
+    {
+     "id": "q04",
+     "split": "heldout",
+     "search_type": "picture",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-15"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 24,
+     "all_correct_above": true,
+     "found_by": {
+      "dense": 19,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": 19,
+      "clip": 1
+     }
+    },
+    {
+     "id": "q05",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-14"
+     ],
+     "file_type": "screenshot",
+     "rank": 11,
+     "above_divider": 33,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 21,
+      "dense": 7
+     },
+     "single_method_rank": {
+      "bm25": 21,
+      "dense": 7,
+      "clip": 7
+     }
+    },
+    {
+     "id": "q06",
+     "split": "heldout",
+     "search_type": "picture",
+     "set": "public",
+     "query": "Search for the picture with a dark central shape surrounded by intricate purple branching boundaries",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 192036.png"
+     ],
+     "file_type": "screenshot",
+     "rank": null,
+     "above_divider": 11,
+     "all_correct_above": false,
+     "found_by": {},
+     "single_method_rank": {
+      "bm25": null,
+      "dense": null,
+      "clip": null
+     }
+    },
+    {
+     "id": "q07",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-17"
+     ],
+     "file_type": "screenshot",
+     "rank": 2,
+     "above_divider": 27,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 8
+     }
+    },
+    {
+     "id": "q08",
+     "split": "tune",
+     "search_type": "picture",
+     "set": "public",
+     "query": "Locate the image whose color legend identifies different roots of a polynomial",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 191854.png",
+      "corpus/real/Screenshot 2025-11-17 193345.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 9,
+     "above_divider": 50,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 29,
+      "dense": 6
+     },
+     "single_method_rank": {
+      "bm25": 29,
+      "dense": 6,
+      "clip": 8
+     }
+    },
+    {
+     "id": "q09",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-19"
+     ],
+     "file_type": "screenshot",
+     "rank": 18,
+     "above_divider": 35,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 15,
+      "dense": 30
+     },
+     "single_method_rank": {
+      "bm25": 15,
+      "dense": 30,
+      "clip": 9
+     }
+    },
+    {
+     "id": "q10",
+     "split": "heldout",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-16",
+      "private-15"
+     ],
+     "file_type": "screenshot",
+     "rank": 2,
+     "above_divider": 24,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 3
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 3,
+      "clip": 5
+     }
+    },
+    {
+     "id": "q11",
+     "split": "tune",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-14"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 35,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 6,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 6,
+      "clip": 1
+     }
+    },
+    {
+     "id": "q12",
+     "split": "tune",
+     "search_type": "picture",
+     "set": "public",
+     "query": "Locate the visualization with three distinct root-attraction regions in the complex plane",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 193345.png",
+      "corpus/real/Screenshot 2025-11-17 191854.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 20,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 8,
+      "dense": 5,
+      "clip": 2
+     },
+     "single_method_rank": {
+      "bm25": 8,
+      "dense": 5,
+      "clip": 2
+     }
+    },
+    {
+     "id": "q13",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-18"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 24,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     }
+    },
+    {
+     "id": "q14",
+     "split": "heldout",
+     "search_type": "inside a scan",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-17"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 42,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 14
+     }
+    },
+    {
+     "id": "q15",
+     "split": "heldout",
+     "search_type": "picture",
+     "set": "public",
+     "query": "Which image has horizontal and vertical axes labeled with real and imaginary components?",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 192036.png",
+      "corpus/real/Screenshot 2025-11-17 191854.png",
+      "corpus/real/Screenshot 2025-11-17 193345.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 14,
+     "above_divider": 50,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 32,
+      "dense": 9
+     },
+     "single_method_rank": {
+      "bm25": 31,
+      "dense": 9,
+      "clip": 4
+     }
+    },
+    {
+     "id": "q16",
+     "split": "heldout",
+     "search_type": "picture",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-14"
+     ],
+     "file_type": "screenshot",
+     "rank": 2,
+     "above_divider": 48,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 25,
+      "dense": 5,
+      "clip": 2
+     },
+     "single_method_rank": {
+      "bm25": 25,
+      "dense": 5,
+      "clip": 2
+     }
+    },
+    {
+     "id": "q17",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-16",
+      "private-17"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 47,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 2,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 2,
+      "dense": 1,
+      "clip": 4
+     }
+    },
+    {
+     "id": "q18",
+     "split": "heldout",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-19"
+     ],
+     "file_type": "screenshot",
+     "rank": 5,
+     "above_divider": 22,
+     "all_correct_above": true,
+     "found_by": {
+      "dense": 12,
+      "clip": 2
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": 12,
+      "clip": 2
+     }
+    },
+    {
+     "id": "q19",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "Find the plot showing regions of convergence for an iterative method applied to a cubic polynomial",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 193345.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 21,
+     "above_divider": 25,
+     "all_correct_above": true,
+     "found_by": {
+      "dense": 8
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": 8,
+      "clip": 9
+     }
+    },
+    {
+     "id": "q20",
+     "split": "heldout",
+     "search_type": "inside a scan",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-18"
+     ],
+     "file_type": "screenshot",
+     "rank": 8,
+     "above_divider": 46,
+     "all_correct_above": true,
+     "found_by": {
+      "dense": 15,
+      "clip": 2
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": 15,
+      "clip": 2
+     }
+    },
+    {
+     "id": "q21",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "Search for the plot with a complex function involving a negative power of z",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 191854.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 9,
+     "above_divider": 26,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 11,
+      "dense": 5
+     },
+     "single_method_rank": {
+      "bm25": 11,
+      "dense": 5,
+      "clip": 10
+     }
+    },
+    {
+     "id": "q22",
+     "split": "tune",
+     "search_type": "picture",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-15"
+     ],
+     "file_type": "screenshot",
+     "rank": 46,
+     "above_divider": 50,
+     "all_correct_above": true,
+     "found_by": {
+      "dense": 26
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": 26,
+      "clip": 5
+     }
+    },
+    {
+     "id": "q23",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-16",
+      "private-17"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 27,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 10,
+      "dense": 3,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     }
+    },
+    {
+     "id": "q24",
+     "split": "heldout",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "Search for the image where the function label contains z raised to the third power",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 193345.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 12,
+     "above_divider": 46,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 36,
+      "dense": 5
+     },
+     "single_method_rank": {
+      "bm25": 36,
+      "dense": 5,
+      "clip": 18
+     }
+    },
+    {
+     "id": "q25",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-19"
+     ],
+     "file_type": "screenshot",
+     "rank": 10,
+     "above_divider": 23,
+     "all_correct_above": true,
+     "found_by": {
+      "dense": 16,
+      "clip": 4
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": 16,
+      "clip": 4
+     }
+    },
+    {
+     "id": "q26",
+     "split": "tune",
+     "search_type": "inside a scan",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-17"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 42,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 11
+     }
+    },
+    {
+     "id": "q27",
+     "split": "tune",
+     "search_type": "picture",
+     "set": "public",
+     "query": "Find the colorful image showing regions that attract complex-number iterations to different roots",
+     "relevant": [
+      "corpus/real/Screenshot 2025-11-17 191854.png",
+      "corpus/real/Screenshot 2025-11-17 193345.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 43,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 33,
+      "dense": 4,
+      "clip": 3
+     },
+     "single_method_rank": {
+      "bm25": 33,
+      "dense": 4,
+      "clip": 2
+     }
+    },
+    {
+     "id": "q28",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-17",
+      "private-16"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 44,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 2
+     }
+    },
+    {
+     "id": "q29",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-08"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 41,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "q30",
+     "split": "tune",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-11"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 33,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     }
+    },
+    {
+     "id": "q31",
+     "split": "tune",
+     "search_type": "picture",
+     "set": "public",
+     "query": "snowy mountain peaks over autumn valley with winding road and wooden chalets",
+     "relevant": [
+      "corpus/real/image.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 40,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": null,
+      "clip": 1
+     }
+    },
+    {
+     "id": "q32",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "why accuracy is useless for rare-event classification and PR-AUC preference",
+     "relevant": [
+      "corpus/real/Phase 0 — Problem framing (no code).txt"
+     ],
+     "file_type": "text",
+     "rank": 1,
+     "above_divider": 40,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "q33",
+     "split": "tune",
+     "search_type": "inside a scan",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-10"
+     ],
+     "file_type": "pdf",
+     "rank": 2,
+     "above_divider": 48,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 3,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 3,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "q34",
+     "split": "heldout",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-09"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 43,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 2
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 2,
+      "clip": null
+     }
+    },
+    {
+     "id": "q35",
+     "split": "tune",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-12",
+      "private-13"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 24,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 2,
+      "clip": 2
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 2
+     }
+    },
+    {
+     "id": "q36",
+     "split": "heldout",
+     "search_type": "exact word",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-07"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 39,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "q37",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-10"
+     ],
+     "file_type": "pdf",
+     "rank": 5,
+     "above_divider": 20,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 2,
+      "dense": 3
+     },
+     "single_method_rank": {
+      "bm25": 2,
+      "dense": 3,
+      "clip": null
+     }
+    },
+    {
+     "id": "q38",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-11"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 32,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     }
+    },
+    {
+     "id": "q39",
+     "split": "heldout",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "alpine landscape with dark forested slopes and isolated farmhouses",
+     "relevant": [
+      "corpus/real/image.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 43,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": null,
+      "clip": 1
+     }
+    },
+    {
+     "id": "q40",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-09"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 41,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "q41",
+     "split": "tune",
+     "search_type": "inside a scan",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-07"
+     ],
+     "file_type": "pdf",
+     "rank": 4,
+     "above_divider": 32,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 2
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 2,
+      "clip": null
+     }
+    },
+    {
+     "id": "q42",
+     "split": "tune",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "data leakage risks when building time-aware features for transactional fraud models",
+     "relevant": [
+      "corpus/real/Phase 0 — Problem framing (no code).txt"
+     ],
+     "file_type": "text",
+     "rank": 1,
+     "above_divider": 43,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "q43",
+     "split": "heldout",
+     "search_type": "picture",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-08"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 42,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "q44",
+     "split": "tune",
+     "search_type": "meaning",
+     "set": "private",
+     "query": null,
+     "relevant": [
+      "private-13",
+      "private-12"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 33,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     }
+    }
+   ]
+  }
+ },
+ "baseline_vs_final": {
+  "tune": {
+   "baseline": {
+    "overall": {
+     "n": 22,
+     "r1": 16,
+     "r1_pct": 72.7,
+     "r5": 19,
+     "r5_pct": 86.4,
+     "r10": 19,
+     "r10_pct": 86.4,
+     "mrr": 0.774
+    },
+    "set": {
+     "private": {
+      "n": 15,
+      "r1": 12,
+      "r1_pct": 80.0,
+      "r5": 14,
+      "r5_pct": 93.3,
+      "r10": 14,
+      "r10_pct": 93.3,
+      "mrr": 0.856
+     },
+     "public": {
+      "n": 7,
+      "r1": 4,
+      "r1_pct": 57.1,
+      "r5": 5,
+      "r5_pct": 71.4,
+      "r10": 5,
+      "r10_pct": 71.4,
+      "mrr": 0.6
+     }
+    },
+    "divider": {
+     "median_above": 14.5,
+     "all_correct_above": 19,
+     "of": 22
+    }
+   },
+   "final": {
+    "overall": {
+     "n": 22,
+     "r1": 17,
+     "r1_pct": 77.3,
+     "r5": 19,
+     "r5_pct": 86.4,
+     "r10": 20,
+     "r10_pct": 90.9,
+     "mrr": 0.812
+    },
+    "set": {
+     "private": {
+      "n": 15,
+      "r1": 12,
+      "r1_pct": 80.0,
+      "r5": 14,
+      "r5_pct": 93.3,
+      "r10": 14,
+      "r10_pct": 93.3,
+      "mrr": 0.85
+     },
+     "public": {
+      "n": 7,
+      "r1": 5,
+      "r1_pct": 71.4,
+      "r5": 5,
+      "r5_pct": 71.4,
+      "r10": 6,
+      "r10_pct": 85.7,
+      "mrr": 0.73
+     }
+    },
+    "divider": {
+     "median_above": 40.0,
+     "all_correct_above": 22,
+     "of": 22,
+     "set": {
+      "private": {
+       "median_above": 33,
+       "all_correct_above": 15,
+       "of": 15
+      },
+      "public": {
+       "median_above": 43,
+       "all_correct_above": 7,
+       "of": 7
+      }
+     }
+    }
+   }
+  },
+  "heldout": {
+   "baseline": {
+    "overall": {
+     "n": 22,
+     "r1": 8,
+     "r1_pct": 36.4,
+     "r5": 13,
+     "r5_pct": 59.1,
+     "r10": 17,
+     "r10_pct": 77.3,
+     "mrr": 0.464
+    },
+    "set": {
+     "private": {
+      "n": 16,
+      "r1": 7,
+      "r1_pct": 43.8,
+      "r5": 12,
+      "r5_pct": 75.0,
+      "r10": 15,
+      "r10_pct": 93.8,
+      "mrr": 0.569
+     },
+     "public": {
+      "n": 6,
+      "r1": 1,
+      "r1_pct": 16.7,
+      "r5": 1,
+      "r5_pct": 16.7,
+      "r10": 2,
+      "r10_pct": 33.3,
+      "mrr": 0.183
+     }
+    },
+    "divider": {
+     "median_above": 17.0,
+     "all_correct_above": 17,
+     "of": 22
+    }
+   },
+   "final": {
+    "overall": {
+     "n": 22,
+     "r1": 7,
+     "r1_pct": 31.8,
+     "r5": 13,
+     "r5_pct": 59.1,
+     "r10": 16,
+     "r10_pct": 72.7,
+     "mrr": 0.443
+    },
+    "set": {
+     "private": {
+      "n": 16,
+      "r1": 6,
+      "r1_pct": 37.5,
+      "r5": 12,
+      "r5_pct": 75.0,
+      "r10": 14,
+      "r10_pct": 87.5,
+      "mrr": 0.539
+     },
+     "public": {
+      "n": 6,
+      "r1": 1,
+      "r1_pct": 16.7,
+      "r5": 1,
+      "r5_pct": 16.7,
+      "r10": 2,
+      "r10_pct": 33.3,
+      "mrr": 0.185
+     }
+    },
+    "divider": {
+     "median_above": 37.0,
+     "all_correct_above": 21,
+     "of": 22,
+     "set": {
+      "private": {
+       "median_above": 37.0,
+       "all_correct_above": 16,
+       "of": 16
+      },
+      "public": {
+       "median_above": 34.5,
+       "all_correct_above": 5,
+       "of": 6
+      }
+     }
+    }
+   }
+  },
+  "all": {
+   "baseline": {
+    "overall": {
+     "n": 44,
+     "r1": 24,
+     "r1_pct": 54.5,
+     "r5": 32,
+     "r5_pct": 72.7,
+     "r10": 36,
+     "r10_pct": 81.8,
+     "mrr": 0.619
+    },
+    "set": {
+     "private": {
+      "n": 31,
+      "r1": 19,
+      "r1_pct": 61.3,
+      "r5": 26,
+      "r5_pct": 83.9,
+      "r10": 29,
+      "r10_pct": 93.5,
+      "mrr": 0.708
+     },
+     "public": {
+      "n": 13,
+      "r1": 5,
+      "r1_pct": 38.5,
+      "r5": 6,
+      "r5_pct": 46.2,
+      "r10": 7,
+      "r10_pct": 53.8,
+      "mrr": 0.408
+     }
+    },
+    "divider": {
+     "median_above": 15.5,
+     "all_correct_above": 36,
+     "of": 44
+    }
+   },
+   "final": {
+    "overall": {
+     "n": 44,
+     "r1": 24,
+     "r1_pct": 54.5,
+     "r5": 32,
+     "r5_pct": 72.7,
+     "r10": 36,
+     "r10_pct": 81.8,
+     "mrr": 0.627
+    },
+    "set": {
+     "private": {
+      "n": 31,
+      "r1": 18,
+      "r1_pct": 58.1,
+      "r5": 26,
+      "r5_pct": 83.9,
+      "r10": 28,
+      "r10_pct": 90.3,
+      "mrr": 0.69
+     },
+     "public": {
+      "n": 13,
+      "r1": 6,
+      "r1_pct": 46.2,
+      "r5": 6,
+      "r5_pct": 46.2,
+      "r10": 8,
+      "r10_pct": 61.5,
+      "mrr": 0.479
+     }
+    },
+    "divider": {
+     "median_above": 39.5,
+     "all_correct_above": 43,
+     "of": 44,
+     "set": {
+      "private": {
+       "median_above": 35,
+       "all_correct_above": 31,
+       "of": 31
+      },
+      "public": {
+       "median_above": 43,
+       "all_correct_above": 12,
+       "of": 13
+      }
+     }
+    }
+   }
+  }
+ }
+}
