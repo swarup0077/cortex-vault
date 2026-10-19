@@ -1,0 +1,1682 @@
+{
+ "title": "Generated-file set: baseline",
+ "when": "2026-10-19T13:10:50",
+ "corpus": {
+  "files": 95,
+  "private_paths": 24,
+  "public_paths": 71
+ },
+ "settings": {},
+ "models": {
+  "text": "BAAI/bge-small-en-v1.5",
+  "clip": "Qdrant/clip-ViT-B-32-vision+Qdrant/clip-ViT-B-32-text",
+  "ocr": "PP-OCRv6_det_small.onnx+PP-OCRv6_rec_small.onnx"
+ },
+ "commit": "d8744d2",
+ "splits": {
+  "guard": {
+   "rows": {
+    "6. All three, CLIP gated (the app)": {
+     "overall": {
+      "n": 32,
+      "r1": 29,
+      "r1_pct": 90.6,
+      "r5": 32,
+      "r5_pct": 100.0,
+      "r10": 32,
+      "r10_pct": 100.0,
+      "mrr": 0.953
+     },
+     "search type": {
+      "exact word": {
+       "n": 8,
+       "r1": 8,
+       "r1_pct": 100.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "inside a scan": {
+       "n": 8,
+       "r1": 8,
+       "r1_pct": 100.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "meaning": {
+       "n": 10,
+       "r1": 7,
+       "r1_pct": 70.0,
+       "r5": 10,
+       "r5_pct": 100.0,
+       "r10": 10,
+       "r10_pct": 100.0,
+       "mrr": 0.85
+      },
+      "picture": {
+       "n": 6,
+       "r1": 6,
+       "r1_pct": 100.0,
+       "r5": 6,
+       "r5_pct": 100.0,
+       "r10": 6,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "file type": {
+      "doc": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "pdf": {
+       "n": 8,
+       "r1": 6,
+       "r1_pct": 75.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 0.875
+      },
+      "photo": {
+       "n": 10,
+       "r1": 10,
+       "r1_pct": 100.0,
+       "r5": 10,
+       "r5_pct": 100.0,
+       "r10": 10,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "screenshot": {
+       "n": 10,
+       "r1": 9,
+       "r1_pct": 90.0,
+       "r5": 10,
+       "r5_pct": 100.0,
+       "r10": 10,
+       "r10_pct": 100.0,
+       "mrr": 0.95
+      },
+      "slides": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "text": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "public": {
+       "n": 32,
+       "r1": 29,
+       "r1_pct": 90.6,
+       "r5": 32,
+       "r5_pct": 100.0,
+       "r10": 32,
+       "r10_pct": 100.0,
+       "mrr": 0.953
+      }
+     }
+    },
+    "1. BM25 only": {
+     "overall": {
+      "n": 32,
+      "r1": 23,
+      "r1_pct": 71.9,
+      "r5": 25,
+      "r5_pct": 78.1,
+      "r10": 26,
+      "r10_pct": 81.2,
+      "mrr": 0.755
+     },
+     "search type": {
+      "exact word": {
+       "n": 8,
+       "r1": 8,
+       "r1_pct": 100.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "inside a scan": {
+       "n": 8,
+       "r1": 7,
+       "r1_pct": 87.5,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 0.938
+      },
+      "meaning": {
+       "n": 10,
+       "r1": 8,
+       "r1_pct": 80.0,
+       "r5": 9,
+       "r5_pct": 90.0,
+       "r10": 10,
+       "r10_pct": 100.0,
+       "mrr": 0.867
+      },
+      "picture": {
+       "n": 6,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      }
+     },
+     "file type": {
+      "doc": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "pdf": {
+       "n": 8,
+       "r1": 6,
+       "r1_pct": 75.0,
+       "r5": 7,
+       "r5_pct": 87.5,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 0.833
+      },
+      "photo": {
+       "n": 10,
+       "r1": 3,
+       "r1_pct": 30.0,
+       "r5": 4,
+       "r5_pct": 40.0,
+       "r10": 4,
+       "r10_pct": 40.0,
+       "mrr": 0.35
+      },
+      "screenshot": {
+       "n": 10,
+       "r1": 10,
+       "r1_pct": 100.0,
+       "r5": 10,
+       "r5_pct": 100.0,
+       "r10": 10,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "slides": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "text": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "public": {
+       "n": 32,
+       "r1": 23,
+       "r1_pct": 71.9,
+       "r5": 25,
+       "r5_pct": 78.1,
+       "r10": 26,
+       "r10_pct": 81.2,
+       "mrr": 0.755
+      }
+     }
+    },
+    "2. Dense only": {
+     "overall": {
+      "n": 32,
+      "r1": 21,
+      "r1_pct": 65.6,
+      "r5": 26,
+      "r5_pct": 81.2,
+      "r10": 26,
+      "r10_pct": 81.2,
+      "mrr": 0.716
+     },
+     "search type": {
+      "exact word": {
+       "n": 8,
+       "r1": 7,
+       "r1_pct": 87.5,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 0.906
+      },
+      "inside a scan": {
+       "n": 8,
+       "r1": 8,
+       "r1_pct": 100.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "meaning": {
+       "n": 10,
+       "r1": 6,
+       "r1_pct": 60.0,
+       "r5": 10,
+       "r5_pct": 100.0,
+       "r10": 10,
+       "r10_pct": 100.0,
+       "mrr": 0.767
+      },
+      "picture": {
+       "n": 6,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      }
+     },
+     "file type": {
+      "doc": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "pdf": {
+       "n": 8,
+       "r1": 3,
+       "r1_pct": 37.5,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 0.615
+      },
+      "photo": {
+       "n": 10,
+       "r1": 4,
+       "r1_pct": 40.0,
+       "r5": 4,
+       "r5_pct": 40.0,
+       "r10": 4,
+       "r10_pct": 40.0,
+       "mrr": 0.4
+      },
+      "screenshot": {
+       "n": 10,
+       "r1": 10,
+       "r1_pct": 100.0,
+       "r5": 10,
+       "r5_pct": 100.0,
+       "r10": 10,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "slides": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "text": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "public": {
+       "n": 32,
+       "r1": 21,
+       "r1_pct": 65.6,
+       "r5": 26,
+       "r5_pct": 81.2,
+       "r10": 26,
+       "r10_pct": 81.2,
+       "mrr": 0.716
+      }
+     }
+    },
+    "3. CLIP only": {
+     "overall": {
+      "n": 32,
+      "r1": 13,
+      "r1_pct": 40.6,
+      "r5": 15,
+      "r5_pct": 46.9,
+      "r10": 19,
+      "r10_pct": 59.4,
+      "mrr": 0.448
+     },
+     "search type": {
+      "exact word": {
+       "n": 8,
+       "r1": 4,
+       "r1_pct": 50.0,
+       "r5": 5,
+       "r5_pct": 62.5,
+       "r10": 6,
+       "r10_pct": 75.0,
+       "mrr": 0.576
+      },
+      "inside a scan": {
+       "n": 8,
+       "r1": 3,
+       "r1_pct": 37.5,
+       "r5": 3,
+       "r5_pct": 37.5,
+       "r10": 4,
+       "r10_pct": 50.0,
+       "mrr": 0.389
+      },
+      "meaning": {
+       "n": 10,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 1,
+       "r5_pct": 10.0,
+       "r10": 3,
+       "r10_pct": 30.0,
+       "mrr": 0.061
+      },
+      "picture": {
+       "n": 6,
+       "r1": 6,
+       "r1_pct": 100.0,
+       "r5": 6,
+       "r5_pct": 100.0,
+       "r10": 6,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "file type": {
+      "doc": {
+       "n": 1,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "pdf": {
+       "n": 8,
+       "r1": 1,
+       "r1_pct": 12.5,
+       "r5": 1,
+       "r5_pct": 12.5,
+       "r10": 1,
+       "r10_pct": 12.5,
+       "mrr": 0.125
+      },
+      "photo": {
+       "n": 10,
+       "r1": 9,
+       "r1_pct": 90.0,
+       "r5": 9,
+       "r5_pct": 90.0,
+       "r10": 9,
+       "r10_pct": 90.0,
+       "mrr": 0.9
+      },
+      "screenshot": {
+       "n": 10,
+       "r1": 3,
+       "r1_pct": 30.0,
+       "r5": 5,
+       "r5_pct": 50.0,
+       "r10": 9,
+       "r10_pct": 90.0,
+       "mrr": 0.433
+      },
+      "slides": {
+       "n": 1,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "text": {
+       "n": 2,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      }
+     },
+     "set": {
+      "public": {
+       "n": 32,
+       "r1": 13,
+       "r1_pct": 40.6,
+       "r5": 15,
+       "r5_pct": 46.9,
+       "r10": 19,
+       "r10_pct": 59.4,
+       "mrr": 0.448
+      }
+     }
+    },
+    "4. BM25 + dense": {
+     "overall": {
+      "n": 32,
+      "r1": 24,
+      "r1_pct": 75.0,
+      "r5": 26,
+      "r5_pct": 81.2,
+      "r10": 26,
+      "r10_pct": 81.2,
+      "mrr": 0.781
+     },
+     "search type": {
+      "exact word": {
+       "n": 8,
+       "r1": 8,
+       "r1_pct": 100.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "inside a scan": {
+       "n": 8,
+       "r1": 8,
+       "r1_pct": 100.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "meaning": {
+       "n": 10,
+       "r1": 8,
+       "r1_pct": 80.0,
+       "r5": 10,
+       "r5_pct": 100.0,
+       "r10": 10,
+       "r10_pct": 100.0,
+       "mrr": 0.9
+      },
+      "picture": {
+       "n": 6,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      }
+     },
+     "file type": {
+      "doc": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "pdf": {
+       "n": 8,
+       "r1": 6,
+       "r1_pct": 75.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 0.875
+      },
+      "photo": {
+       "n": 10,
+       "r1": 4,
+       "r1_pct": 40.0,
+       "r5": 4,
+       "r5_pct": 40.0,
+       "r10": 4,
+       "r10_pct": 40.0,
+       "mrr": 0.4
+      },
+      "screenshot": {
+       "n": 10,
+       "r1": 10,
+       "r1_pct": 100.0,
+       "r5": 10,
+       "r5_pct": 100.0,
+       "r10": 10,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "slides": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "text": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "public": {
+       "n": 32,
+       "r1": 24,
+       "r1_pct": 75.0,
+       "r5": 26,
+       "r5_pct": 81.2,
+       "r10": 26,
+       "r10_pct": 81.2,
+       "mrr": 0.781
+      }
+     }
+    },
+    "5. All three, CLIP ungated": {
+     "overall": {
+      "n": 32,
+      "r1": 22,
+      "r1_pct": 68.8,
+      "r5": 29,
+      "r5_pct": 90.6,
+      "r10": 31,
+      "r10_pct": 96.9,
+      "mrr": 0.78
+     },
+     "search type": {
+      "exact word": {
+       "n": 8,
+       "r1": 8,
+       "r1_pct": 100.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "inside a scan": {
+       "n": 8,
+       "r1": 8,
+       "r1_pct": 100.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "meaning": {
+       "n": 10,
+       "r1": 5,
+       "r1_pct": 50.0,
+       "r5": 10,
+       "r5_pct": 100.0,
+       "r10": 10,
+       "r10_pct": 100.0,
+       "mrr": 0.733
+      },
+      "picture": {
+       "n": 6,
+       "r1": 1,
+       "r1_pct": 16.7,
+       "r5": 3,
+       "r5_pct": 50.0,
+       "r10": 5,
+       "r10_pct": 83.3,
+       "mrr": 0.269
+      }
+     },
+     "file type": {
+      "doc": {
+       "n": 1,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 0.5
+      },
+      "pdf": {
+       "n": 8,
+       "r1": 5,
+       "r1_pct": 62.5,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 0.812
+      },
+      "photo": {
+       "n": 10,
+       "r1": 5,
+       "r1_pct": 50.0,
+       "r5": 7,
+       "r5_pct": 70.0,
+       "r10": 9,
+       "r10_pct": 90.0,
+       "mrr": 0.561
+      },
+      "screenshot": {
+       "n": 10,
+       "r1": 10,
+       "r1_pct": 100.0,
+       "r5": 10,
+       "r5_pct": 100.0,
+       "r10": 10,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "slides": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "text": {
+       "n": 2,
+       "r1": 1,
+       "r1_pct": 50.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 0.667
+      }
+     },
+     "set": {
+      "public": {
+       "n": 32,
+       "r1": 22,
+       "r1_pct": 68.8,
+       "r5": 29,
+       "r5_pct": 90.6,
+       "r10": 31,
+       "r10_pct": 96.9,
+       "mrr": 0.78
+      }
+     }
+    },
+    "7. All three, gated, no every-word list": {
+     "overall": {
+      "n": 32,
+      "r1": 28,
+      "r1_pct": 87.5,
+      "r5": 32,
+      "r5_pct": 100.0,
+      "r10": 32,
+      "r10_pct": 100.0,
+      "mrr": 0.938
+     },
+     "search type": {
+      "exact word": {
+       "n": 8,
+       "r1": 8,
+       "r1_pct": 100.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "inside a scan": {
+       "n": 8,
+       "r1": 8,
+       "r1_pct": 100.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "meaning": {
+       "n": 10,
+       "r1": 6,
+       "r1_pct": 60.0,
+       "r5": 10,
+       "r5_pct": 100.0,
+       "r10": 10,
+       "r10_pct": 100.0,
+       "mrr": 0.8
+      },
+      "picture": {
+       "n": 6,
+       "r1": 6,
+       "r1_pct": 100.0,
+       "r5": 6,
+       "r5_pct": 100.0,
+       "r10": 6,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "file type": {
+      "doc": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "pdf": {
+       "n": 8,
+       "r1": 5,
+       "r1_pct": 62.5,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 0.812
+      },
+      "photo": {
+       "n": 10,
+       "r1": 10,
+       "r1_pct": 100.0,
+       "r5": 10,
+       "r5_pct": 100.0,
+       "r10": 10,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "screenshot": {
+       "n": 10,
+       "r1": 9,
+       "r1_pct": 90.0,
+       "r5": 10,
+       "r5_pct": 100.0,
+       "r10": 10,
+       "r10_pct": 100.0,
+       "mrr": 0.95
+      },
+      "slides": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "text": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "public": {
+       "n": 32,
+       "r1": 28,
+       "r1_pct": 87.5,
+       "r5": 32,
+       "r5_pct": 100.0,
+       "r10": 32,
+       "r10_pct": 100.0,
+       "mrr": 0.938
+      }
+     }
+    }
+   },
+   "divider": {
+    "median_above": 15.5,
+    "all_correct_above": 32,
+    "of": 32
+   },
+   "latency_ms": {
+    "p50": 78.5,
+    "p95": 120.0
+   },
+   "queries": [
+    {
+     "id": "g01",
+     "split": "guard",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "0x80070005 access denied installer",
+     "relevant": [
+      "corpus/screenshots/Screenshot 2026-10-12 101530.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 13,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     }
+    },
+    {
+     "id": "g02",
+     "split": "guard",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "KeyError user_id traceback",
+     "relevant": [
+      "corpus/screenshots/Screenshot 2026-10-13 091204.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 5,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 9
+     }
+    },
+    {
+     "id": "g03",
+     "split": "guard",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "ERESOLVE unable to resolve dependency tree",
+     "relevant": [
+      "corpus/screenshots/Screenshot 2026-10-13 151022.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 14,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     }
+    },
+    {
+     "id": "g04",
+     "split": "guard",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "PNR 4521873906",
+     "relevant": [
+      "corpus/receipts/ticket-2026-10-24.pdf",
+      "corpus/screenshots/phone/Screenshot_20261012-080102_Messages.png"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 10,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 4,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 4,
+      "clip": 1
+     }
+    },
+    {
+     "id": "g05",
+     "split": "guard",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "UPI transaction ID 629184736251",
+     "relevant": [
+      "corpus/screenshots/Screenshot_20261018-130512_Pay.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 17,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     }
+    },
+    {
+     "id": "g06",
+     "split": "guard",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "consumer number 110045227",
+     "relevant": [
+      "corpus/receipts/electricity-bill-october.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 28,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "g07",
+     "split": "guard",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "NET::ERR_CERT_DATE_INVALID",
+     "relevant": [
+      "corpus/screenshots/Screenshot (3).png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 7,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1,
+      "clip": 2
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 2
+     }
+    },
+    {
+     "id": "g08",
+     "split": "guard",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "git reset --soft HEAD~1",
+     "relevant": [
+      "corpus/notes/git cheatsheet.md"
+     ],
+     "file_type": "text",
+     "rank": 1,
+     "above_divider": 10,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "g09",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "the page that defines the singular value decomposition",
+     "relevant": [
+      "corpus/papers/matrix-decompositions.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 2,
+     "above_divider": 15,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 2,
+      "dense": 2
+     },
+     "single_method_rank": {
+      "bm25": 2,
+      "dense": 2,
+      "clip": null
+     }
+    },
+    {
+     "id": "g10",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "paper on generating images by gradually removing noise",
+     "relevant": [
+      "corpus/papers/2006.11239.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 36,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 2
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 2,
+      "clip": null
+     }
+    },
+    {
+     "id": "g11",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "notes on letting every word in a sentence look at every other word",
+     "relevant": [
+      "corpus/papers/1706.03762.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 22,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 3
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 3,
+      "clip": null
+     }
+    },
+    {
+     "id": "g12",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "default hyperparameters for the Adam optimizer",
+     "relevant": [
+      "corpus/papers/1412.6980.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 2,
+     "above_divider": 21,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 6,
+      "dense": 3
+     },
+     "single_method_rank": {
+      "bm25": 6,
+      "dense": 3,
+      "clip": null
+     }
+    },
+    {
+     "id": "g13",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "slide about gradient descent with momentum",
+     "relevant": [
+      "corpus/decks/ML lecture v2.pptx"
+     ],
+     "file_type": "slides",
+     "rank": 1,
+     "above_divider": 3,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "g14",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "what was decided at the project sync about freezing the API",
+     "relevant": [
+      "corpus/notes/meeting notes 2026-10-14.docx"
+     ],
+     "file_type": "doc",
+     "rank": 1,
+     "above_divider": 12,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "g15",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "how long to bake bread in a covered pot",
+     "relevant": [
+      "corpus/notes/sourdough recipe.txt"
+     ],
+     "file_type": "text",
+     "rank": 1,
+     "above_divider": 14,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "g16",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "my card was declined at an online shop",
+     "relevant": [
+      "corpus/screenshots/Screenshot 2026-10-17 110203.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 16,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 3
+     }
+    },
+    {
+     "id": "g17",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "port 8080 already in use when starting a container",
+     "relevant": [
+      "corpus/screenshots/Screenshot (4).png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 14,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 6
+     }
+    },
+    {
+     "id": "g18",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "advice on sleeping better and avoiding coffee",
+     "relevant": [
+      "corpus/screenshots/phone/Screenshot_20261013-120000_Reader.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 2,
+     "above_divider": 27,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 9
+     }
+    },
+    {
+     "id": "g19",
+     "split": "guard",
+     "search_type": "picture",
+     "set": "public",
+     "query": "sunset over the sea",
+     "relevant": [
+      "corpus/photos/IMG_20260921_183012.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 20,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": null,
+      "clip": 1
+     }
+    },
+    {
+     "id": "g20",
+     "split": "guard",
+     "search_type": "picture",
+     "set": "public",
+     "query": "two dice on a table",
+     "relevant": [
+      "corpus/photos/IMG_20260925_160010.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 13,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": null,
+      "clip": 1
+     }
+    },
+    {
+     "id": "g21",
+     "split": "guard",
+     "search_type": "picture",
+     "set": "public",
+     "query": "snow covered mountains",
+     "relevant": [
+      "corpus/photos/IMG_20260923_120301.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 14,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": null,
+      "clip": 1
+     }
+    },
+    {
+     "id": "g22",
+     "split": "guard",
+     "search_type": "picture",
+     "set": "public",
+     "query": "a red apple",
+     "relevant": [
+      "corpus/photos/IMG_20260926_090909.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 17,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": null,
+      "clip": 1
+     }
+    },
+    {
+     "id": "g23",
+     "split": "guard",
+     "search_type": "picture",
+     "set": "public",
+     "query": "a rainbow in the sky",
+     "relevant": [
+      "corpus/photos/IMG_20260928_131313.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 6,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": null,
+      "clip": 1
+     }
+    },
+    {
+     "id": "g24",
+     "split": "guard",
+     "search_type": "picture",
+     "set": "public",
+     "query": "the moon at night",
+     "relevant": [
+      "corpus/photos/IMG_20260924_221145.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 15,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": null,
+      "clip": 1
+     }
+    },
+    {
+     "id": "g25",
+     "split": "guard",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "Bayes theorem example about a test for a rare condition",
+     "relevant": [
+      "corpus/scans/scan_0001.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 17,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "g26",
+     "split": "guard",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "hostel quiet hours",
+     "relevant": [
+      "corpus/scans/scan_0002.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 37,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "g27",
+     "split": "guard",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "lab 3 has moved to room 214",
+     "relevant": [
+      "corpus/photos/notices/IMG_20261004_150000.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 23,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 24
+     }
+    },
+    {
+     "id": "g28",
+     "split": "guard",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "water supply interrupted on 21 October",
+     "relevant": [
+      "corpus/photos/notices/IMG_20261005_091500.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 22,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     }
+    },
+    {
+     "id": "g29",
+     "split": "guard",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "total on the Blue Door Cafe bill",
+     "relevant": [
+      "corpus/photos/notices/IMG_20261018_143500.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 16,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     }
+    },
+    {
+     "id": "g30",
+     "split": "guard",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "where is the spare key for the lab cupboard",
+     "relevant": [
+      "corpus/screenshots/phone/Screenshot_20261012-193344_Notes.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 14,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 13
+     }
+    },
+    {
+     "id": "g31",
+     "split": "guard",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "back up the phone overnight while it charges",
+     "relevant": [
+      "corpus/screenshots/phone/Screenshot_20261011-221530_Browser.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 36,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 9
+     }
+    },
+    {
+     "id": "g32",
+     "split": "guard",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "linear regression loss written on the whiteboard",
+     "relevant": [
+      "corpus/photos/notices/IMG_20261003_103000.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 18,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 2,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 2,
+      "dense": 1,
+      "clip": 1
+     }
+    }
+   ]
+  }
+ }
+}
