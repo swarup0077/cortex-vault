@@ -2,14 +2,16 @@
 
     python bench/bench_scale.py make <folder> [--files 1000]      # bench_upload's generator and mix, × files/100
     python bench/bench_scale.py index <folder> --data <dir> [--with-corpus] [--out report.json]
+    python bench/bench_scale.py search --data <dir> [--out report.json]   # search latency only, on that index
 
 `make` writes the files from fixed seeds; the fonts and image encoders differ by OS, so two machines' files differ
 slightly (1,000 files: 1,145.9 MB on Windows, 1,146.8 MB on Linux). `index` indexes them, with `corpus/` too
 when asked, into `<dir>` (a fresh data dir), then searches the committed queries (the owner's public ones and the
 generated-file set; the private ones never leave the owner's laptop) and prints one JSON report: indexing time per
 stage and in total, files/sec per kind, the database and thumbnails on disk, the process's peak RAM, and search
-latency p50/p95 (the engine's stage timers, as `vault eval` reports them, and wall time). On the deploy host run it
-under `nice -n 19` so the live demo keeps the CPU. Quality at scale is `vault eval --purpose scale --extra <folder>`.
+latency p50/p95 (the engine's stage timers, as `vault eval` reports them, and wall time). `search` times the same
+queries again on an index `index` built, after a change to search. On the deploy host run it under `nice -n 19` so
+the live demo keeps the CPU. Quality at scale is `vault eval --purpose scale --extra <folder>`.
 """
 
 from __future__ import annotations
@@ -83,22 +85,9 @@ def cmd_index(args: argparse.Namespace) -> None:
     rep = lib.index(roots, listed=lambda: marks.setdefault("listed", time.perf_counter() - t0))
     total = time.perf_counter() - t0
     index_peak = peak_rss_mb()
-    paths = Paths()
-    queries = [q for q in load_queries(paths, "owner") if q.public] + load_queries(paths, "generated")
-    engine_ms, wall_ms = [], []
-    with lib.connect() as conn:
-        n_files = conn.execute("SELECT count(*) FROM files WHERE status = 'ok'").fetchone()[0]
-        n_chunks = conn.execute("SELECT count(*) FROM chunks").fetchone()[0]
-        text_index, image_index = lib.vectors(conn)
-        search(conn, "warm up", cfg, text_index=text_index, image_index=image_index)  # loads the models
-        for _ in range(args.repeat):
-            for q in queries:
-                t = time.perf_counter()
-                resp = search(conn, q.text, cfg, text_index=text_index, image_index=image_index)
-                wall_ms.append((time.perf_counter() - t) * 1000)
-                engine_ms.append(sum(resp.timings_ms.values()))
+    timed = time_searches(lib, args.repeat)
     report = {
-        "roots": [str(r) for r in roots], "files_indexed": n_files, "chunks": n_chunks,
+        "roots": [str(r) for r in roots], "files_indexed": timed.pop("files"), "chunks": timed.pop("chunks"),
         "errors": len(rep.errors), "listed_s": round(marks.get("listed", 0.0), 1), "total_s": round(total, 1),
         "stages_s": {k: round(v, 1) for k, v in rep.timings.items()},
         "files_per_sec": {k: round(v, 2) for k, v in rep.files_per_sec().items()},
@@ -106,16 +95,49 @@ def cmd_index(args: argparse.Namespace) -> None:
         "ocr_images": rep.ocr_images,
         "db_mb": round(sum(size_mb(p) for p in args.data.glob("vault.db*")), 1),
         "thumbs_mb": round(size_mb(args.data / "thumbs"), 1),
-        "peak_rss_mb_indexing": round(index_peak, 0), "peak_rss_mb": round(peak_rss_mb(), 0),
-        "queries": {"owner_public": sum(q.split != "guard" for q in queries),
-                    "generated": sum(q.split == "guard" for q in queries), "repeat": args.repeat},
-        "search_ms": {"engine_p50": round(percentile(engine_ms, 0.5), 1),
-                      "engine_p95": round(percentile(engine_ms, 0.95), 1),
-                      "wall_p50": round(percentile(wall_ms, 0.5), 1), "wall_p95": round(percentile(wall_ms, 0.95), 1)},
+        "peak_rss_mb_indexing": round(index_peak, 0), "peak_rss_mb": round(peak_rss_mb(), 0), **timed,
     }
+    write(report, args.out)
+
+
+def time_searches(lib: Library, repeat: int) -> dict:
+    """The committed public queries and the generated set, `repeat` times each after a warm-up: p50/p95 of the
+    engine's stage timers and of wall time."""
+    paths = Paths()
+    queries = [q for q in load_queries(paths, "owner") if q.public] + load_queries(paths, "generated")
+    engine_ms, wall_ms = [], []
+    with lib.connect() as conn:
+        n_files = conn.execute("SELECT count(*) FROM files WHERE status = 'ok'").fetchone()[0]
+        n_chunks = conn.execute("SELECT count(*) FROM chunks").fetchone()[0]
+        text_index, image_index = lib.vectors(conn)
+        search(conn, "warm up", lib.cfg, text_index=text_index, image_index=image_index)  # loads the models
+        for _ in range(repeat):
+            for q in queries:
+                t = time.perf_counter()
+                resp = search(conn, q.text, lib.cfg, text_index=text_index, image_index=image_index)
+                wall_ms.append((time.perf_counter() - t) * 1000)
+                engine_ms.append(sum(resp.timings_ms.values()))
+    return {"files": n_files, "chunks": n_chunks,
+            "queries": {"owner_public": sum(q.split != "guard" for q in queries),
+                        "generated": sum(q.split == "guard" for q in queries), "repeat": repeat},
+            "search_ms": {"engine_p50": round(percentile(engine_ms, 0.5), 1),
+                          "engine_p95": round(percentile(engine_ms, 0.95), 1),
+                          "wall_p50": round(percentile(wall_ms, 0.5), 1),
+                          "wall_p95": round(percentile(wall_ms, 0.95), 1)}}
+
+
+def cmd_search(args: argparse.Namespace) -> None:
+    if not (args.data / "vault.db").exists():
+        raise SystemExit(f"{args.data} holds no index: build one with `index` first")
+    timed = time_searches(Library(Config(data_dir=args.data)), args.repeat)
+    write({"data": str(args.data), "files_indexed": timed.pop("files"), "chunks": timed.pop("chunks"), **timed,
+           "peak_rss_mb": round(peak_rss_mb(), 0)}, args.out)
+
+
+def write(report: dict, out: Path | None) -> None:
     text = json.dumps(report, indent=1)
-    if args.out:
-        args.out.write_text(text + "\n", encoding="utf-8")
+    if out:
+        out.write_text(text + "\n", encoding="utf-8")
     print(text)
 
 
@@ -133,6 +155,11 @@ def main() -> None:
     i.add_argument("--repeat", type=int, default=3, help="times each query runs (default 3)")
     i.add_argument("--out", type=Path)
     i.set_defaults(func=cmd_index)
+    s = sub.add_parser("search", help="time searches again on an index `index` built")
+    s.add_argument("--data", type=Path, required=True)
+    s.add_argument("--repeat", type=int, default=3, help="times each query runs (default 3)")
+    s.add_argument("--out", type=Path)
+    s.set_defaults(func=cmd_search)
     args = ap.parse_args()
     args.func(args)
 
