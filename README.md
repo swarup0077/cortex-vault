@@ -8,6 +8,8 @@ looks at what is in each picture, using three small models that run on the CPU. 
 ones and 19 of the author's own. You can add your own files to search them alongside; they stay on the demo server,
 are kept only for your session and are deleted 60 minutes after your last search or upload.
 
+**Source:** https://github.com/swarup0077/cortex-vault (AGPL-3.0; the demo's footer links here).
+
 | Results, with the matched text highlighted in the preview | A picture found by what it shows |
 |---|---|
 | ![Search results for "error 0x80070005"](design/v0-brass/port/readme-desktop-light-results.png) | ![A picture match](design/v0-brass/port/readme-desktop-light-picture-match.png) |
@@ -231,7 +233,8 @@ The libraries in `requirements.txt`:
 | pytest | 9.1.1 | MIT |
 
 PyMuPDF is used under the AGPL-3.0, whose section 13 asks a network service built on it to offer its users the
-source code. Cortex Vault itself is licensed under the AGPL-3.0 to match ([LICENSE](LICENSE)).
+source code. Cortex Vault itself is licensed under the AGPL-3.0 to match ([LICENSE](LICENSE)), and the demo's footer
+links to this repository: https://github.com/swarup0077/cortex-vault.
 
 ## How it was built
 

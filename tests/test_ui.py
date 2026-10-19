@@ -227,8 +227,17 @@ def test_no_served_html_css_or_js_contains_an_external_url() -> None:
     texts.append(views.home(DEMO, views.Archive(), recent=[], samples=52))
     for text in texts:
         urls = re.findall(r"https?://[^\s\"')<>]+", text)
-        assert [u for u in urls if u != "http://www.w3.org/2000/svg"] == []
+        links = re.findall(r'<a [^>]*href="(https?://[^"]+)"', text)  # opens only when clicked: loads nothing
+        assert links in ([], [views.SOURCE_URL])
+        assert [u for u in urls if u != "http://www.w3.org/2000/svg" and u not in links] == []
     assert not (STATIC / "fonts").exists()  # system fonts only (SPEC §8)
+
+
+def test_the_demo_footer_links_to_the_source_code() -> None:
+    """AGPL-3.0 section 13: the demo offers its users the source; the local app doesn't need to."""
+    demo = views.footer(DEMO)
+    assert f'href="{views.SOURCE_URL}"' in demo and "Source code (AGPL-3.0)" in demo and 'rel="noopener' in demo
+    assert views.SOURCE_URL not in views.footer(LOCAL) and "Source code" not in views.footer(LOCAL)
 
 
 def test_the_theme_names_plain_system_fonts() -> None:

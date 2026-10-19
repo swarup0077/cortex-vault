@@ -399,6 +399,8 @@ body.cv-query .cv-queries, body.cv-off-home .cv-queries { display: none; }
 .cv-footer__in { display: flex; align-items: center; flex-wrap: wrap; gap: 9px 24px; padding-block: 17px; color: var(--cv-muted);
   font-size: 11px; }
 .cv-footer__mode { display: flex; align-items: center; gap: 7px; }
+.cv-footer__src { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.cv-footer__src:hover, .cv-footer__src:focus-visible { color: var(--cv-ink); }
 .cv-keys { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 .cv-keys .cv-ico { width: 14px; height: 14px; }
 .cv-keys b { color: var(--cv-ink); font-weight: 500; font-family: var(--cv-mono); }

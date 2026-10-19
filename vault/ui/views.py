@@ -373,9 +373,16 @@ def top(mode: Mode, suggestions: Sequence[Suggestion] = ()) -> str:
     )
 
 
+SOURCE_URL = "https://github.com/swarup0077/cortex-vault"  # offered to the demo's users (AGPL-3.0 section 13)
+
+
 def footer(mode: Mode) -> str:
+    """The mode line, the index line, a link to the source code (demo only: a plain link, nothing loads until it's
+    clicked), and the keyboard hints."""
+    source = (f'<a class="cv-footer__src" href="{SOURCE_URL}" target="_blank" rel="noopener noreferrer">Source '
+              "code (AGPL-3.0)</a>") if mode.demo else ""
     return (f'<footer class="cv-app cv-part cv-footer"><div class="cv-wrap cv-footer__in">'
-            f'<span class="cv-footer__mode"><span class="cv-dot"></span>{_e(mode.footer)}</span>'
+            f'<span class="cv-footer__mode"><span class="cv-dot"></span>{_e(mode.footer)}</span>{source}'
             '<span data-index-line></span><span class="cv-keys">' + icon("keyboard") +
             '<span><b data-kbd>Ctrl K</b> search</span><span><b>↑↓</b> move</span><span><b>↵</b> open</span>'
             "<span><b>esc</b> clear</span></span></div></footer>")
