@@ -455,7 +455,9 @@ def test_the_server_logs_no_queries_in_either_mode(demo_ctx, tmp_path, make_sear
     assert caplog.records and "quokka" not in logged and "7731" not in logged
 
     repo = Path(__file__).resolve().parents[1]
-    assert re.search(r"uvicorn\.run\([^)]*access_log=False", (repo / "app.py").read_text(encoding="utf-8"))
+    import app
+
+    assert app.server_config(object(), 7860).access_log is False  # the server that app.py runs logs no URLs
     assert not re.search(r"^\s*log\b", (repo / "deploy" / "Caddyfile").read_text(encoding="utf-8"), re.M)
 
 

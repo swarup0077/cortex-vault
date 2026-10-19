@@ -34,6 +34,9 @@ from vault.ui.server import make_app  # noqa: E402
 log = logging.getLogger("vault.app")
 
 HOST = "127.0.0.1"  # never another interface: local mode is private, demo mode sits behind Caddy (SPEC §2, §18)
+# Seconds a stopping server gives open requests. Without it, a browser tab's open Gradio event stream kept a restart
+# waiting until systemd killed the app 90 s later (open item aa).
+SHUTDOWN_GRACE_S = 5
 
 
 def build_context(mode: str) -> UiContext:
@@ -83,7 +86,13 @@ def main() -> None:
     threading.Thread(target=warm_up, args=(ctx,), daemon=True).start()
     port = int(os.environ.get("GRADIO_SERVER_PORT", "7860"))
     log.info("Cortex Vault (%s mode) on http://%s:%d", mode, HOST, port)
-    uvicorn.run(app, host=HOST, port=port, log_level="warning", access_log=False)  # no URLs (they hold ?q=) logged
+    uvicorn.Server(server_config(app, port)).run()
+
+
+def server_config(app, port: int) -> uvicorn.Config:
+    """No access log: URLs hold ?q=, and no query is logged (SPEC §8)."""
+    return uvicorn.Config(app, host=HOST, port=port, log_level="warning", access_log=False,
+                          timeout_graceful_shutdown=SHUTDOWN_GRACE_S)
 
 
 if __name__ == "__main__":
