@@ -51,3 +51,16 @@ corpus/screenshots/phone/Screenshot_20261014-090000_Mail.png,screenshot,generate
 corpus/slides-pdf/lecture-slides-cnn.pdf,pdf,generated (corpus/make_standin.py),generated for this project; no third-party content
 corpus/slides-pdf/poster-hackathon.pdf,pdf,generated (corpus/make_standin.py),generated for this project; no third-party content
 corpus/slides-pdf/slides-export-rl.pdf,pdf,generated (corpus/make_standin.py),generated for this project; no third-party content
+corpus/real/image.jpg,photo,own,own work
+corpus/real/numpy notes.txt,doc,own,own work
+corpus/real/Phase 0 — Problem framing (no code).txt,doc,own,own work
+corpus/real/Screenshot 2025-11-17 191854.png,screenshot,own,own work
+corpus/real/Screenshot 2025-11-17 192036.png,screenshot,own,own work
+corpus/real/Screenshot 2025-11-17 193345.png,screenshot,own,own work
+corpus/real/WhatsApp Image 2026-10-19 at 10.24.49 (1).jpeg,screenshot,own,own work
+corpus/real/WhatsApp Image 2026-10-19 at 10.24.51 (1).jpeg,photo,own,own work
+corpus/real/WhatsApp Image 2026-10-19 at 10.24.52 (1).jpeg,photo,own,own work
+corpus/real/WhatsApp Image 2026-10-19 at 10.24.53 (1).jpeg,photo,own,own work
+corpus/real/WhatsApp Image 2026-10-19 at 10.24.53 (2).jpeg,screenshot,own,own work
+corpus/real/WhatsApp Image 2026-10-19 at 10.24.54 (2).jpeg,photo,own,own work
+corpus/real/WhatsApp Image 2026-10-19 at 10.24.54.jpeg,photo,own,own work

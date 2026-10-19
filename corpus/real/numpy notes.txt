@@ -1,0 +1,12 @@
+numpy:
+-> import numpy :for accesing the functions in numpy(it Is a libraray)
+-> import numpy as np
+   arr = np.array([1,2,3,4])
+   print(arr)
+   which prints an array
+   here array attribute is in np
+2d arrays = [[1,2],[3,4]]
+3d arrays = [[[1,2],[3,4]],[[2,3],[5,6]]]
+if a be an array then to check the dimension of array : a.ndim give dim
+ 
+ 

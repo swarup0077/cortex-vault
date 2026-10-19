@@ -1,0 +1,36 @@
+Phase 0 — Problem framing (no code)
+Before anything: what does "fraud" mean in our dataset, what's the base rate, what's the cost of FP vs FN, what's the latency requirement (is this scored in real time at checkout, or batch overnight)? These framing questions are literally what interviewers told you to ask first in system design rounds. We answer them for our own project before building.
+Phase 1 — Imbalanced data fundamentals
+Concepts to understand before writing a line of code:
+
+Why accuracy is meaningless here (a model predicting "not fraud" always gets 99% accuracy)
+Precision, recall, F1, ROC-AUC vs PR-AUC (and why PR-AUC is the right one under imbalance — this is a classic interview trap question)
+Resampling strategies: undersampling, oversampling, SMOTE — what each does mathematically, and why SMOTE can actually hurt you (it creates synthetic points that can blur the decision boundary)
+Algorithm-level fixes: class weights, focal loss — different philosophy from resampling, and you should be able to articulate the tradeoff
+
+Phase 2 — Feature engineering for tabular/transactional data
+
+Why raw features are rarely enough: aggregations (transaction velocity, amount vs. historical average), time-based features, categorical encoding (target encoding vs one-hot vs embeddings for high-cardinality columns)
+The big one: data leakage. This is THE concept fraud detection projects are built to test. E.g. using a feature that's only known after the fraud was confirmed, or aggregating future transactions into a "historical" feature. You need to be able to explain a specific leakage bug you found and fixed.
+Time-aware train/test splitting — random splits leak future information into the past, which is wrong for any time-ordered data
+
+Phase 3 — Modeling
+
+Why gradient-boosted trees (XGBoost/LightGBM) dominate tabular data over neural nets — concept: trees handle mixed feature types, missing values, and nonlinear interactions without much preprocessing; deep learning generally needs way more data to beat trees on tabular problems
+Understanding what the trees are actually doing (splits, gain, how boosting iteratively corrects residual errors) — not just calling .fit()
+Hyperparameter intuition: what does max_depth, learning_rate, scale_pos_weight actually control, and why
+
+Phase 4 — Threshold selection under asymmetric cost
+
+A classifier outputs a probability, not a decision. Choosing the 0.5 cutoff is almost always wrong. You need to reason about cost matrix (cost of FN vs FP) and pick the threshold that minimizes expected cost — this is a genuinely good "show me your thinking" interview story
+Precision-recall tradeoff curve, and picking an operating point business-driven, not accuracy-driven
+
+Phase 5 — Explainability
+
+SHAP values: why a black-box gradient boosted model needs them, what they actually represent (marginal contribution of a feature to a prediction), and why "the model said so" isn't an acceptable answer in a regulated domain like fraud/finance
+
+Phase 6 — Serving, monitoring, and drift
+
+Wrapping the model in FastAPI: a forward pass at inference is just predict_proba, the engineering is in latency, batching, versioning
+Drift: feature drift (input distribution changes) vs concept drift (the relationship between features and fraud changes) — different problems, different detection methods (PSI, KS-test for feature drift; tracking live precision/recall against delayed labels for concept drift)
+Why fraud is a moving target — this is the differentiator between this project and a static Kaggle notebook

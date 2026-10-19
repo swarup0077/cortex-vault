@@ -1,0 +1,68 @@
+{
+ "seed": 20261019,
+ "stratified_by": "search_type, per source file",
+ "counts": {
+  "meaning": {
+   "tune": 9,
+   "heldout": 10
+  },
+  "exact word": {
+   "tune": 5,
+   "heldout": 4
+  },
+  "picture": {
+   "tune": 5,
+   "heldout": 5
+  },
+  "inside a scan": {
+   "tune": 3,
+   "heldout": 3
+  }
+ },
+ "splits": {
+  "q01": "tune",
+  "q02": "heldout",
+  "q03": "tune",
+  "q04": "heldout",
+  "q05": "heldout",
+  "q06": "heldout",
+  "q07": "heldout",
+  "q08": "tune",
+  "q09": "heldout",
+  "q10": "heldout",
+  "q11": "tune",
+  "q12": "tune",
+  "q13": "tune",
+  "q14": "heldout",
+  "q15": "heldout",
+  "q16": "heldout",
+  "q17": "heldout",
+  "q18": "heldout",
+  "q19": "heldout",
+  "q20": "heldout",
+  "q21": "heldout",
+  "q22": "tune",
+  "q23": "tune",
+  "q24": "heldout",
+  "q25": "heldout",
+  "q26": "tune",
+  "q27": "tune",
+  "q28": "tune",
+  "q29": "tune",
+  "q30": "tune",
+  "q31": "tune",
+  "q32": "tune",
+  "q33": "tune",
+  "q34": "heldout",
+  "q35": "tune",
+  "q36": "heldout",
+  "q37": "heldout",
+  "q38": "tune",
+  "q39": "heldout",
+  "q40": "tune",
+  "q41": "tune",
+  "q42": "tune",
+  "q43": "heldout",
+  "q44": "tune"
+ }
+}
