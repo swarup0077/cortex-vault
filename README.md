@@ -28,8 +28,9 @@ Each query runs through four ranked lists of files, and Reciprocal Rank Fusion m
   left out.
 - **Picture:** CLIP ViT-B/32 compares the query with every image. A gate keeps only the clear matches: images scoring
   at least 2 standard deviations above the mean of all candidates (or, with fewer than 20 images, the top 5 above a
-  floor). When no file holds every word and CLIP's best image is a strong outlier, the *visual-query rule* gives that
-  image extra weight: "dice on a table" puts the photo of dice first, though no text in it says so.
+  floor). When no file holds every word and CLIP's best image is a strong outlier, well ahead of the next image too,
+  the *visual-query rule* gives that image extra weight: "dice on a table" puts the photo of dice first, though no
+  text in it says so.
 
 Each list holds up to 100 files, ranked by their best passage, so one long book can't fill a list. Fusion adds
 1 / (60 + rank) from each list a file appears in. Results that score under half of the top result's score go below
@@ -64,26 +65,32 @@ identified by content (SHA-256), so renamed, moved and duplicate files aren't re
 44 queries written by the author before any search, over 95 files: the 52 generated files, 19 of the author's own
 public files and 24 private ones (kept out of this repository; queries about them are reported by id only).
 A correct file at rank 1, in the top 5 and in the top 10 (Recall@k), and MRR@10. The queries were split in half
-with a fixed seed: the tuning half was used to choose settings, and the held-out half was run once with the final
-settings ([`eval/results.md`](eval/results.md)), plus once more for the divider's numbers only after its rule
-changed (the ranking was identical).
+with a fixed seed: the tuning half was used to choose settings, and the held-out half was run only in logged runs:
+at the start, with the final settings, once more for the divider's numbers after its rule changed, and after the fix
+to the visual-query rule (see Known limitations), on the 95 files and on 1,095. [`eval/results.md`](eval/results.md)
+holds the current settings' report, with every held-out run side by side. The current settings:
 
 | Queries | n | R@1 | R@5 | R@10 | MRR@10 |
 |---|---|---|---|---|---|
-| All | 44 | 24 (55%) | 32 (73%) | 36 (82%) | 0.627 |
-| Held-out half | 22 | 7 (32%) | 13 (59%) | 16 (73%) | 0.443 |
-| Tuning half | 22 | 17 (77%) | 19 (86%) | 20 (91%) | 0.812 |
-| Public files | 13 | 6 (46%) | 6 (46%) | 8 (62%) | 0.479 |
-| Private files | 31 | 18 (58%) | 26 (84%) | 28 (90%) | 0.690 |
+| All | 44 | 23 (52%) | 30 (68%) | 35 (80%) | 0.601 |
+| Held-out half | 22 | 6 (27%) | 12 (54%) | 16 (73%) | 0.402 |
+| Tuning half | 22 | 17 (77%) | 18 (82%) | 19 (86%) | 0.801 |
+| Public files | 13 | 5 (38%) | 5 (38%) | 7 (54%) | 0.402 |
+| Private files | 31 | 18 (58%) | 25 (81%) | 28 (90%) | 0.685 |
 | Exact word | 9 | 7 (78%) | 9 (100%) | 9 (100%) | 0.856 |
 | Meaning | 19 | 10 (53%) | 13 (68%) | 15 (79%) | 0.601 |
-| Picture | 10 | 5 (50%) | 6 (60%) | 7 (70%) | 0.561 |
-| Inside a scan | 6 | 2 (33%) | 4 (67%) | 5 (83%) | 0.479 |
+| Picture | 10 | 3 (30%) | 4 (40%) | 6 (60%) | 0.371 |
+| Inside a scan | 6 | 3 (50%) | 4 (67%) | 5 (83%) | 0.604 |
+
+Before that fix, on the same 95 files: 24 / 32 / 36, MRR 0.627, and pictures 5 / 6 / 7 of 10
+([`eval/results_final.md`](eval/results_final.md)). Here the fix costs two picture queries and lifts one query about
+text in a scan to #1; it pays off in a larger library (Scale test, below).
 
 What each list adds (all 44 queries, R@5 / R@10): exact and every word alone 24 / 25, meaning alone 27 / 34,
-picture alone 22 / 29, words + meaning 25 / 31, all three with the picture gate (the app) 32 / 36. Without the gate
-the picture list adds more noise than it finds: 30 / 34. A separate set of 32 queries about the generated files,
-used only as a guardrail while tuning: 28 (88%) / 32 (100%) / 32 (100%), MRR 0.927.
+picture alone 22 / 29, words + meaning 25 / 31, all three with the picture gate (the app) 30 / 35. Without the gate
+the picture list adds more noise than it finds: 30 / 34, and 19 at R@1 against the app's 23. A separate set of 32
+queries about the generated files, used only as a guardrail while tuning: 28 (88%) / 32 (100%) / 32 (100%), MRR
+0.924.
 
 The held-out half is the honest number, and it is lower: 4 of its 6 queries without a correct file in the top 10
 describe abstract plots (fractals, complex-function plots) whose only text is axis numbers (see Known limitations).
@@ -103,23 +110,25 @@ with the live demo running ([`bench/bench_scale.py`](bench/bench_scale.py),
 | Time by stage | OCR 1,622 s (881 images and pages), meaning vectors 216 s, text extraction 148 s, CLIP 75 s, database writes 37 s, thumbnails 15 s |
 | On disk | database 25.4 MB, thumbnails 6.0 MB |
 | Peak RAM of the indexing process | 2,318 MB |
-| Search, 45 public queries × 3 | p50 136 ms, p95 175 ms |
+| Search, 45 public queries × 3 | p50 136 ms, p95 175 ms; after the visual-query fix, p50 134 ms, p95 177 ms |
 
 While it indexed, the live demo answered in 0.07–0.11 s (0.03–0.04 s idle).
 
 **Quality at scale.** The same 1,000 files mixed into the 95 evaluation files, all queries run again on the laptop
-([`eval/results_scale.md`](eval/results_scale.md)); nothing was tuned on it:
+with the current settings ([`eval/results_scale.md`](eval/results_scale.md)); nothing was tuned on it:
 
 | Queries | R@1 | R@5 | R@10 | MRR@10 | Results above the divider (median) |
 |---|---|---|---|---|---|
-| All 44, 95 files → 1,095 files | 24 → 17 | 32 → 28 | 36 → 36 | 0.627 → 0.503 | 19 → 10 |
-| Held-out half (22) | 7 → 5 | 13 → 13 | 16 → 17 | 0.443 → 0.395 | 19 → 9.5 |
-| Generated-file set (32) | 28 → 26 | 32 → 29 | 32 → 31 | 0.927 → 0.855 | 9.5 → 4.5 |
+| All 44, 95 files → 1,095 files | 23 → 25 | 30 → 29 | 35 → 33 | 0.601 → 0.610 | 19.5 → 19 |
+| Held-out half (22) | 6 → 9 | 12 → 12 | 16 → 14 | 0.402 → 0.466 | 19.5 → 21.5 |
+| Generated-file set (32) | 28 → 26 | 32 → 31 | 32 → 31 | 0.924 → 0.875 | 10 → 4.5 |
 
-Recall@10 holds; the top of the list gets worse. The files that moved above the correct ones are the evaluation's own
-screenshots, not the new files: with 713 images instead of 63, CLIP's best image passes the visual-query rule's
-outlier test far more often, so the rule fires on text queries (on 12 of the 17 tuning-half queries that aren't
-picture queries, against 1 of 17 without the extra files). That is the known limitation below.
+The top of the list holds at this size; two queries leave the top 10. Before the fix to the visual-query rule it
+didn't hold: all 44, R@1 24 → 17 and MRR 0.627 → 0.503
+([`eval/results_scale_before_z.md`](eval/results_scale_before_z.md)). With 713 images instead of 63, CLIP's best
+image passed the rule's outlier test far more often, so the rule fired on text queries and lifted the evaluation's
+own screenshots above the correct files (on 12 of the 17 tuning-half queries that aren't picture queries). The rule
+now also asks for a clear lead over the next image, and fires on none of them.
 
 ### Speed
 
@@ -128,9 +137,13 @@ UI shows as "in 0.04 s".
 
 | Where | Index | Queries | p50 | p95 |
 |---|---|---|---|---|
-| Laptop (Windows, CPU only) | the 95 evaluation files, including a 4,000-passage textbook | the 44 queries | 188 ms | 258 ms |
-| Laptop (Windows, CPU only) | the same plus the 1,000 generated files | the 44 queries | 232 ms | 406 ms |
-| Demo server (4 vCPUs) | the 71 demo files plus the 1,000 generated files | 45 public queries, 3 times each | 136 ms | 175 ms |
+| Laptop (Windows, CPU only) | the 95 evaluation files, including a 4,000-passage textbook | the 44 queries | 221 ms | 399 ms |
+| Laptop (Windows, CPU only) | the same plus the 1,000 generated files | the 44 queries | 282 ms | 496 ms |
+| Demo server (4 vCPUs) | the 71 demo files plus the 1,000 generated files | 45 public queries, 3 times each | 134 ms | 177 ms |
+
+Laptop timings drift between runs (power and thermal state): the evaluation run before the visual-query fix measured
+188 / 258 ms on the same 95 files, and timed side by side in one process the fix doesn't slow search down. The demo
+server's timings are steadier: 136 / 175 ms before the fix.
 
 The live demo answered "error 0x80070005", "Mandelbrot fractal" and "complex plane with real and imaginary axes" in
 0.03–0.04 s. Uploads on the demo server (an Azure D4as_v4: 4 vCPUs, 16 GB RAM), timed with
@@ -165,11 +178,15 @@ ones, which are OCR'd page by page): text and Word 5.2, PowerPoint 8.8, PDF 0.20
   intricate purple branching boundaries") are the weakest group: none of the 5 public held-out queries of this kind has its
   file in the top 5 (ranks 9, 12, 14, 21 and not found). Such images have little text beyond axis numbers, and CLIP
   ranks them only moderately.
-- **The visual-query rule can fire on a text query.** When CLIP's best image looks like a strong outlier, the rule
-  lifts it above a page that holds the query's text. On the 95 evaluation files it fired on 1 of the 17 tuning-half
-  queries that aren't picture queries; with 1,000 more files in the index, on 12 of 17, which is most of the drop in
-  R@1 at scale. Its outlier test was calibrated on 36 and 200 images. Fixing it needs a design change, not a
-  threshold, and is planned.
+- **The picture rule is cautious.** The visual-query rule gives a picture extra weight only when CLIP ranks it well
+  ahead of every other image. That stopped it firing on text queries in a larger library (with 1,000 more files it
+  had fired on 12 of the 17 tuning-half queries that aren't picture queries; now on none), but it now rarely fires
+  for real photos and screenshots: on the author's files, for none of the tuning half's picture queries, and two
+  pictures that CLIP alone ranks first (one in each half) dropped to #10 and #11. Drawn test scenes lead the next
+  image by 0.039 or more; the real picture the rule used to fire for in the tuning half leads by 0.029, under the
+  0.035 required. A picture with
+  a near-copy in the library (a forwarded copy, a second shot) never gets the extra weight, because the copy is the
+  next image.
 - **No date queries.** "Screenshots from last week" searches for those words; it doesn't filter by date. Kind words
   (screenshot, photo, pdf, slides, notes) do filter.
 - **Supported files:** PNG, JPEG and WebP images (HEIC with the optional `pillow-heif`), PDF, `.docx`, `.pptx`,
@@ -180,9 +197,12 @@ ones, which are OCR'd page by page): text and Word 5.2, PowerPoint 8.8, PDF 0.20
 
 ## Run it locally (Windows)
 
-Python 3.12, CPU only.
+Python 3.12, CPU only. `py` is the launcher the python.org installer adds; with [uv](https://docs.astral.sh/uv/)
+instead, make the environment with `uv venv --python 3.12 --seed .venv`.
 
 ```bat
+git clone https://github.com/swarup0077/cortex-vault
+cd cortex-vault
 py -3.12 -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
@@ -242,6 +262,6 @@ Cortex Vault was built between 16 and 19 October 2026 from [SPEC.md](SPEC.md), t
 milestone per session,
 with [Claude Code](https://claude.com/claude-code): M0 scaffold and deploy probe, M1 text pipeline, M2 OCR, M3
 photos, CLIP and metadata, M4 UI and first deploy, M5 speed and visual polish, M6 real files and the evaluation.
-Each change came with a test on generated files (506 tests today), and every threshold was first calibrated on
+Each change came with a test on generated files (513 tests today), and every threshold was first calibrated on
 generated data with a script in [`bench/`](bench/README.md), marked provisional, and tuned only on the tuning half
 of the evaluation queries. The decisions, with what was measured and why, are logged in SPEC §19.
