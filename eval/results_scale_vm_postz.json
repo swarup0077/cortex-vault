@@ -1,0 +1,17 @@
+{
+ "data": "/home/azureuser/scale-test/data",
+ "files_indexed": 1071,
+ "chunks": 6914,
+ "queries": {
+  "owner_public": 13,
+  "generated": 32,
+  "repeat": 3
+ },
+ "search_ms": {
+  "engine_p50": 133.8,
+  "engine_p95": 176.6,
+  "wall_p50": 134.0,
+  "wall_p95": 176.9
+ },
+ "peak_rss_mb": 629.0
+}
