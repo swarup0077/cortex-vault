@@ -152,6 +152,15 @@ class Config:
     page_results: int = 20
     weaker_matches: bool = True
     visual_row: int = 10
+    # The divider's bar (M6 item 3): fused results that fail it go below the divider, as weaker matches, in order.
+    # Two candidate rules, 0 = off. Share: a result scoring under this share of the top result's RRF score (a cut;
+    # the order doesn't change). Provisional (bench/tune.py, SPEC §19): raised in 0.01 steps on the eval's tuning
+    # half until a correct file above the divider would fall below it (0.32: one found by dense alone at #43);
+    # median results above it 50 → 40, generated set 50 → 23.
+    divider_min_share: float = 0.31
+    # Terms: a result found by keyword search alone whose chunks hold fewer than this many of the query's terms
+    # (the other candidate; off: at its best, 2-5, the median above the divider moved only 50 → 49.5).
+    divider_min_terms: int = 0
 
     # Demo uploads (SPEC §8): enforced in vault/session.py, not only by Gradio. M6 (§19, 19 Oct): sized for a
     # small audience (one or two visitors at the viva): fewer sessions, each allowed more; the 200-file cap is timed

@@ -19,9 +19,9 @@ from vault.search.gate import Gated, gate
 from vault.search.parse import ParsedQuery, parse
 from vault.search.retrievers import Hit
 from vault.search.snippet import make_snippet, prose_start, term_pattern
+from vault.search.terms import content_terms
 from vault.search.toc import is_toc, strip_leaders
 from vault.vectors import VectorIndex
-
 
 
 @dataclass
@@ -45,7 +45,8 @@ class SearchResult:
     highlight_boxes: list = field(default_factory=list)
     clip_gated: bool = False
     rerank_score: float | None = None
-    weaker: bool = False  # below the fused list: only the dense floor or the CLIP gate kept it out (SPEC §7.4)
+    weaker: bool = False  # below the divider (SPEC §7.4 step 4); `below` says why
+    below: str = ""
     # Why this result (SPEC §8): `ranks` are each method's real rank (for a weaker match, in the method's full list,
     # below the floor or outside the gate); `shares` are each list's term of the RRF sum that placed it
     shares: dict[str, float] = field(default_factory=dict)
@@ -117,9 +118,34 @@ class _Clip:
         return "strong" if file_id in self.strong else "kept" if file_id in self.kept else "not kept"
 
 
+TAIL = "meaning without its floor, CLIP without its gate"  # why a weaker match from the tail is below the divider
+
+
+def divide(fused: Sequence[Fused], cfg: Config, terms: dict[int, int] | None = None, n_terms: int = 0
+           ) -> tuple[list[Fused], dict[int, str]]:
+    """The divider's bar (M6 item 3, provisional): the fused results that stay above it, and why each other one
+    goes below. Share: a result under `divider_min_share` of the top result's score (a cut, in order). Terms: a
+    result found by keyword search alone (BM25, every-word) whose chunks hold fewer than `divider_min_terms` of the
+    query's `n_terms` content terms (`terms`: the most one of its chunks holds), or than all of them when the query
+    has fewer; a one-word query keeps its keyword matches."""
+    above: list[Fused] = []
+    why: dict[int, str] = {}
+    top = fused[0].score if fused else 0.0
+    need = min(cfg.divider_min_terms, n_terms) if n_terms > 1 else 0
+    for f in fused:
+        held = (terms or {}).get(f.file_id, 0)
+        if cfg.divider_min_share > 0 and f.score < cfg.divider_min_share * top:
+            why[f.file_id] = f"scored under {cfg.divider_min_share:.0%} of the top result"
+        elif need > 0 and set(f.ranks) <= {"bm25", "all_terms"} and held < need:
+            why[f.file_id] = f"found by keyword alone, holding {held} of the {n_terms} query words"
+        else:
+            above.append(f)
+    return above, why
+
+
 def _result(file: sqlite3.Row, paths: list[str], fused: Fused | None, chunk: sqlite3.Row | None, query: str, cfg: Config,
             clip_gated: bool = False, weaker: bool = False, *, size: int | None = None, sources: Sequence[str] = (),
-            clip: _Clip = _Clip(), real_ranks: dict[str, dict[int, int]] | None = None) -> SearchResult:
+            clip: _Clip = _Clip(), real_ranks: dict[str, dict[int, int]] | None = None, below: str = "") -> SearchResult:
     primary = Path(paths[0]) if paths else Path("")
     ranks = {name: fused.ranks.get(name) for name in cfg.weights} if fused else {}
     if real_ranks is not None:  # a weaker match: each method's rank in its full list, not in the tail's fusion
@@ -144,6 +170,7 @@ def _result(file: sqlite3.Row, paths: list[str], fused: Fused | None, chunk: sql
         thumb_url=file["thumb_path"],
         clip_gated=clip_gated,
         weaker=weaker,
+        below=below or (TAIL if weaker else ""),
         shares=dict(fused.shares) if fused else {},
         clip_status=clip.status(file["id"], file["kind"]),
         size_bytes=size,
@@ -203,8 +230,10 @@ def _shown(text: str, cfg: Config) -> str:
 
 def _hydrate(conn: sqlite3.Connection, fused: list[Fused], query: str, cfg: Config, clip_gated: bool,
              weaker: bool = False, *, clip: _Clip = _Clip(), real_ranks: dict[str, dict[int, int]] | None = None,
-             chunk_lists: dict[str, Sequence[Hit]] | None = None) -> list[SearchResult]:
-    """Cards for fused files, in order, each with its snippet chunk (`_snippet_chunks`)."""
+             chunk_lists: dict[str, Sequence[Hit]] | None = None, below: dict[int, str] | None = None
+             ) -> list[SearchResult]:
+    """Cards for fused files, in order, each with its snippet chunk (`_snippet_chunks`). `below`: why each file
+    the divider's bar moved below it is there."""
     best_chunk = _snippet_chunks(conn, fused, chunk_lists or {}, cfg, query)
     chunk_ids = [c for c in best_chunk.values() if c is not None]
     chunks = {
@@ -222,8 +251,9 @@ def _hydrate(conn: sqlite3.Connection, fused: list[Fused], query: str, cfg: Conf
             sources.setdefault(fid, []).append(src)
     return [
         _result(files[f.file_id], paths.get(f.file_id, []), f, chunks.get(best_chunk[f.file_id]), query, cfg,
-                clip_gated, weaker, size=sizes.get(f.file_id), sources=sources.get(f.file_id, ()), clip=clip,
-                real_ranks=real_ranks)
+                clip_gated, weaker or f.file_id in (below or {}), size=sizes.get(f.file_id),
+                sources=sources.get(f.file_id, ()), clip=clip, real_ranks=real_ranks,
+                below=(below or {}).get(f.file_id, ""))
         for f in fused
     ]
 
@@ -242,8 +272,9 @@ def search(
     kinds: Iterable[str] = (),
     roots: Iterable[str] = (),
 ) -> SearchResponse:
-    """Parse → BM25 + all-terms + dense + gated CLIP → collapse to file → RRF (with the visual-query rule) → snippet,
-    then the weaker matches below (SPEC §7.4 step 4) and CLIP's gated hits for the Visual matches row.
+    """Parse → BM25 + all-terms + dense + gated CLIP → collapse to file → RRF (with the visual-query rule) → the
+    divider's bar → snippet, then the weaker matches below (SPEC §7.4 step 4) and CLIP's gated hits for the Visual
+    matches row.
 
     `kinds` are the UI's kind chips, united with the query's kind words; `roots` limits every list to files with
     a path under those indexed roots (the demo's upload scope). Pass prebuilt `text_index` / `image_index` to
@@ -312,10 +343,19 @@ def search(
         boosts["clip"] = dict.fromkeys(gated.strong, cfg.visual_clip_factor)
     fused_all = rrf(lists, cfg.rrf_k, weights, boosts)
     fused = fused_all[:limit]
+    terms: dict[int, int] = {}
+    n_terms = len(content_terms(pq.text))
+    if cfg.divider_min_terms > 0 and n_terms > 1:
+        keyword_only = {f.file_id for f in fused if set(f.ranks) <= {"bm25", "all_terms"}}
+        hits = [h for h in bm25_hits if h.file_id in keyword_only]
+        held = retrievers.terms_held(conn, pq, [h.chunk_id for h in hits])
+        for h in hits:
+            terms[h.file_id] = max(terms.get(h.file_id, 0), held[h.chunk_id])
+    above, moved = divide(fused, cfg, terms, n_terms)
     sw.lap("fuse")
 
-    # Weaker matches (SPEC §7.4 step 4): what only the dense floor or the CLIP gate kept out, fused the same way
-    # without them, below everything fusion kept. BM25 has no floor, so none of its files is left for here.
+    # Weaker matches (SPEC §7.4 step 4): the fused results under the divider's bar, then what only the dense floor
+    # or the CLIP gate kept out, fused the same way without them. BM25 has no floor, so none of its files is left.
     tail: list[Fused] = []
     if cfg.weaker_matches and len(fused) < limit:
         shown = {f.file_id for f in fused}
@@ -329,10 +369,12 @@ def search(
     real_ranks = {"dense": {f: i for i, (f, _) in enumerate(collapse(dense_all), start=1)},
                   "clip": {f: i for i, f in enumerate(clip_ranked, start=1)}}
     chunk_lists = {"all_terms": all_hits, "bm25": bm25_hits, "dense": dense_all}  # for each card's snippet chunk
-    results = _hydrate(conn, fused, pq.text, cfg, gated.gated, clip=clip_info, chunk_lists=chunk_lists)
-    weaker = _hydrate(conn, tail, pq.text, cfg, False, weaker=True, clip=clip_info, real_ranks=real_ranks,
-                      chunk_lists=chunk_lists)
-    by_id = {r.file_id: r for r in results}
+    results = _hydrate(conn, above, pq.text, cfg, gated.gated, clip=clip_info, chunk_lists=chunk_lists)
+    weaker = _hydrate(conn, [f for f in fused if f.file_id in moved], pq.text, cfg, gated.gated, clip=clip_info,
+                      chunk_lists=chunk_lists, below=moved)
+    by_id = {r.file_id: r for r in [*results, *weaker]}
+    weaker += _hydrate(conn, tail, pq.text, cfg, False, weaker=True, clip=clip_info, real_ranks=real_ranks,
+                       chunk_lists=chunk_lists)
     row_ids = [file_id for file_id, _ in gated.hits[: cfg.visual_row]]
     fused_by_id = {f.file_id: f for f in fused_all}
     missing = _hydrate(conn, [fused_by_id[i] for i in row_ids if i not in by_id], pq.text, cfg, gated.gated,

@@ -124,3 +124,60 @@ def test_results_carry_the_preview_facts(conn, cfg, fake_embedder, tmp_path) -> 
     assert r.chunk_source == "doc_text" and r.text_sources == ["doc_text"]
     p = search(conn, "red", cfg).results[0]
     assert (p.width, p.height) == (640, 480) and p.text_sources == []
+
+
+def checklists(root: Path) -> Path:
+    root.mkdir(parents=True)
+    (root / "lab.txt").write_text("Lab checklist: switch on the fume hood before the session.", encoding="utf-8")
+    (root / "shopping.txt").write_text("Shopping checklist: bread, milk, eggs, coffee, rice, tea, butter.",
+                                       encoding="utf-8")
+    (root / "recipe.txt").write_text("Sourdough: mix flour, water and starter.", encoding="utf-8")
+    return root
+
+
+def test_with_no_bar_every_fused_result_is_above_the_divider(conn, cfg, fake_embedder, tmp_path) -> None:
+    from dataclasses import replace
+
+    index_paths(conn, [checklists(tmp_path / "c")], cfg)
+    resp = search(conn, "fume hood checklist", replace(cfg, divider_min_share=0.0))
+    assert names(resp.results) == ["lab.txt", "shopping.txt"]
+
+
+def test_a_keyword_match_on_one_word_of_several_goes_below_the_divider(conn, cfg, fake_embedder, tmp_path) -> None:
+    """Divider candidate "terms" (M6 item 3): a file found by keyword search alone, holding one of three query
+    words, is a weaker match; a one-word query keeps its keyword matches above."""
+    from dataclasses import replace
+
+    index_paths(conn, [checklists(tmp_path / "c")], cfg)
+    bar = replace(cfg, divider_min_share=0.0, divider_min_terms=2)
+    resp = search(conn, "fume hood checklist", bar)
+    assert names(resp.results) == ["lab.txt"] and names(resp.weaker)[0] == "shopping.txt"
+    moved = resp.weaker[0]
+    assert moved.weaker and "weaker match" in moved.badges and moved.ranks["bm25"] == 2
+    assert moved.below == "found by keyword alone, holding 1 of the 3 query words"
+    assert set(names(search(conn, "checklist", bar).results)) == {"lab.txt", "shopping.txt"}
+
+
+def test_a_result_far_below_the_top_score_goes_below_the_divider(conn, cfg, fake_embedder, tmp_path) -> None:
+    """Divider candidate "share": a cut at a share of the top result's RRF score; the order doesn't change."""
+    from dataclasses import replace
+
+    index_paths(conn, [checklists(tmp_path / "c")], cfg)
+    resp = search(conn, "fume hood checklist", replace(cfg, divider_min_share=0.5))
+    assert names(resp.results) == ["lab.txt"] and names(resp.weaker)[0] == "shopping.txt"
+    assert resp.weaker[0].below == "scored under 50% of the top result"
+    assert names(search(conn, "fume hood checklist", replace(cfg, divider_min_share=0.3)).results) == [
+        "lab.txt", "shopping.txt"]  # 1/62 is 33% of 3/61
+
+
+def test_divide_keeps_order_and_says_why() -> None:
+    from vault.search.engine import divide
+    from vault.search.fuse import Fused
+
+    fused = [Fused(1, 0.05, {"bm25": 1, "dense": 1}), Fused(2, 0.03, {"bm25": 2}), Fused(3, 0.02, {"dense": 2}),
+             Fused(4, 0.01, {"bm25": 3, "all_terms": 1})]
+    assert divide(fused, Config(divider_min_share=0.0)) == (fused, {})
+    above, why = divide(fused, Config(divider_min_share=0.0, divider_min_terms=3), {2: 1, 4: 2}, n_terms=2)
+    assert [f.file_id for f in above] == [1, 3, 4] and set(why) == {2}  # needs 2 of 2: file 4 holds both
+    above, why = divide(fused, Config(divider_min_share=0.5))
+    assert [f.file_id for f in above] == [1, 2] and set(why) == {3, 4}

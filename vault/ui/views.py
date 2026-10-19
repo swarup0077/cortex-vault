@@ -515,8 +515,7 @@ def details(r: SearchResult, resp: SearchResponse) -> str:
         if rank or share:
             rows.append(f"<dt>{_e(label[0].upper() + label[1:])}</dt><dd>rank {rank or '–'} · "
                         f"RRF share {share or 0:.4f}</dd>")
-    total = f"{r.rrf_score:.4f}" + (" (among the weaker matches: meaning without its floor, CLIP without "
-                                     "its gate)" if r.weaker else "")
+    total = f"{r.rrf_score:.4f}" + (f" (among the weaker matches: {r.below})" if r.weaker else "")
     rows.append(f"<dt>RRF total</dt><dd>{_e(total)}</dd>")
     c = resp.clip
     if c.get("candidates"):

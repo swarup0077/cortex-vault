@@ -97,6 +97,19 @@ def bm25(conn: sqlite3.Connection, pq: ParsedQuery, k: int, *, all_terms: bool =
     return [Hit(r[0], r[1], -r[2], bool(r[3])) for r in rows]  # FTS5 bm25 is lower-is-better
 
 
+def terms_held(conn: sqlite3.Connection, pq: ParsedQuery, chunk_ids: list[int]) -> dict[int, int]:
+    """How many of the query's content terms each chunk holds, matched the way BM25 matches them."""
+    held = dict.fromkeys(chunk_ids, 0)
+    if not chunk_ids:
+        return held
+    marks = ",".join("?" * len(chunk_ids))
+    for t in content_terms(pq.text):
+        for (rowid,) in conn.execute(f"SELECT rowid FROM chunks_fts WHERE chunks_fts MATCH ? AND rowid IN ({marks})",
+                                     [_quote(t), *chunk_ids]):
+            held[rowid] += 1
+    return held
+
+
 _WORD = re.compile(r"[^\W_]+")
 
 
