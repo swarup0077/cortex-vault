@@ -1,0 +1,22 @@
+query,expected_file,search_type
+who books the seminar room and by when,meeting notes 2026-10-14.docx,meaning
+which beach do we visit on day 3 of the Goa trip,travel plan goa.docx,meaning
+spice farm lunch and ferry back before dark,travel plan goa.docx,exact word
+singular values are the square roots of the eigenvalues of A transpose A,Linear algebra review.pptx,exact word
+office hours on Tuesday afternoon,ML lecture v1.pptx,exact word
+cross-entropy loss for classification,ML lecture v2.pptx,exact word
+compress a matrix by keeping only the largest singular values,Linear algebra review.pptx|matrix-decompositions.pdf,meaning
+slides on gradient descent,ML lecture v1.pptx|ML lecture v2.pptx,filtered
+pdf about the Adam optimizer,1412.6980.pdf,filtered
+screenshot of the interview schedule email,Screenshot_20261014-090000_Mail.png,filtered
+photo of the moon,IMG_20260924_221145.jpg,filtered
+deck about eigenvalues and eigenvectors,Linear algebra review.pptx,filtered
+pdf with the electricity amount due,electricity-bill-october.pdf,filtered
+docs about the project sync,meeting notes 2026-10-14.docx,filtered
+train 12345 arrival time in Madgaon,ticket-2026-10-24.pdf|travel plan goa.docx,mixed
+coach B2 berth numbers for our trip,ticket-2026-10-24.pdf|Screenshot_20261012-080102_Messages.png,mixed
+Room 4B interview what to bring,Screenshot_20261014-090000_Mail.png,mixed
+212 kWh units consumed on the bill,electricity-bill-october.pdf,mixed
+Q(s a) update rule in reinforcement learning,slides-export-rl.pdf,mixed
+HACKATHON 2026 registration deadline and prize,poster-hackathon.pdf,mixed
+max pooling over a 2 x 2 window halves the feature map,lecture-slides-cnn.pdf,inside a scan

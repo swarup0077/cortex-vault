@@ -91,14 +91,25 @@ def cmd_eval(console: Console, cfg: Config, args: argparse.Namespace) -> int:
         console.print(f"split: {paths.split_file.relative_to(paths.repo).as_posix()}, "
                       f"full set: {paths.full_queries.relative_to(paths.repo).as_posix()} (git-ignored)")
         return 0
+    if args.import_coverage:
+        rep = ev.import_queries([args.import_coverage], paths, sources=("coverage",))
+        ev.write_generated(rep.queries, paths, "coverage")
+        console.print(f"{len(rep.queries)} coverage queries; {len(rep.left_out)} left out → "
+                      f"{paths.coverage_queries.relative_to(paths.repo).as_posix()}")
+        return 0
     if args.import_generated:
         rep = ev.import_queries([args.import_generated], paths, sources=("generated",))
         ev.write_generated(rep.queries, paths)
         console.print(f"{len(rep.queries)} generated-file queries; {len(rep.left_out)} left out → "
                       f"{paths.generated_queries.relative_to(paths.repo).as_posix()}")
         return 0
+    if (args.queries == "coverage") != (args.purpose == "coverage"):
+        console.print("[red]The coverage set runs only as --queries coverage --purpose coverage (logged, SPEC §9).")
+        return 2
     if args.queries == "generated":
         splits = [ev.GUARD]
+    elif args.queries == "coverage":
+        splits = [ev.COVERAGE]
     else:
         splits = ["tune", "heldout"] if args.split == "all" else [args.split]
     if "heldout" in splits and not args.purpose:
@@ -123,9 +134,10 @@ def cmd_eval(console: Console, cfg: Config, args: argparse.Namespace) -> int:
         console.print(md)
         console.print(f"wrote {out.with_suffix('.md')} and .json")
         return 0 if data["identical"] else 1
-    detail = splits if args.purpose in ("final", "post-z") else [s for s in splits if s in ("tune", ev.GUARD)]
+    detail = splits if args.purpose in ("final", "post-z") else [s for s in splits if s in ("tune", ev.GUARD,
+                                                                                         ev.COVERAGE)]
     title = {"baseline": "Eval baseline", "final": "Eval: final settings",
-             "post-z": "Eval: current settings (after item z)",
+             "post-z": "Eval: current settings (after item z)", "coverage": "Coverage queries (generated files)",
              "scale": "Eval at scale: the eval files plus generated extras"}.get(args.purpose, "Eval (tuning half)")
     if args.queries == "generated":
         title = {"baseline": "Generated-file set: baseline", "final": "Generated-file set: final settings",
@@ -142,7 +154,12 @@ def cmd_eval(console: Console, cfg: Config, args: argparse.Namespace) -> int:
             after = "at scale" if args.purpose == "scale" else args.purpose
             lines, data[f"{before}_vs_{args.purpose}"] = ev.compare(base, data, before=before, after=after)
             md = _before_first_section(md, lines)
+    if args.purpose == "coverage":
+        data["section9"] = ev.section9_counts(lib, paths)
     ev.write_report(md, data, out)
+    if args.purpose == "coverage":  # touches no held-out query, but runs once and is logged like those that do
+        ev.log_heldout(paths, args.purpose, overrides, when=run.when, report=out, note=args.note)
+        ev.put_coverage(paths)
     if "heldout" in splits:
         finals = ev.log_heldout(paths, args.purpose, overrides, when=run.when, report=out, note=args.note)
         ev.put_heldout_runs(paths)
@@ -306,12 +323,15 @@ def build_parser() -> argparse.ArgumentParser:
                    help="convert the owner's queries.csv (then queries_extra.csv) and split them; nothing is run")
     p.add_argument("--import-generated", type=Path, metavar="CSV",
                    help="convert the approved generated-file query set (eval/queries_generated.csv)")
-    p.add_argument("--queries", choices=("owner", "generated"), default="owner",
-                   help="the owner's set (headline numbers) or the generated-file set (a guardrail, reported apart)")
+    p.add_argument("--import-coverage", type=Path, metavar="CSV",
+                   help="convert the coverage set (eval/queries_coverage.csv): more queries about the generated files")
+    p.add_argument("--queries", choices=("owner", "generated", "coverage"), default="owner",
+                   help="the owner's set (headline numbers), the generated-file set (a guardrail, reported apart) or the "
+                   "coverage set (run once with --purpose coverage)")
     p.add_argument("--split", choices=("tune", "heldout", "all"), default="tune")
     p.add_argument("--purpose", choices=ev.PURPOSES, help="required when the held-out half runs: baseline, final, "
                    "divider-rerun (divider numbers only, ranks checked against the final run), scale or post-z "
-                   "(after item z; its report is eval/results, the current settings')")
+                   "(after item z; its report is eval/results, the current settings'); coverage for the coverage set")
     p.add_argument("--note", default="", help="what the run measures, in a few words, kept in the held-out log")
     p.add_argument("--out", type=Path, help="report path without suffix (default: eval/results, or eval/results_"
                    "<baseline|final|divider|scale> for those purposes)")

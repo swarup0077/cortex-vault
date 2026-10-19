@@ -37,13 +37,16 @@ from vault.search.retrievers import load_text_index
 
 SEED = 20261019
 SOURCES = ("owner", "owner-extra")  # queries.csv, then queries_extra.csv: their ids start with q and x
-PURPOSES = ("baseline", "final", "divider-rerun", "scale", "post-z")  # why a run touched the held-out half (logged)
+PURPOSES = ("baseline", "final", "divider-rerun", "scale", "post-z", "coverage")  # why a run is logged
 # Each purpose's report, after "results" (and "_generated" for the generated set): the unsuffixed report is the
 # current settings' (post-z since item z, 19 Oct); a final run's is kept apart, and what a run compares with.
 REPORT = {None: "", "baseline": "_baseline", "final": "_final", "divider-rerun": "_divider", "scale": "_scale",
-          "post-z": ""}
+          "post-z": "", "coverage": "_coverage"}
 COMPARE_WITH = {"final": "_baseline", "post-z": "_final", "scale": ""}
 GUARD = "guard"  # the split of the generated-file set: reported apart, a guardrail in tuning, never tuned toward
+# The split of the coverage set: more queries about the generated files, for the §9 coverage the owner's own
+# queries don't aim at (Word and PowerPoint targets, kind words, mixed queries). Run once, logged; never tuned on.
+COVERAGE = "coverage"
 METHODS = ("bm25", "all_terms", "dense", "clip")
 CUTOFFS = (1, 5, 10)
 
@@ -75,6 +78,10 @@ class Paths:
     @property
     def generated_queries(self) -> Path:
         return self.out / "queries_generated.jsonl"
+
+    @property
+    def coverage_queries(self) -> Path:
+        return self.out / "queries_coverage.jsonl"
 
     @property
     def split_file(self) -> Path:
@@ -125,12 +132,12 @@ def import_queries(csvs: Sequence[Path], paths: Paths = Paths(), seed: int = SEE
                    sources: Sequence[str] = SOURCES) -> ImportReport:
     """The owner's CSVs (query, expected_file, search_type; several files separated by "|") → queries with keys.
     The first CSV is `owner` (ids q01…), the second `owner-extra` (x01…); `sources=("generated",)` reads the
-    generated-file set (g01…), which isn't split. The CSVs are read, never changed."""
+    generated-file set (g01…) and `("coverage",)` the coverage set (c01…), which aren't split. The CSVs are read, never changed."""
     ids = private_ids(paths)
     public = {p.name: p.relative_to(paths.repo).as_posix() for p in paths.corpus.rglob("*") if p.is_file()}
     report = ImportReport([])
     for source, csv_path in zip(sources, csvs):
-        prefix = {"owner": "q", "owner-extra": "x", "generated": "g"}[source]
+        prefix = {"owner": "q", "owner-extra": "x", "generated": "g", "coverage": "c"}[source]
         with Path(csv_path).open(encoding="utf-8-sig", newline="") as f:
             for i, row in enumerate(csv.DictReader(f), start=1):
                 qid = f"{prefix}{i:02d}"
@@ -143,9 +150,9 @@ def import_queries(csvs: Sequence[Path], paths: Paths = Paths(), seed: int = SEE
                     report.trimmed.append((qid, len(names) - len(keys)))
                 report.queries.append(Query(qid, row["query"].strip(), row["search_type"].strip(), keys,
                                             source=source))
-    if "generated" in sources:
+    if "generated" in sources or "coverage" in sources:
         for q in report.queries:
-            q.split = GUARD
+            q.split = GUARD if q.source == "generated" else COVERAGE
     else:
         assign_splits(report.queries, seed)
     return report
@@ -186,18 +193,20 @@ def write_queries(queries: Sequence[Query], paths: Paths = Paths()) -> None:
                                            indent=1) + "\n", encoding="utf-8")
 
 
-def write_generated(queries: Sequence[Query], paths: Paths = Paths()) -> None:
+def write_generated(queries: Sequence[Query], paths: Paths = Paths(), which: str = "generated") -> None:
     paths.out.mkdir(parents=True, exist_ok=True)
-    with paths.generated_queries.open("w", encoding="utf-8") as f:
+    with (paths.coverage_queries if which == "coverage" else paths.generated_queries).open("w", encoding="utf-8") as f:
         for q in queries:
             f.write(json.dumps(asdict(q), ensure_ascii=False) + "\n")
 
 
 def load_queries(paths: Paths = Paths(), which: str = "owner") -> list[Query]:
     """The owner's set (the full one when this machine has it, else the committed public queries), or the
-    generated-file set."""
+    generated-file set, or the coverage set."""
     if which == "generated":
         src = paths.generated_queries
+    elif which == "coverage":
+        src = paths.coverage_queries
     else:
         src = paths.full_queries if paths.full_queries.is_file() else paths.public_queries
     with src.open(encoding="utf-8") as f:
@@ -462,7 +471,8 @@ def report(run: Run, *, splits: Sequence[str], detail: Sequence[str], title: str
             entry["queries"] = per_query(run, qs)
         data["splits"][name] = entry
         app = s["rows"][APP]
-        heading = {"tune": "Tuning half", "heldout": "Held-out half", GUARD: "Generated-file set"}.get(name, "Both halves")
+        heading = {"tune": "Tuning half", "heldout": "Held-out half", GUARD: "Generated-file set",
+                   COVERAGE: "Coverage queries (generated files)"}.get(name, "Both halves")
         md += [f"## {heading} ({len(qs)} queries)", ""]
         md += _table("Setting", {row: v["overall"] for row, v in s["rows"].items()}) + [""]
         for by in ("search type", "file type", "set"):
@@ -619,7 +629,8 @@ def heldout_runs(paths: Paths) -> list[str]:
         d = json.loads(f.read_text(encoding="utf-8"))
         if isinstance(d, dict) and "heldout" in d.get("splits", {}):
             reports[(d["when"], d["commit"])] = d
-    log = [json.loads(line) for line in paths.heldout_log.read_text(encoding="utf-8").splitlines() if line.strip()]
+    log = [e for e in (json.loads(line) for line in paths.heldout_log.read_text(encoding="utf-8").splitlines()
+                       if line.strip()) if e["purpose"] != "coverage"]  # the coverage run touches no held-out query
     md = [_SIDE_START, "## Every run on the held-out half", "",
           f"Each run that touched the held-out half, in the order of `eval/{paths.heldout_log.name}`; the app's row. "
           "Picture: the picture queries, R@1 / R@5 / R@10. Divider: the median number of results above it, and the "
@@ -652,18 +663,106 @@ def heldout_runs(paths: Paths) -> list[str]:
     return md + [_SIDE_END]
 
 
+def _put_section(target: Path, lines: list[str], start: str, end: str, after: str | None = None) -> None:
+    """Write `lines` (which begin with `start` and end with `end`) into `target`: over an earlier copy, else
+    right after the `after` marker if it's there, else before the first section."""
+    text = target.read_text(encoding="utf-8")
+    if start in text:
+        head, _, rest = text.partition(start)
+        tail = rest.partition(end)[2].lstrip("\n")
+    elif after and after in text:
+        head, _, tail = text.partition(after)
+        head, tail = head + after + "\n\n", tail.lstrip("\n")
+    else:
+        head, sep, tail = text.partition("\n## ")
+        head, tail = head + "\n", (sep.lstrip("\n") + tail) if sep else ""
+    target.write_text(head + "\n".join(lines) + "\n\n" + tail, encoding="utf-8")
+
+
 def put_heldout_runs(paths: Paths) -> Path | None:
     """Write the side-by-side section into the current settings' report (`eval/results.md`) before its first
     section, replacing an earlier copy; nothing if that report or the log doesn't exist yet."""
     target = paths.out / "results.md"
     if not target.is_file() or not paths.heldout_log.is_file():
         return None
-    text = target.read_text(encoding="utf-8")
-    if _SIDE_START in text:
-        head, _, rest = text.partition(_SIDE_START)
-        tail = rest.partition(_SIDE_END)[2].lstrip("\n")
-    else:
-        head, sep, tail = text.partition("\n## ")
-        head, tail = head + "\n", (sep.lstrip("\n") + tail) if sep else ""
-    target.write_text(head + "\n".join(heldout_runs(paths)) + "\n\n" + tail, encoding="utf-8")
+    _put_section(target, heldout_runs(paths), _SIDE_START, _SIDE_END)
+    return target
+
+
+# §9's coverage (owner, 20 Oct): the owner's 44 queries cover the four search types the owner uses; the rest of §9
+# comes from the generated files, the generated set and the coverage set. Rows: (label, minimum, test on a query).
+_COV_START, _COV_END = "<!-- coverage queries: written by vault eval -->", "<!-- /coverage queries -->"
+_SECTION9_MIN = {"queries": 40, "exact (exact word)": 6, "semantic (meaning)": 6, "visual (picture)": 6,
+                 "filtered (kind words)": 6, "mixed": 6, "a .docx or .pptx correct file": 6,
+                 "a tall screenshot correct file": 3, "a PDF correct file with text inside an image on a page": 3}
+
+
+def section9_counts(lib: Library, paths: Paths) -> dict[str, dict[str, int]]:
+    """§9's coverage counted per query set (owner, generated, coverage). A tall screenshot is at least twice as
+    high as it is wide; a PDF with text inside an image has a page with both native text and OCR'd text (an upper
+    bound for the owner's private books: the query may be about the native text)."""
+    ids = private_ids(paths)
+    facts: dict[str, dict] = {}
+    with lib.connect() as conn:
+        pdf_image = {fid for (fid,) in conn.execute(
+            "SELECT DISTINCT a.file_id FROM chunks a JOIN chunks b ON a.file_id = b.file_id AND a.page = b.page "
+            "WHERE a.source = 'pdf_text' AND b.source = 'ocr'")}
+        for path, fid, kind, w, h in conn.execute(
+                "SELECT p.path, f.id, f.kind, f.width, f.height FROM paths p JOIN files f ON f.id = p.file_id"):
+            facts[key_of(path, paths, ids)] = {"suffix": Path(path).suffix.lower(), "pdf_image": fid in pdf_image,
+                                               "tall": kind == "screenshot" and bool(w and h and h >= 2 * w)}
+
+    def has(q: Query, fact: Callable[[dict], bool]) -> bool:
+        return any(fact(facts.get(k, {})) for k in q.relevant)
+
+    tests: dict[str, Callable[[Query], bool]] = {
+        "queries": lambda q: True,
+        "exact (exact word)": lambda q: q.category == "exact word",
+        "semantic (meaning)": lambda q: q.category == "meaning",
+        "visual (picture)": lambda q: q.category == "picture",
+        "filtered (kind words)": lambda q: q.category == "filtered",
+        "mixed": lambda q: q.category == "mixed",
+        "inside a scan (the owner's type, not in §9)": lambda q: q.category == "inside a scan",
+        "a .docx or .pptx correct file": lambda q: has(q, lambda f: f.get("suffix") in (".docx", ".pptx")),
+        "a tall screenshot correct file": lambda q: has(q, lambda f: f.get("tall", False)),
+        "a PDF correct file with text inside an image on a page": lambda q: has(q, lambda f: f.get("pdf_image", False)),
+    }
+    sets = {name: load_queries(paths, name) for name in ("owner", "generated", "coverage")}
+    return {label: {name: sum(map(test, qs)) for name, qs in sets.items()} for label, test in tests.items()}
+
+
+def coverage_section(paths: Paths) -> list[str]:
+    """The coverage run, reported apart from the owner's queries (`eval/results.md`)."""
+    data = json.loads((paths.out / "results_coverage.json").read_text(encoding="utf-8"))
+    entry = data["splits"][COVERAGE]
+    app = entry["rows"][APP]
+    md = [_COV_START, f"## Coverage queries ({entry['rows'][APP]['overall']['n']} queries about the generated files)",
+          "",
+          f"Run {data['when']} at commit {data['commit']}, logged as `coverage`; full report in "
+          "[`results_coverage.md`](results_coverage.md). Written from the generated files' contents before any search, "
+          "for the §9 coverage the owner's 44 queries don't aim at: Word and PowerPoint files, kind words (filtered) and "
+          "mixed queries (an exact number, code or name with words about the content). Nothing was tuned on them.", ""]
+    md += _table("App, overall and by search type", {"all": app["overall"], **app["search type"]}) + [""]
+    md += _table("App, by file type of the first correct file", app["file type"]) + [""]
+    md += ["| id | search type | query | correct file type | rank |", "|---|---|---|---|---|"]
+    for q in entry.get("queries", []):
+        md.append(f"| {q['id']} | {q['search_type']} | {q['query']} | {q['file_type']} | {q['rank'] or 'not in 50'} |")
+    counts = data.get("section9")
+    if counts:
+        md += ["", "**§9 coverage, by query set** (the owner's 44 deliberately cover the owner's four search types; the "
+               "rest comes from the generated files):", "",
+               "| queries with | owner's | generated | coverage | all | §9 asks |", "|---|---|---|---|---|---|"]
+        for label, by in counts.items():
+            need = _SECTION9_MIN.get(label)
+            md.append(f"| {label} | {by['owner']} | {by['generated']} | {by['coverage']} | {sum(by.values())} | "
+                      f"{f'≥ {need}' if need else '–'} |")
+    return md + [_COV_END]
+
+
+def put_coverage(paths: Paths) -> Path | None:
+    """Write the coverage section into `eval/results.md`, after the held-out runs."""
+    target = paths.out / "results.md"
+    if not target.is_file() or not (paths.out / "results_coverage.json").is_file():
+        return None
+    _put_section(target, coverage_section(paths), _COV_START, _COV_END, after=_SIDE_END)
     return target

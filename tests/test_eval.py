@@ -183,7 +183,9 @@ def test_every_held_out_run_goes_side_by_side_in_the_current_report(tmp_path, mo
         (paths.out / f"{name}.json").write_text(json.dumps(d), encoding="utf-8")
     paths.heldout_log.write_text("".join(json.dumps({"when": d["when"], "purpose": p, "commit": d["commit"],
                                                      "settings": {}}) + "\n"
-                                         for p, d in (("final", final), ("divider-rerun", rerun))), encoding="utf-8")
+                                         for p, d in (("final", final), ("divider-rerun", rerun),
+                                                      ("coverage", {"when": "2026-10-20T08:00:00", "commit": "fff9999"}))),
+                                 encoding="utf-8")
     current = {**final, "when": "2026-10-20T09:00:00", "commit": "ccc3333",
                "splits": {s: _half(2) for s in ("tune", "heldout", "all")}}
     (paths.out / "results.json").write_text(json.dumps(current), encoding="utf-8")
@@ -197,6 +199,7 @@ def test_every_held_out_run_goes_side_by_side_in_the_current_report(tmp_path, mo
     ev.put_heldout_runs(paths)  # a later run replaces the section
     md = (paths.out / "results.md").read_text(encoding="utf-8")
     assert md.count("## Every run on the held-out half") == 1
+    assert "coverage" not in md and "| 3 | post-z" in md  # the coverage run touches no held-out query
     assert md.index("## Every run on the held-out half") < md.index("## Tuning half")
     held = md.split("**Held-out half**")[1].split("**Both halves**")[0]
     assert "| 1 | final: after fixes x, y, n and f; the divider's first bar (0.31) | 10-19 17:04, aaa1111 | 95 | 1 |" in held
@@ -217,3 +220,71 @@ def test_the_generated_set_is_imported_apart_and_never_split(tmp_path) -> None:
                                                                  ("g02", ev.GUARD, "generated")]
     ev.write_generated(rep.queries, paths)
     assert [q.id for q in ev.load_queries(paths, "generated")] == ["g01", "g02"]
+
+
+def test_the_coverage_set_is_imported_apart_and_runs_only_logged(tmp_path) -> None:
+    """Owner, 20 Oct (open item ac): more queries about the generated files, for the §9 coverage the owner's own
+    queries don't aim at. Their own split, never tuned; run only as `--queries coverage --purpose coverage`."""
+    paths = make_paths(tmp_path)
+    setup_files(paths)
+    src = write_csv(tmp_path / "queries_coverage.csv", [("garden plan", "garden plan.md", "filtered"),
+                                                         ("dice 2026", "dice.png", "mixed")])
+    rep = ev.import_queries([src], paths, sources=("coverage",))
+    assert [(q.id, q.split, q.source) for q in rep.queries] == [("c01", ev.COVERAGE, "coverage"),
+                                                                 ("c02", ev.COVERAGE, "coverage")]
+    ev.write_generated(rep.queries, paths, "coverage")
+    assert [q.category for q in ev.load_queries(paths, "coverage")] == ["filtered", "mixed"]
+    assert main(["eval", "--queries", "coverage"]) == 2  # no purpose: it could overwrite eval/results.md
+    assert main(["eval", "--purpose", "coverage"]) == 2  # the purpose belongs to the coverage set only
+
+
+def test_section9_counts_each_query_set(tmp_path, fake_embedder, fake_ocr) -> None:
+    from conftest import build_docx, build_pdf_with_image, draw_text_image, save_image
+    from vault.ingest.records import OcrLine
+
+    paths = make_paths(tmp_path)
+    setup_files(paths)
+    real = paths.corpus / "real"
+    build_docx(real / "notes.docx", ["Seminar room booked for Friday."])
+    save_image(draw_text_image((400, 1000), [(20, 900, "bottom line")], 24), real / "Screenshot (9).png")
+    build_pdf_with_image(real / "slides.pdf", "Pooling", draw_text_image((800, 400), [(20, 20, "max pooling")], 32))
+    fake_ocr.lines_for = lambda img: [OcrLine("max pooling", 0.95, 10, 10, 300, 40)]
+    lib = ev.eval_library(Config(), paths)
+    owner = [ev.Query("q01", "quokka", "meaning", ["private-01"], "tune"),
+             ev.Query("q02", "bottom line", "inside a scan", ["corpus/real/Screenshot (9).png"], "heldout")]
+    ev.write_queries(owner, paths)
+    ev.write_generated([ev.Query("g01", "seminar", "exact word", ["corpus/real/notes.docx"], ev.GUARD,
+                                 "generated")], paths)
+    ev.write_generated([ev.Query("c01", "pdf about pooling", "filtered", ["corpus/real/slides.pdf"], ev.COVERAGE,
+                                 "coverage"),
+                        ev.Query("c02", "room 4B notes", "mixed", ["corpus/real/notes.docx"], ev.COVERAGE,
+                                 "coverage")], paths, "coverage")
+    counts = ev.section9_counts(lib, paths)
+    assert counts["queries"] == {"owner": 2, "generated": 1, "coverage": 2}
+    assert counts["a .docx or .pptx correct file"] == {"owner": 0, "generated": 1, "coverage": 1}
+    assert counts["a tall screenshot correct file"] == {"owner": 1, "generated": 0, "coverage": 0}
+    assert counts["a PDF correct file with text inside an image on a page"] == {"owner": 0, "generated": 0,
+                                                                                  "coverage": 1}
+    assert counts["filtered (kind words)"]["coverage"] == 1 and counts["mixed"]["coverage"] == 1
+
+
+def test_the_coverage_run_gets_its_own_section_after_the_held_out_runs(tmp_path) -> None:
+    paths = make_paths(tmp_path)
+    paths.out.mkdir(parents=True)
+    m = {"n": 2, "r1": 1, "r1_pct": 50.0, "r5": 2, "r5_pct": 100.0, "r10": 2, "r10_pct": 100.0, "mrr": 0.75}
+    data = {"when": "2026-10-20T08:00:00", "commit": "fff9999", "splits": {ev.COVERAGE: {
+        "rows": {ev.APP: {"overall": m, "search type": {"filtered": m}, "file type": {"slides": m}}},
+        "queries": [{"id": "c01", "search_type": "filtered", "query": "slides on gradient descent",
+                     "file_type": "slides", "rank": 1}]}},
+        "section9": {"queries": {"owner": 44, "generated": 32, "coverage": 21},
+                     "mixed": {"owner": 0, "generated": 0, "coverage": 6}}}
+    (paths.out / "results_coverage.json").write_text(json.dumps(data), encoding="utf-8")
+    side = f"{ev._SIDE_START}\n## Every run on the held-out half\n\nrows\n{ev._SIDE_END}"
+    (paths.out / "results.md").write_text(f"# Eval\n\nRun.\n\n{side}\n\n## Tuning half\n\nrows\n", encoding="utf-8")
+    ev.put_coverage(paths)
+    ev.put_coverage(paths)  # a later write replaces it
+    md = (paths.out / "results.md").read_text(encoding="utf-8")
+    assert md.count("## Coverage queries (2 queries about the generated files)") == 1
+    assert md.index(ev._SIDE_END) < md.index("## Coverage queries") < md.index("## Tuning half")
+    assert "| c01 | filtered | slides on gradient descent | slides | 1 |" in md
+    assert "| queries | 44 | 32 | 21 | 97 | ≥ 40 |" in md and "| mixed | 0 | 0 | 6 | 6 | ≥ 6 |" in md
