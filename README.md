@@ -231,7 +231,7 @@ The libraries in `requirements.txt`:
 | pytest | 9.1.1 | MIT |
 
 PyMuPDF is used under the AGPL-3.0, whose section 13 asks a network service built on it to offer its users the
-source code.
+source code. Cortex Vault itself is licensed under the AGPL-3.0 to match ([LICENSE](LICENSE)).
 
 ## How it was built
 

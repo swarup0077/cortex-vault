@@ -89,7 +89,7 @@ python3 -m venv .venv
 
 ## 6. systemd service
 
-The unit ([vault.service](vault.service)) runs `app.py` as `azureuser` with `VAULT_MODE=demo`, binds `127.0.0.1:7860`, disables Gradio analytics, and keeps the model cache in `data/models/` so it survives reboots. It serves the committed `demo_index/` read-only; the server never indexes `corpus/` itself. Uploads go to per-session copies under `/tmp/vault_sessions/`, wiped after 30 idle minutes and on every start.
+The unit ([vault.service](vault.service)) runs `app.py` as `azureuser` with `VAULT_MODE=demo`, binds `127.0.0.1:7860`, disables Gradio analytics, and keeps the model cache in `data/models/` so it survives reboots. It serves the committed `demo_index/` read-only; the server never indexes `corpus/` itself. Uploads go to per-session copies under `/tmp/vault_sessions/`, wiped 60 minutes after the session's last search or upload and on every start. A restart takes about 5 s: the app gives open requests `SHUTDOWN_GRACE_S` (5 s) and then stops (open item aa). Both units are enabled, so after a reboot the site is back by itself: 20 s from `sudo systemctl reboot` to the home page on 19 Oct.
 
 ```bash
 python3 -c "import sqlite3; print(sqlite3.sqlite_version)"    # 3.44+ for FTS5 secure-delete (open item h)
