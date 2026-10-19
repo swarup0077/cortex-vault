@@ -207,7 +207,7 @@ def test_the_upload_lifetime_comes_from_the_config(tmp_path, fake_embedder) -> N
     texts = [views.footer(ctx.view_mode), layout.home_html(ctx, None),
              views.upload_outcome([], ctx.view_mode, views.Archive(), received=0)]
     for text in texts:
-        assert "45 minutes" in text and "30 minutes" not in text
+        assert "45 minutes after your last search or upload" in text and "60 minutes" not in text
     assert "Demo server · no cloud services" in views.top(ctx.view_mode)
     local = views.Mode(demo=False)
     assert "Local only · nothing leaves this device" in views.top(local)
@@ -435,14 +435,29 @@ def test_folders_panel_handlers(tmp_path, fake_embedder, make_search_corpus) -> 
     assert "6 files left" in layout.remove_folder(ctx, str(root.resolve()))
 
 
-def test_with_twenty_sessions_open_uploads_say_busy_and_search_still_works(demo_ctx) -> None:
-    """Owner's check (SPEC §8): max_sessions = 20 open, a new visitor's Add files and drop zone say the demo is busy;
-    searching the sample files works for everyone, and a visitor who has a session can still add to it."""
-    assert demo_ctx.sessions.cfg.max_sessions == 20
+def test_opening_or_searching_the_page_never_creates_a_session(demo_ctx) -> None:
+    """Owner's rule (19 Oct): only the first accepted upload creates a session, so crawlers can't use up the slots."""
+    client = TestClient(make_app(build_blocks(demo_ctx), demo_ctx.resolve, demo=True))
+    assert client.get("/?q=diffusion").status_code == 200
+    layout.home_html(demo_ctx, None)
+    layout.status_html(demo_ctx, None)
+    layout.run_search(demo_ctx, None, "denoising diffusion")
+    layout.run_search(demo_ctx, None, "denoising diffusion", "My uploads")
+    for route in ("thumb", "preview", "detail", "file"):
+        client.get(f"/{route}/1?s={uuid.uuid4()}")
+    *_, (_, _, sid) = layout.handle_upload(demo_ctx, None, [gradio_file(demo_ctx, "notes.zip", "not supported")])
+    assert sid is None and demo_ctx.sessions.sessions == {}
+
+
+def test_with_all_sessions_open_uploads_say_busy_and_search_still_works(demo_ctx) -> None:
+    """Owner's check (SPEC §8): with max_sessions (5) open, a new visitor's Add files and drop zone say the demo is
+    busy; searching the sample files works for everyone, and a visitor who has a session can still add to it."""
+    cap = demo_ctx.sessions.cfg.max_sessions
+    assert cap == 5
     _, _, first = upload(demo_ctx, {"first.txt": "Notes from the first visitor about robotics."})
-    for _ in range(19):
+    for _ in range(cap - 1):
         demo_ctx.sessions._create()
-    assert demo_ctx.sessions.full and len(demo_ctx.sessions.sessions) == 20
+    assert demo_ctx.sessions.full and len(demo_ctx.sessions.sessions) == cap
 
     home = layout.home_html(demo_ctx, None)
     assert views._e(views.DEMO_BUSY) in home and 'data-act="add"' not in home  # neither Add files nor the drop zone

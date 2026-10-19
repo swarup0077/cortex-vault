@@ -3,8 +3,10 @@
 The first upload copies the demo index (SQLite backup API) into `<root>/<uuid4>/` and indexes the files there;
 later uploads add only their new files (the indexer's fast path skips the earlier ones, and a file identical to
 one already uploaded is skipped by sha256). Limits are enforced here, not only by Gradio. Only files inside
-Gradio's upload folder are read, and each is copied into the session and the Gradio copy deleted. A session idle
-for `session_ttl_s` is wiped, and every session is wiped when the app starts.
+Gradio's upload folder are read, and each is copied into the session and the Gradio copy deleted. A session is
+created only by the first accepted upload, never by opening or searching the page, so crawlers can't use up the
+`max_sessions` slots. It is wiped `session_ttl_s` after its last search or upload (fetching a thumbnail or a
+preview doesn't count), and every session is wiped when the app starts.
 """
 
 from __future__ import annotations
@@ -113,12 +115,13 @@ class SessionManager:
             if self.root.exists():
                 shutil.rmtree(self.root, ignore_errors=True)
 
-    def get(self, session_id: str | None) -> Session | None:
+    def get(self, session_id: str | None, touch: bool = True) -> Session | None:
+        """The live session with this id. `touch`: this is a search or an upload, so its idle time restarts."""
         if not session_id or not _UUID4.match(session_id):
             return None
         with self._lock:
             s = self.sessions.get(session_id)
-            if s is not None:
+            if s is not None and touch:
                 s.last_used = self.clock()
             return s
 
@@ -129,11 +132,12 @@ class SessionManager:
             return len(self.sessions) >= self.cfg.max_sessions
 
     def library(self, session_id: str | None) -> Library | None:
-        s = self.get(session_id)
+        """For the id-only routes (thumbnails, previews, downloads): these don't keep a session alive."""
+        s = self.get(session_id, touch=False)
         return s.library if s else None
 
     def expire(self) -> list[str]:
-        """Wipe sessions idle longer than the TTL; returns their ids."""
+        """Wipe sessions whose last search or upload is older than the TTL; returns their ids."""
         now = self.clock()
         with self._lock:
             old = [s for s in self.sessions.values() if not s.busy and now - s.last_used > self.cfg.session_ttl_s]

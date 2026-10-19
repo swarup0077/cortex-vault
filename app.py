@@ -77,7 +77,9 @@ def main() -> None:
     if ctx.demo:
         start_demo(ctx)
     blocks = build_blocks(ctx)
-    app = make_app(blocks, ctx.resolve, demo=ctx.demo, max_file_size="25mb" if ctx.demo else None)
+    # Gradio refuses a larger upload before it's written; vault/session.py checks every limit again (SPEC §8)
+    app = make_app(blocks, ctx.resolve, demo=ctx.demo,
+                   max_file_size=ctx.sessions.cfg.upload_max_bytes if ctx.demo else None)
     threading.Thread(target=warm_up, args=(ctx,), daemon=True).start()
     port = int(os.environ.get("GRADIO_SERVER_PORT", "7860"))
     log.info("Cortex Vault (%s mode) on http://%s:%d", mode, HOST, port)

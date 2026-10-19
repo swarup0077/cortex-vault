@@ -134,15 +134,15 @@ class Config:
     weaker_matches: bool = True
     visual_row: int = 10
 
-    # Demo uploads (SPEC §8): enforced in vault/session.py, not only by Gradio. Final (M5): a mixed 100-file,
-    # 115 MB upload (bench/bench_upload.py) was listed in 8 s and fully read in 3.5 min on the D4as_v4 VM, inside
-    # the 5-minute target, so the spec's first values stay.
-    upload_max_files: int = 100  # per session
-    upload_max_bytes: int = 25 * 1024 * 1024  # per file
-    upload_max_total: int = 200 * 1024 * 1024  # per session
-    upload_zip_max_total: int = 100 * 1024 * 1024  # zip_max_total for uploaded .docx/.pptx (unpacked)
-    session_ttl_s: int = 30 * 60  # a session idle this long is wiped
-    max_sessions: int = 20  # sessions at once; more uploaders wait (bounds disk use at 20 × 200 MB)
+    # Demo uploads (SPEC §8): enforced in vault/session.py, not only by Gradio. M6 (§19, 19 Oct): sized for a
+    # small audience (one or two visitors at the viva): fewer sessions, each allowed more; the 200-file cap is timed
+    # on the VM with `bench/bench_upload.py --files 200`.
+    upload_max_files: int = 200  # per session, over all its uploads
+    upload_max_bytes: int = 50 * 1024 * 1024  # per file
+    upload_max_total: int = 500 * 1024 * 1024  # per session
+    upload_zip_max_total: int = 500 * 1024 * 1024  # zip_max_total for uploaded .docx/.pptx (unpacked)
+    session_ttl_s: int = 60 * 60  # wiped this long after the session's last search or upload
+    max_sessions: int = 5  # sessions at once; more uploaders are turned away (disk: 5 × 500 MB plus indexes)
 
     @property
     def db_path(self) -> Path:

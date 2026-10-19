@@ -1,5 +1,5 @@
 """Demo uploads (SPEC §8): a per-session copy of the demo index, incremental uploads, limits enforced in code,
-the 30-minute expiry, and a demo index that never changes."""
+the expiry after the last search or upload, and a demo index that never changes."""
 
 import hashlib
 from pathlib import Path
@@ -98,6 +98,7 @@ def blob(inbox: Path, name: str, nbytes: int, seed: int) -> Path:
 
 
 def test_limits_are_enforced_in_code(demo, inbox, tmp_path) -> None:
+    """Every cap counts the whole session, over all its uploads, not one upload (owner, 19 Oct)."""
     sm = manager(demo, tmp_path, upload_max_files=4, upload_max_bytes=2000, upload_max_total=3000)
     exe = inbox / "x" / "setup.exe"
     exe.parent.mkdir()
@@ -148,17 +149,44 @@ def test_gradio_copies_are_deleted_after_copying(demo, inbox, tmp_path) -> None:
 def test_idle_sessions_expire_and_start_wipes_all(demo, inbox, tmp_path) -> None:
     clock = Clock()
     sm = manager(demo, tmp_path, clock=clock)
+    ttl = sm.cfg.session_ttl_s
     s, _ = sm.add_files(None, make_files(inbox, 1), inbox)
-    clock.t += 29 * 60
-    assert sm.get(s.id) is not None  # touched: idle restarts
-    clock.t += 29 * 60
+    clock.t += ttl - 60
+    assert sm.get(s.id) is not None  # a search: the idle time restarts
+    clock.t += ttl - 60
     assert sm.expire() == []
-    clock.t += 31 * 60
+    clock.t += 120
     assert sm.expire() == [s.id] and sm.get(s.id) is None and not s.dir.exists()
     s2, _ = sm.add_files(None, make_files(inbox, 1, start=5), inbox)
     restarted = manager(demo, tmp_path)
     restarted.wipe_all()
     assert not s2.dir.exists() and restarted.get(s2.id) is None
+
+
+def test_only_a_search_or_an_upload_keeps_a_session_alive(demo, inbox, tmp_path) -> None:
+    """Owner's rule (19 Oct): uploads are deleted `session_ttl_s` after the session's last search or upload, not
+    after it started. The id-only routes (thumbnails, previews, downloads) look it up with `library()`, which
+    doesn't count."""
+    clock = Clock()
+    sm = manager(demo, tmp_path, clock=clock)
+    ttl = sm.cfg.session_ttl_s
+    s, _ = sm.add_files(None, make_files(inbox, 1), inbox)
+    clock.t += ttl - 60
+    _, more = sm.add_files(s.id, make_files(inbox, 1, start=3), inbox)  # a second upload restarts it too
+    assert more.session_id == s.id
+    clock.t += ttl - 60
+    assert sm.library(s.id) is s.library  # a thumbnail is still served…
+    clock.t += 120
+    assert sm.expire() == [s.id]  # …but didn't keep the session alive
+
+
+def test_demo_limits_for_a_small_audience() -> None:
+    """Owner's caps for the viva (19 Oct, §19): 5 sessions; per session 200 files over all its uploads, 500 MB in
+    total, 50 MB per file and 500 MB unpacked per Office file; deleted 60 minutes after the last search or upload."""
+    cfg = Config()
+    assert cfg.max_sessions == 5 and cfg.upload_max_files == 200 and cfg.session_ttl_s == 60 * 60
+    assert (cfg.upload_max_bytes, cfg.upload_max_total, cfg.upload_zip_max_total) == (50 * 2**20, 500 * 2**20,
+                                                                                       500 * 2**20)
 
 
 def test_session_ids_are_uuid4_and_unknown_ids_are_refused(demo, inbox, tmp_path) -> None:

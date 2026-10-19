@@ -56,7 +56,8 @@ def file_id(raw: str) -> int:
     return int(raw)
 
 
-def make_app(blocks: gr.Blocks, resolve: Resolve, *, demo: bool = True, max_file_size: str | None = None) -> FastAPI:
+def make_app(blocks: gr.Blocks, resolve: Resolve, *, demo: bool = True,
+             max_file_size: str | int | None = None) -> FastAPI:
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
     def library(session: str | None) -> Library:

@@ -60,8 +60,9 @@ class UiContext:
     view_mode: views.Mode = field(init=False)
 
     def __post_init__(self) -> None:
-        ttl_s = self.sessions.cfg.session_ttl_s if self.sessions else self.library.cfg.session_ttl_s
-        self.view_mode = views.Mode(demo=self.demo, ttl_min=max(1, round(ttl_s / 60)))
+        cfg = self.sessions.cfg if self.sessions else self.library.cfg
+        self.view_mode = views.Mode(demo=self.demo, ttl_min=max(1, round(cfg.session_ttl_s / 60)),
+                                    max_files=cfg.upload_max_files)
 
     @property
     def demo(self) -> bool:

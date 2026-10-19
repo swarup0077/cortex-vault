@@ -51,7 +51,8 @@ class Mode:
     """What differs between the demo server and your own computer."""
 
     demo: bool
-    ttl_min: int = 30  # demo: minutes until an idle session's uploads are deleted (`Config.session_ttl_s`)
+    ttl_min: int = 60  # demo: uploads are deleted this long after the last search or upload (`session_ttl_s`)
+    max_files: int = 200  # demo: files per session, over all its uploads (`Config.upload_max_files`)
     where: str = field(init=False)  # "on this server" | "on this computer"
 
     def __post_init__(self) -> None:
@@ -68,7 +69,7 @@ class Mode:
 
     @property
     def deleted(self) -> str:
-        return f"deleted after {self.ttl_min} minute{'s' if self.ttl_min != 1 else ''}"
+        return f"deleted {self.ttl_min} minute{'s' if self.ttl_min != 1 else ''} after your last search or upload"
 
     @property
     def footer(self) -> str:
@@ -455,7 +456,7 @@ def home(mode: Mode, archive: Archive, *, recent: Sequence[Recent], folders: Seq
     if mode.demo:
         drop = ('<button type="button" class="cv-drop" data-act="add">' + icon("upload") +
                 'Drop your own files here to search them too <span class="cv-drop__sep">·</span>'
-                '<span class="cv-drop__hint">PDF, Office, images, text · up to 100</span></button>')
+                f'<span class="cv-drop__hint">PDF, Office, images, text · up to {mode.max_files}</span></button>')
         if archive.uploads_full:
             drop = (f'<div class="cv-drop cv-drop--busy" role="status">{_e(DEMO_BUSY)} '
                     '<span class="cv-drop__hint">· searching the sample files works as usual</span></div>')
