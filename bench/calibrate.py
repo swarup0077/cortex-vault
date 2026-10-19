@@ -1,6 +1,7 @@
 """Calibrate the provisional search thresholds on generated data (CLAUDE.md, SPEC §9 tuning rule).
 
     python bench/calibrate.py dense     # dense_min_cosine: bge cosines of matching vs unrelated pairs
+    python bench/calibrate.py tiny      # dense_min_chars: where very short chunks land for queries they do not answer
     python bench/calibrate.py clip      # CLIP's top hit (z and cosine): drawn scenes vs queries no picture answers
     python bench/calibrate.py rule      # clip_strong_z / clip_strong_cosine end to end: scene and paraphrase recall
     python bench/calibrate.py kind      # clip_screenshot_margin: generated screen captures vs photo-like pictures
@@ -193,6 +194,116 @@ def dense() -> dict:
                               for f in (0.40, 0.42, 0.45, 0.48, 0.50)},
     }
     return {"summary": summary, "rows": rows}
+
+
+# ---------------------------------------------------------------- tiny chunks (open item x)
+
+# What OCR leaves on text-free photos and UI icons (one- and two-character lines, stray ideographs, status-bar bits)
+JUNK = ["0", "M", "8", "x", "|", "日", "品", "0 田", "白 这", "ll", "I1", "oO", "Ok", "5G", "Wi", "@ #", "1 2", "87%",
+        "8:12", "TRU", "NOTE", "x 2", "ii I", "B2", "-_-", "OO 0", "m n", "ON"]
+# Short chunks that do mean something: slide titles, notice headings, receipt lines
+SHORT = ["Summary", "Questions", "Agenda", "Welcome", "Pooling", "Thank you", "Lab 3", "Q-learning", "Office hours",
+         "Hostel notice", "LIBRARY NOTICE", "Payment successful", "Low Disk Space", "404 Not Found", "Masala dosa",
+         "TOTAL Rs 456.75", "Convolution", "Exit", "Rainbow", "Reading list"]
+
+
+def _chars(text: str) -> int:
+    return sum(not c.isspace() for c in text)
+
+
+TINY_LENGTHS = range(1, 21)
+TINY_PER_LENGTH = 12  # junk strings and real fragments per length
+
+
+def _tiny_samples() -> tuple[list[str], list[str]]:
+    """For every length 1-20 (non-space characters): OCR-like junk drawn from digits, letters, punctuation and a
+    few ideographs, and real fragments: the start of a calibration document cut to that length."""
+    import random
+
+    rnd = random.Random(7)
+    alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz|-_:%@#.,日品白这田"
+    texts, kinds = list(JUNK) + list(SHORT), ["junk"] * len(JUNK) + ["short"] * len(SHORT)
+    starts = [t for doc in DOCS.values() for t in doc.split(". ") if _chars(t) >= 30]
+    for n in TINY_LENGTHS:
+        for _ in range(TINY_PER_LENGTH):
+            words, s = [], ""
+            while _chars(s) < n:  # junk: short "words" of random characters
+                words.append("".join(rnd.choice(alphabet) for _ in range(rnd.randint(1, 4))))
+                s = " ".join(words)
+            texts.append(s if _chars(s) == n else s.rstrip()[: len(s) - (_chars(s) - n)])
+            kinds.append("junk")
+            src, cut = rnd.choice(starts), ""
+            for ch in src[rnd.randint(0, 10):] if len(src) > 40 else src:  # real: a fragment of a sentence
+                if _chars(cut) == n and not ch.isspace():
+                    break
+                cut += ch
+            texts.append(cut.strip())
+            kinds.append("short")
+    return texts, kinds
+
+
+def tiny() -> dict:
+    """Where very short chunks land in dense search for queries they don't answer, by their non-space characters.
+    A chunk with almost no text embeds near the middle of the space, so it sits high for many queries."""
+    cfg = Config()
+    emb = models.text_embedder(cfg)
+    names = list(DOCS)
+    extra, extra_kinds = _tiny_samples()
+    texts = [DOCS[n] for n in names] + extra
+    kinds = ["doc"] * len(names) + extra_kinds
+    D = emb.embed_documents(texts)
+    groups = {"text": [q for q, _, _ in PAIRS], "visual": VISUAL}  # visual: no text chunk answers them
+    rows = [{"text": t, "kind": k, "chars": _chars(t)} for t, k in zip(texts, kinds)]
+    n_docs = len(names)
+    for g, queries in groups.items():
+        top5, floor = np.zeros(len(texts)), np.zeros(len(texts))
+        for q in queries:
+            s = D @ emb.embed_query(q)
+            docs_s = s[:n_docs]
+            # Each string on its own among the real chunks (a doc among the other docs): would it reach the top 5?
+            for i, score in enumerate(s):
+                others = np.delete(docs_s, i) if i < n_docs else docs_s
+                top5[i] += int(np.sum(others > score)) < 5
+            floor += s >= cfg.dense_min_cosine
+        for r, a, b in zip(rows, top5, floor):
+            r[f"{g}_top5"] = round(float(a / len(queries)), 3)
+            r[f"{g}_above_floor"] = round(float(b / len(queries)), 3)
+
+    def mean(sel: list[dict], key: str) -> float:
+        return round(float(np.mean([r[key] for r in sel])), 3)
+
+    for r in rows:
+        r["longest_word"] = _longest_word(r["text"])
+    docs = [r for r in rows if r["kind"] == "doc"]
+    keys = [f"{g}_{m}" for g in groups for m in ("top5", "above_floor")]
+    by_chars = {}
+    for n in sorted({r["chars"] for r in rows if r["kind"] != "doc"}):
+        sel = [r for r in rows if r["kind"] != "doc" and r["chars"] == n]
+        by_chars[n] = {"strings": len(sel), **{k: mean(sel, k) for k in keys}}
+    by_word = {}
+    for n in sorted({min(r["longest_word"], 6) for r in rows if r["kind"] != "doc"}):
+        sel = [r for r in rows if r["kind"] != "doc" and min(r["longest_word"], 6) == n]
+        by_word["6+" if n == 6 else str(n)] = {"strings": len(sel), "junk": sum(r["kind"] == "junk" for r in sel),
+                                               **{k: mean(sel, k) for k in keys}}
+    # The rule: a chunk with no word (run of letters or digits) at least `min_word` long gets no vector. What it
+    # removes from dense: junk strings, and real fragments of 3+ characters (those would be a loss).
+    rule = {}
+    for w in (2, 3, 4):
+        junk = [r for r in rows if r["kind"] == "junk"]
+        real = [r for r in rows if r["kind"] == "short" and r["chars"] >= 3]
+        rule[str(w)] = {"junk_removed": round(float(np.mean([r["longest_word"] < w for r in junk])), 3),
+                        "real_fragments_removed": round(float(np.mean([r["longest_word"] < w for r in real])), 3)}
+    summary = {"model": emb.name, "queries": {g: len(q) for g, q in groups.items()}, "doc_chunks": len(docs),
+               "docs": {k: mean(docs, k) for k in keys}, "by_non_space_chars": by_chars,
+               "by_longest_word": by_word, "rule_min_word": rule}
+    return {"summary": summary, "rows": rows}
+
+
+def _longest_word(text: str) -> int:
+    """Characters in the longest run of letters or digits (an ideograph counts as one)."""
+    import re
+
+    return max((len(t) for t in re.findall(r"[^\W_]+", text)), default=0)
 
 
 # ---------------------------------------------------------------- clip: strong outliers
@@ -621,7 +732,7 @@ def ocr_stop() -> dict:
 
 
 def main(argv: list[str]) -> None:
-    jobs = {"dense": dense, "clip": clip, "rule": rule, "kind": kind, "ocr-stop": ocr_stop}
+    jobs = {"dense": dense, "tiny": tiny, "clip": clip, "rule": rule, "kind": kind, "ocr-stop": ocr_stop}
     if not argv or argv[0] not in jobs:
         sys.exit(f"usage: python bench/calibrate.py {{{'|'.join(jobs)}}}")
     out = jobs[argv[0]]()

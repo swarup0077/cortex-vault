@@ -32,6 +32,7 @@ from vault.config import REPO_ROOT, Config
 from vault.demo import CORPUS_DIR
 from vault.library import TEXT_SUFFIXES, Library
 from vault.search.engine import SearchResponse, SearchResult, search
+from vault.search.retrievers import load_text_index
 
 SEED = 20261019
 SOURCES = ("owner", "owner-extra")  # queries.csv, then queries_extra.csv: their ids start with q and x
@@ -368,6 +369,8 @@ def evaluate(lib: Library, queries: Sequence[Query], overrides: dict | None = No
     out: dict[str, dict[str, Outcome]] = {}
     with lib.connect() as conn:
         text_index, image_index = lib.vectors(conn)
+        if base.dense_min_word != lib.cfg.dense_min_word:  # a run that changes which chunks dense search sees
+            text_index = load_text_index(conn, text_index.matrix.shape[1], base.dense_min_word)
         for row in [APP, *[r for r in rows if r != APP]]:
             cfg = configure(base, ABLATIONS[row])
             out[row] = {q.id: outcome(search(conn, q.text, cfg, text_index=text_index, image_index=image_index),

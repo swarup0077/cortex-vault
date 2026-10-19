@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from dataclasses import dataclass
 
@@ -84,9 +85,23 @@ def bm25(conn: sqlite3.Connection, pq: ParsedQuery, k: int, *, all_terms: bool =
     return [Hit(r[0], r[1], -r[2]) for r in rows]  # FTS5 bm25 is lower-is-better
 
 
-def load_text_index(conn: sqlite3.Connection, dim: int) -> VectorIndex:
+_WORD = re.compile(r"[^\W_]+")
+
+
+def longest_word(text: str | None) -> int:
+    """Characters in the longest run of letters or digits (an ideograph counts as one)."""
+    return max((len(w) for w in _WORD.findall(text or "")), default=0)
+
+
+def load_text_index(conn: sqlite3.Connection, dim: int, min_word: int = 0) -> VectorIndex:
+    """Chunk vectors for dense search. A chunk with no word of `min_word` characters (OCR junk such as "0 田")
+    is left out: it carries no meaning, yet sits close to many short queries (open item x). It stays in BM25."""
+    where = ""
+    if min_word > 0:
+        conn.create_function("cv_longest_word", 1, longest_word, deterministic=True)
+        where = f" WHERE cv_longest_word(c.text) >= {int(min_word)}"
     return VectorIndex.from_query(
-        conn, "SELECT v.chunk_id, v.vec, c.file_id FROM text_vectors v JOIN chunks c ON c.id = v.chunk_id", dim
+        conn, f"SELECT v.chunk_id, v.vec, c.file_id FROM text_vectors v JOIN chunks c ON c.id = v.chunk_id{where}", dim
     )
 
 

@@ -93,6 +93,11 @@ class Config:
     # hard paraphrases, scored 0.539-0.832; the floor sits 2 std of the hard-pair scores (0.113) below the lowest,
     # rounded down. A floor too high costs paraphrase recall, so it errs low: it cuts 55% of unrelated pairs.
     dense_min_cosine: float = 0.42
+    # A chunk whose longest word (run of letters or digits) is shorter than this gets no place in dense search; it
+    # stays in BM25 (open item x). Provisional (bench/calibrate.py tiny): on generated strings, chunks whose longest
+    # word has 1-2 characters reached the dense top 5 among real chunks for 79-86% of visual queries, against 21%
+    # for a real chunk; 3 removes no real fragment that has a 3-letter word, and 3.4% of fragments of 3+ characters.
+    dense_min_word: int = 3
     rrf_k: int = 60
     # RRF weight per ranked list; 0 leaves a list out (the ablations do). "all_terms" is BM25 restricted to chunks
     # holding every content term (SPEC §7.2, §19)

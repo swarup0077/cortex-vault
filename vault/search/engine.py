@@ -230,7 +230,7 @@ def search(
     all_hits = retrievers.bm25(conn, pq, cfg.top_k, all_terms=True)
     sw.lap("all_terms")
     if text_index is None:
-        text_index = retrievers.load_text_index(conn, embedder.dim)
+        text_index = retrievers.load_text_index(conn, embedder.dim, cfg.dense_min_word)
         sw.lap("load_vectors")
     # The floor applies after top-k, so filtering here is the same as in the retriever; the rest feeds the tail.
     dense_all = retrievers.dense(conn, pq, cfg.top_k, embedder, text_index, allowed)
