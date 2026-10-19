@@ -14,6 +14,7 @@ goes to `bench/generated/`, which is gitignored; delete it when you're done.
 | `calibrate.py` | Calibrates the provisional search thresholds on generated data (CLAUDE.md, SPEC §9 tuning rule) |
 | `scenes.py` | Drawn scenes, text-free photos and screen captures for the CLIP calibrations |
 | `kind_real.py` | Item w: the screenshot-vs-photo CLIP rule on the real files (labels from names and camera EXIF), measurement only; writes `eval/results_kind.*` |
+| `bench_scale.py` | Scale test (item u): ~1,000 files in `bench_upload.py`'s mix indexed into a scratch index; indexing time per stage, files/sec, disk, peak RAM, search latency |
 | `tune.py` | M6 tuning (SPEC §9, §19): each provisional value on a small grid, then the divider's two candidate bars, on the eval's tuning half with the generated set as a guardrail; never reads the held-out half |
 
 The OCR models ship inside the `rapidocr` wheel. Only the ingest run needs bge-small, which downloads once
