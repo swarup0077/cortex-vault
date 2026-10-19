@@ -6,6 +6,7 @@
     python bench/calibrate.py toc       # toc_min_entries: dot-leader entries on contents pages vs other pages
     python bench/calibrate.py clip      # CLIP's top hit (z and cosine): drawn scenes vs queries no picture answers
     python bench/calibrate.py rule      # clip_strong_z / clip_strong_cosine end to end: scene and paraphrase recall
+    python bench/calibrate.py gap       # clip_strong_gap: CLIP's lead over its runner-up, scenes vs no-match queries
     python bench/calibrate.py kind      # clip_screenshot_margin: generated screen captures vs photo-like pictures
     python bench/calibrate.py ocr-stop  # pdf_ocr_stop_*: OCR readability of printed vs handwriting-like scanned pages
 
@@ -571,6 +572,104 @@ def rule() -> dict:
     return {"summary": summary, "rows": rows}
 
 
+# ---------------------------------------------------------------- gap: the visual-query rule's outlier test (item z)
+
+GAPS = [0.0, 0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04]
+
+
+def gap() -> dict:
+    """Open item z: CLIP's z-score of its top hit grows with the number of images (the pool's mean and spread move
+    as unrelated images are added), so a fixed z bar fires on more text queries in a bigger library. The cosine lead
+    of the top hit over the runner-up doesn't depend on the pool. For 36, 200 and 700 images (the 12 drawn scenes
+    plus distractors): each scene query whose top hit is its scene should fire; every query no picture answers (text
+    queries, the dense calibration's paraphrases, visual queries with no matching picture) and a scene query whose
+    top hit is another picture should not. Scored with today's z bar, at each gap. Then the gap's known limit: a
+    scene's lead over a near-copy of itself (`_near_copies`)."""
+    import scenes
+    from vault.ingest.extract_image import clip_input
+
+    cfg = Config()
+    vision, text = models.clip_vision(cfg), models.clip_text(cfg)
+    no_match = TEXT_QUERIES + VISUAL_MISSES + [q for q, _, _ in PAIRS]
+    Q = {q: text.embed_text(q) for q in [q for _, _, q in scenes.SCENES] + no_match}
+    rows, summary = [], {"z_bar": cfg.clip_strong_z, "queries": {"scenes": len(scenes.SCENES), "no_match": len(no_match)}}
+    for n_extra in (24, 188, 688):
+        names, images = _clip_collection(n_extra)
+        V = vision.embed_images([clip_input(im, cfg.clip_side) for im in images])
+        cases = [(q, "scene", name) for name, _, q in scenes.SCENES] + [(q, "no-match", None) for q in no_match]
+        for q, kind, target in cases:
+            s = V @ Q[q]
+            o = np.argsort(-s)
+            z = float((s[o[0]] - s.mean()) / s.std())
+            should = kind == "scene" and names[o[0]] == target
+            rows.append({"n": len(names), "query": q, "kind": kind, "top": names[o[0]], "should_fire": should,
+                         "z": round(z, 3), "lead": round(float(s[o[0]] - s[o[1]]), 4)})
+        n_rows = [r for r in rows if r["n"] == len(names)]
+        good = [r for r in n_rows if r["should_fire"]]
+        bad = [r for r in n_rows if not r["should_fire"]]
+        table = {}
+        for g in GAPS:
+            fires = lambda r: r["z"] >= cfg.clip_strong_z and r["lead"] >= g  # noqa: E731
+            table[str(g)] = {"fires_on_scenes": f"{sum(map(fires, good))}/{len(good)}",
+                             "fires_on_others": f"{sum(map(fires, bad))}/{len(bad)}"}
+        summary[f"{len(names)} images"] = {
+            "scene_top_is_scene": f"{len(good)}/{len(scenes.SCENES)}",
+            "lead_should_fire": stats([r["lead"] for r in good]) if good else {"n": 0},
+            "lead_should_not_fire_with_z_over_bar": stats(over) if (over := [
+                r["lead"] for r in bad if r["z"] >= cfg.clip_strong_z]) else {"n": 0},
+            "z_over_bar_should_not_fire": f"{sum(r['z'] >= cfg.clip_strong_z for r in bad)}/{len(bad)}",
+            "by_gap": table,
+        }
+    summary["near_copies"], copy_rows = _near_copies(vision, text, Q, cfg)
+    return {"summary": summary, "rows": rows + copy_rows}
+
+
+def _forwarded(im):
+    """A chat app's forward: 0.75x, JPEG quality 70 (new bytes, so the index stores it as a separate file)."""
+    import io
+
+    from PIL import Image
+
+    im = im.convert("RGB").resize((int(im.width * 0.75), int(im.height * 0.75)))
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=70)
+    return Image.open(io.BytesIO(buf.getvalue())).convert("RGB")
+
+
+def _reshot(im):
+    """A second shot of the same scene: a 6% crop, 12% brighter."""
+    from PIL import ImageEnhance
+
+    w, h = im.size
+    im = im.convert("RGB").crop((int(w * 0.03), int(h * 0.03), int(w * 0.97), int(h * 0.97)))
+    return ImageEnhance.Brightness(im).enhance(1.12)
+
+
+def _near_copies(vision, text, Q: dict, cfg: Config) -> tuple[dict, list[dict]]:
+    """The gap's known limit: a scene's lead over its own near-copy (a forwarded copy, a second shot), and whether an
+    image-to-image cosine could tell near-copies from distinct look-alikes, so the lead could skip copies."""
+    import scenes
+    from vault.ingest.extract_image import clip_input
+
+    rows, leads, copy_cos = [], [], []
+    for name, draw, q in scenes.SCENES:
+        im = draw()
+        E = vision.embed_images([clip_input(x, cfg.clip_side) for x in (im, _forwarded(im), _reshot(im))])
+        s = E @ Q[q]
+        for i, how in ((1, "forwarded"), (2, "reshot")):
+            leads.append(float(s[0] - s[i]))
+            copy_cos.append(float(E[0] @ E[i]))
+            rows.append({"query": q, "kind": f"near-copy:{how}", "lead": round(leads[-1], 4),
+                         "image_cosine": round(copy_cos[-1], 3)})
+    lookalike = {}
+    for make in (scenes.phone_chat, scenes.desktop_screenshot, scenes.code_editor, scenes.noise_photo):
+        E = vision.embed_images([clip_input(make(1000 + i), cfg.clip_side) for i in range(40)])
+        pairs = (E @ E.T)[np.triu_indices(len(E), 1)]
+        lookalike[make.__name__] = {"max": round(float(pairs.max()), 3), "p50": round(float(np.median(pairs)), 3)}
+    return {"lead_over_copy": stats(leads), "copy_image_cosine": stats(copy_cos),
+            "distinct_lookalike_image_cosine": lookalike}, rows
+
+
 # ---------------------------------------------------------------- kind: screenshot vs photo by CLIP zero-shot
 
 # Sizes a forwarded file arrives at (WhatsApp resizes to 1600 px on the long side), plus camera and screen sizes.
@@ -829,7 +928,7 @@ def ocr_stop() -> dict:
 
 
 def main(argv: list[str]) -> None:
-    jobs = {"dense": dense, "tiny": tiny, "prose": prose, "toc": toc, "clip": clip, "rule": rule, "kind": kind, "ocr-stop": ocr_stop}
+    jobs = {"dense": dense, "tiny": tiny, "prose": prose, "toc": toc, "clip": clip, "rule": rule, "gap": gap, "kind": kind, "ocr-stop": ocr_stop}
     if not argv or argv[0] not in jobs:
         sys.exit(f"usage: python bench/calibrate.py {{{'|'.join(jobs)}}}")
     out = jobs[argv[0]]()
