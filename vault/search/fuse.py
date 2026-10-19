@@ -18,11 +18,15 @@ class Fused:
 
 
 def collapse(hits: Sequence[Hit]) -> list[tuple[int, int]]:
-    """Keep each file's best-ranked chunk, in order: [(file_id, chunk_id)]. Position + 1 is the file's rank."""
-    seen: dict[int, int] = {}
-    for h in hits:
-        seen.setdefault(h.file_id, h.chunk_id)
-    return list(seen.items())
+    """Keep each file's best-ranked chunk, in order: [(file_id, chunk_id)]. Position + 1 is the file's rank.
+    A contents page stands for its file only when none of the file's other chunks is in the list (open item n)."""
+    first: dict[int, tuple[int, int]] = {}  # file → (position in the list, chunk)
+    toc_only: dict[int, tuple[int, int]] = {}
+    for i, h in enumerate(hits):
+        (toc_only if getattr(h, "toc", False) else first).setdefault(h.file_id, (i, h.chunk_id))
+    for file_id, at in toc_only.items():
+        first.setdefault(file_id, at)
+    return [(file_id, chunk) for file_id, (_, chunk) in sorted(first.items(), key=lambda kv: kv[1][0])]
 
 
 def rrf(

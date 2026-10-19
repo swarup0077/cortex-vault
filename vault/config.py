@@ -98,6 +98,11 @@ class Config:
     # word has 1-2 characters reached the dense top 5 among real chunks for 79-86% of visual queries, against 21%
     # for a real chunk; 3 removes no real fragment that has a 3-letter word, and 3.4% of fragments of 3+ characters.
     dense_min_word: int = 3
+    # A chunk with this many dot-leader entries ("Bayes' theorem ........ 17") is a contents page (open item n): left
+    # out of dense, standing for its file in BM25 only when nothing else of it is there. Provisional (bench/calibrate.py
+    # toc): 30 generated contents pages (3-14 entries, native and read by OCR) against 36 other pages with dots and
+    # numbers (receipts, exam papers, ellipses, prose): no other page had more than 2; at 4, 26 of 30 are found.
+    toc_min_entries: int = 4
     rrf_k: int = 60
     # RRF weight per ranked list; 0 leaves a list out (the ablations do). "all_terms" is BM25 restricted to chunks
     # holding every content term (SPEC §7.2, §19)

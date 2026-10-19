@@ -3,6 +3,7 @@
     python bench/calibrate.py dense     # dense_min_cosine: bge cosines of matching vs unrelated pairs
     python bench/calibrate.py tiny      # dense_min_word: where very short chunks land for queries they do not answer
     python bench/calibrate.py prose     # snippet_prose_words: where a meaning-only snippet starts on OCR chunks
+    python bench/calibrate.py toc       # toc_min_entries: dot-leader entries on contents pages vs other pages
     python bench/calibrate.py clip      # CLIP's top hit (z and cosine): drawn scenes vs queries no picture answers
     python bench/calibrate.py rule      # clip_strong_z / clip_strong_cosine end to end: scene and paraphrase recall
     python bench/calibrate.py kind      # clip_screenshot_margin: generated screen captures vs photo-like pictures
@@ -297,6 +298,79 @@ def tiny() -> dict:
     summary = {"model": emb.name, "queries": {g: len(q) for g, q in groups.items()}, "doc_chunks": len(docs),
                "docs": {k: mean(docs, k) for k in keys}, "by_non_space_chars": by_chars,
                "by_longest_word": by_word, "rule_min_word": rule}
+    return {"summary": summary, "rows": rows}
+
+
+def _contents_text(seed: int, entries: int, leader: str) -> str:
+    from bench_ocr import sentence
+    import random
+
+    rnd = random.Random(seed)
+    rows = [f"{i + 1}  {sentence(rnd, rnd.randint(2, 4))} {leader * rnd.randint(8, 20)} {6 * i + 1}"
+            for i in range(entries)]
+    return "\n".join(["Contents", *rows])
+
+
+def _ocr_text(img) -> str:
+    """What OCR reads off a drawn page, lines joined as a chunk joins them."""
+    lines = models.ocr_engine(Config()).read(np.asarray(img.convert("RGB")))
+    return " ".join(ln.text for ln in sorted(lines, key=lambda ln: (round(ln.y0 / 20), ln.x0)) if ln.conf >= 0.5)
+
+
+def _drawn(text: str, seed: int):
+    from PIL import ImageDraw
+
+    from bench_ocr import font
+
+    img = _printed(seed, lines=0)
+    d = ImageDraw.Draw(img)
+    for i, line in enumerate(text.split("\n")):
+        d.text((110, 130 + 62 * i), line, fill=(25, 25, 25), font=font(30 if i else 44))
+    return img
+
+
+def toc() -> dict:
+    """toc_min_entries: dot-leader entries ("Title ........ 17") on generated contents pages, as native text and as
+    real OCR reads them, against pages that also have dots and numbers: receipts, exam papers, prose with ellipses."""
+    import random
+
+    from bench_ocr import sentence
+    from vault.search.toc import leader_entries
+
+    rnd = random.Random(11)
+    pages: list[tuple[str, str, int, str]] = []  # (kind, form, entries drawn, text)
+    for i, n in enumerate([3, 4, 5, 6, 7, 8, 10, 12, 14] * 2):
+        leader = [".", ". ", "…"][i % 3]
+        text = _contents_text(100 + i, n, leader)
+        pages.append(("contents", "native", n, text))
+        if leader != "…":  # the font has no ellipsis glyph
+            pages.append(("contents", "ocr", n, _ocr_text(_drawn(text, 200 + i))))
+    others = []
+    for i in range(6):
+        others.append(("prose", " ".join(sentence(rnd, rnd.randint(6, 12)) + "." for _ in range(14))))
+    for i in range(4):
+        items = [f"{sentence(rnd, 2)} {'.' * rnd.randint(6, 14)} {rnd.randint(40, 400)}.00" for _ in range(rnd.randint(3, 7))]
+        others.append(("receipt", "\n".join(["Receipt", *items, f"TOTAL ........ {rnd.randint(500, 900)}.00"])))
+    for i in range(4):
+        qs = [f"Q{j + 1}. {sentence(rnd, 8)} ......... ({rnd.choice([2, 5, 10])} marks)" for j in range(rnd.randint(4, 8))]
+        others.append(("exam", "\n".join(["Answer all questions", *qs])))
+    for i in range(4):
+        others.append(("ellipses", " ".join(f"{sentence(rnd, 7)}... and {rnd.randint(2, 9)} more" for _ in range(6))))
+    for kind, text in list(others):
+        pages.append((kind, "native", 0, text))
+        pages.append((kind, "ocr", 0, _ocr_text(_drawn(text, rnd.randint(300, 900)))))
+    rows = [{"kind": k, "form": f, "entries_drawn": n, "counted": leader_entries(t)} for k, f, n, t in pages]
+    contents = [r for r in rows if r["kind"] == "contents"]
+    rest = [r for r in rows if r["kind"] != "contents"]
+    worst_other = max(r["counted"] for r in rest)
+    by_threshold = {t: {"contents_flagged": sum(r["counted"] >= t for r in contents),
+                        "others_flagged": sum(r["counted"] >= t for r in rest)} for t in range(2, 9)}
+    summary = {"contents_pages": len(contents), "other_pages": len(rest),
+               "most_entries_on_another_page": worst_other,
+               "others_by_kind": {k: max(r["counted"] for r in rest if r["kind"] == k)
+                                  for k in sorted({r["kind"] for r in rest})},
+               "contents_counted_vs_drawn": [(r["form"], r["entries_drawn"], r["counted"]) for r in contents],
+               "by_threshold": by_threshold}
     return {"summary": summary, "rows": rows}
 
 
@@ -755,7 +829,7 @@ def ocr_stop() -> dict:
 
 
 def main(argv: list[str]) -> None:
-    jobs = {"dense": dense, "tiny": tiny, "prose": prose, "clip": clip, "rule": rule, "kind": kind, "ocr-stop": ocr_stop}
+    jobs = {"dense": dense, "tiny": tiny, "prose": prose, "toc": toc, "clip": clip, "rule": rule, "kind": kind, "ocr-stop": ocr_stop}
     if not argv or argv[0] not in jobs:
         sys.exit(f"usage: python bench/calibrate.py {{{'|'.join(jobs)}}}")
     out = jobs[argv[0]]()

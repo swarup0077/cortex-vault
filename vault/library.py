@@ -115,7 +115,8 @@ class Library:
             conn.close()
 
     def _load_vectors(self, conn: sqlite3.Connection) -> tuple[VectorIndex, VectorIndex]:
-        return (retrievers.load_text_index(conn, models.text_embedder(self.cfg).dim, self.cfg.dense_min_word),
+        return (retrievers.load_text_index(conn, models.text_embedder(self.cfg).dim, self.cfg.dense_min_word,
+                                           self.cfg.toc_min_entries),
                 retrievers.load_image_index(conn))
 
     def vectors(self, conn: sqlite3.Connection) -> tuple[VectorIndex, VectorIndex]:

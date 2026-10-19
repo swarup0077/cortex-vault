@@ -17,10 +17,11 @@ from vault.search import retrievers
 from vault.search.fuse import Fused, collapse, rrf
 from vault.search.gate import Gated, gate
 from vault.search.parse import ParsedQuery, parse
-from vault.search.snippet import make_snippet, prose_start
+from vault.search.retrievers import Hit
+from vault.search.snippet import make_snippet, prose_start, term_pattern
+from vault.search.toc import is_toc, strip_leaders
 from vault.vectors import VectorIndex
 
-SNIPPET_ORDER = ("all_terms", "bm25", "dense")
 
 
 @dataclass
@@ -135,7 +136,8 @@ def _result(file: sqlite3.Row, paths: list[str], fused: Fused | None, chunk: sql
         effective_date=file["effective_date"],
         page=chunk["page"] if chunk else None,
         chunk_id=chunk["id"] if chunk else None,
-        snippet_html=make_snippet(chunk["text"], query, cfg.snippet_chars, cfg.snippet_prose_words) if chunk else "",
+        snippet_html=make_snippet(_shown(chunk["text"], cfg), query, cfg.snippet_chars, cfg.snippet_prose_words)
+        if chunk else "",
         ranks=ranks,
         rrf_score=fused.score if fused else 0.0,
         badges=badges,
@@ -153,31 +155,57 @@ def _result(file: sqlite3.Row, paths: list[str], fused: Fused | None, chunk: sql
     )
 
 
-def _snippet_chunks(conn: sqlite3.Connection, fused: list[Fused], dense_by_file: dict[int, list[int]],
-                    cfg: Config) -> dict[int, int | None]:
-    """Each file's snippet chunk: the one holding every term if any, else BM25's best for the file, else dense's.
-    A meaning-only match takes the file's best dense chunk that reads as prose, so a status bar or title bar
-    chunk ("08:12 87% Browser") doesn't stand for a page of text (open item y)."""
-    best = {f.file_id: next((f.chunks[n] for n in SNIPPET_ORDER if n in f.chunks), None) for f in fused}
-    by_dense = {f.file_id: dense_by_file.get(f.file_id, []) for f in fused
-                if next((n for n in SNIPPET_ORDER if n in f.chunks), None) == "dense"}
-    candidates = [c for cs in by_dense.values() for c in cs]
-    if not candidates:
-        return best
-    text = dict(conn.execute(f"SELECT id, text FROM chunks WHERE id IN ({','.join('?' * len(candidates))})",
-                             candidates))
-    for fid, chunk_ids in by_dense.items():
-        prose = next((c for c in chunk_ids if prose_start(text.get(c, ""), cfg.snippet_prose_words) is not None), None)
-        if prose is not None:
-            best[fid] = prose
+def _snippet_chunks(conn: sqlite3.Connection, fused: list[Fused], chunk_lists: dict[str, Sequence[Hit]],
+                    cfg: Config, query: str) -> dict[int, int | None]:
+    """Each file's snippet chunk, which is also the page or passage shown. Its keyword hits (the chunks holding
+    every term, if the file has any) are compared by how much of the query they hold: distinct terms, then how often
+    they occur, then keyword rank. So the page covering a topic beats a short page that only names it, as a contents
+    page, an agenda slide or an overview does; BM25 alone favours the short one (open item n). A contents page shows
+    only when the file has nothing else there. A meaning-only match takes its best dense chunk that reads as prose,
+    not a status or title bar (open item y)."""
+    of_file: dict[str, dict[int, list[int]]] = {name: {} for name in chunk_lists}
+    for name, hits in chunk_lists.items():
+        for h in hits:
+            of_file[name].setdefault(h.file_id, []).append(h.chunk_id)
+    cands: dict[int, tuple[str, list[int]]] = {}
+    for f in fused:
+        for name in ("all_terms", "bm25", "dense"):
+            if of_file.get(name, {}).get(f.file_id):
+                cands[f.file_id] = (name, list(dict.fromkeys(of_file[name][f.file_id])))
+                break
+    ids = [c for _, cs in cands.values() for c in cs]
+    text = dict(conn.execute(f"SELECT id, text FROM chunks WHERE id IN ({','.join('?' * len(ids))})", ids)) if ids         else {}
+    pattern = term_pattern(query)
+
+    def held(c: int) -> tuple[int, int]:
+        found = [m.group().lower() for m in pattern.finditer(text.get(c, ""))] if pattern else []
+        return len(set(found)), len(found)
+
+    best: dict[int, int | None] = {}
+    for f in fused:
+        if f.file_id not in cands:  # found by what is in the picture only
+            best[f.file_id] = None
+            continue
+        name, cs = cands[f.file_id]
+        cs = [c for c in cs if not is_toc(text.get(c), cfg.toc_min_entries)] or cs
+        if name == "dense":
+            best[f.file_id] = next((c for c in cs if prose_start(text.get(c, ""), cfg.snippet_prose_words) is not None),
+                                   cs[0])
+        else:
+            best[f.file_id] = max(cs, key=lambda c: (*held(c), -cs.index(c)))
     return best
+
+
+def _shown(text: str, cfg: Config) -> str:
+    """A contents page's leader dots shown as a single "…", so the snippet shows its entries."""
+    return strip_leaders(text) if is_toc(text, cfg.toc_min_entries) else text
 
 
 def _hydrate(conn: sqlite3.Connection, fused: list[Fused], query: str, cfg: Config, clip_gated: bool,
              weaker: bool = False, *, clip: _Clip = _Clip(), real_ranks: dict[str, dict[int, int]] | None = None,
-             dense_by_file: dict[int, list[int]] | None = None) -> list[SearchResult]:
+             chunk_lists: dict[str, Sequence[Hit]] | None = None) -> list[SearchResult]:
     """Cards for fused files, in order, each with its snippet chunk (`_snippet_chunks`)."""
-    best_chunk = _snippet_chunks(conn, fused, dense_by_file or {}, cfg)
+    best_chunk = _snippet_chunks(conn, fused, chunk_lists or {}, cfg, query)
     chunk_ids = [c for c in best_chunk.values() if c is not None]
     chunks = {
         r["id"]: r
@@ -244,12 +272,12 @@ def search(
     embedder = embedder or models.text_embedder(cfg)
     db.check_text_model(conn, embedder.name)
     sw.lap("load_model")  # ~0 once warm; the first query pays the model load
-    bm25_hits = retrievers.bm25(conn, pq, cfg.top_k)
+    bm25_hits = retrievers.bm25(conn, pq, cfg.top_k, toc_min=cfg.toc_min_entries)
     sw.lap("bm25")
-    all_hits = retrievers.bm25(conn, pq, cfg.top_k, all_terms=True)
+    all_hits = retrievers.bm25(conn, pq, cfg.top_k, all_terms=True, toc_min=cfg.toc_min_entries)
     sw.lap("all_terms")
     if text_index is None:
-        text_index = retrievers.load_text_index(conn, embedder.dim, cfg.dense_min_word)
+        text_index = retrievers.load_text_index(conn, embedder.dim, cfg.dense_min_word, cfg.toc_min_entries)
         sw.lap("load_vectors")
     # The floor applies after top-k, so filtering here is the same as in the retriever; the rest feeds the tail.
     dense_all = retrievers.dense(conn, pq, cfg.top_k, embedder, text_index, allowed)
@@ -299,17 +327,15 @@ def search(
     clip_info = _Clip(bool(clip_ranked), frozenset(f for f, _ in gated.hits), gated.strong)
     real_ranks = {"dense": {f: i for i, (f, _) in enumerate(collapse(dense_all), start=1)},
                   "clip": {f: i for i, f in enumerate(clip_ranked, start=1)}}
-    dense_by_file: dict[int, list[int]] = {}  # every file's dense chunks, best first (snippet choice)
-    for h in dense_all:
-        dense_by_file.setdefault(h.file_id, []).append(h.chunk_id)
-    results = _hydrate(conn, fused, pq.text, cfg, gated.gated, clip=clip_info, dense_by_file=dense_by_file)
+    chunk_lists = {"all_terms": all_hits, "bm25": bm25_hits, "dense": dense_all}  # for each card's snippet chunk
+    results = _hydrate(conn, fused, pq.text, cfg, gated.gated, clip=clip_info, chunk_lists=chunk_lists)
     weaker = _hydrate(conn, tail, pq.text, cfg, False, weaker=True, clip=clip_info, real_ranks=real_ranks,
-                      dense_by_file=dense_by_file)
+                      chunk_lists=chunk_lists)
     by_id = {r.file_id: r for r in results}
     row_ids = [file_id for file_id, _ in gated.hits[: cfg.visual_row]]
     fused_by_id = {f.file_id: f for f in fused_all}
     missing = _hydrate(conn, [fused_by_id[i] for i in row_ids if i not in by_id], pq.text, cfg, gated.gated,
-                       clip=clip_info, dense_by_file=dense_by_file)
+                       clip=clip_info, chunk_lists=chunk_lists)
     by_id.update({r.file_id: r for r in missing})
     sw.lap("hydrate")
     clip_summary = {"candidates": gated.candidates, "kept": len(gated.hits), "strong": len(gated.strong),

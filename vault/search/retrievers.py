@@ -11,6 +11,7 @@ import numpy as np
 from vault.models import ClipText, TextEmbedder
 from vault.search.parse import ParsedQuery
 from vault.search.terms import content_terms
+from vault.search.toc import is_toc
 from vault.vectors import VectorIndex
 
 
@@ -19,6 +20,7 @@ class Hit:
     chunk_id: int
     file_id: int
     score: float
+    toc: bool = False  # a contents page (open item n): it stands for its file only when nothing else of it does
 
 
 def filter_sql(pq: ParsedQuery, alias: str = "f") -> tuple[str, list]:
@@ -70,19 +72,24 @@ def fts_all_query(pq: ParsedQuery) -> str | None:
     return " AND ".join([_quote(t) for t in terms] + [_quote(p) for p in pq.phrases])
 
 
-def bm25(conn: sqlite3.Connection, pq: ParsedQuery, k: int, *, all_terms: bool = False) -> list[Hit]:
-    """BM25 over chunks. With `all_terms`, only chunks containing every content term (the all-terms list)."""
+def bm25(conn: sqlite3.Connection, pq: ParsedQuery, k: int, *, all_terms: bool = False,
+         toc_min: int = 0) -> list[Hit]:
+    """BM25 over chunks. With `all_terms`, only chunks containing every content term (the all-terms list). Hits on
+    a contents page (`toc_min` dot-leader entries or more, open item n) are marked."""
     q = fts_all_query(pq) if all_terms else fts_query(pq)
     if q is None:
         return []
     where, params = filter_sql(pq)
+    if toc_min > 0:
+        conn.create_function("cv_is_toc", 1, lambda text: is_toc(text, toc_min), deterministic=True)
+    toc = "cv_is_toc(c.text)" if toc_min > 0 else "0"
     rows = conn.execute(
-        "SELECT c.id, c.file_id, bm25(chunks_fts) AS s FROM chunks_fts "
+        f"SELECT c.id, c.file_id, bm25(chunks_fts) AS s, {toc} FROM chunks_fts "
         "JOIN chunks c ON c.id = chunks_fts.rowid JOIN files f ON f.id = c.file_id "
         f"WHERE chunks_fts MATCH ? AND {where} ORDER BY s LIMIT ?",
         [q, *params, k],
     ).fetchall()
-    return [Hit(r[0], r[1], -r[2]) for r in rows]  # FTS5 bm25 is lower-is-better
+    return [Hit(r[0], r[1], -r[2], bool(r[3])) for r in rows]  # FTS5 bm25 is lower-is-better
 
 
 _WORD = re.compile(r"[^\W_]+")
@@ -93,13 +100,18 @@ def longest_word(text: str | None) -> int:
     return max((len(w) for w in _WORD.findall(text or "")), default=0)
 
 
-def load_text_index(conn: sqlite3.Connection, dim: int, min_word: int = 0) -> VectorIndex:
-    """Chunk vectors for dense search. A chunk with no word of `min_word` characters (OCR junk such as "0 田")
-    is left out: it carries no meaning, yet sits close to many short queries (open item x). It stays in BM25."""
-    where = ""
+def load_text_index(conn: sqlite3.Connection, dim: int, min_word: int = 0, toc_min: int = 0) -> VectorIndex:
+    """Chunk vectors for dense search. Left out, and kept in BM25: a chunk with no word of `min_word` characters
+    (OCR junk such as "0 田": no meaning, yet close to many short queries, open item x), and a contents page
+    (`toc_min` dot-leader entries: it names every topic in a few words, open item n)."""
+    conds = []
     if min_word > 0:
         conn.create_function("cv_longest_word", 1, longest_word, deterministic=True)
-        where = f" WHERE cv_longest_word(c.text) >= {int(min_word)}"
+        conds.append(f"cv_longest_word(c.text) >= {int(min_word)}")
+    if toc_min > 0:
+        conn.create_function("cv_is_toc", 1, lambda text: is_toc(text, toc_min), deterministic=True)
+        conds.append("NOT cv_is_toc(c.text)")
+    where = f" WHERE {' AND '.join(conds)}" if conds else ""
     return VectorIndex.from_query(
         conn, f"SELECT v.chunk_id, v.vec, c.file_id FROM text_vectors v JOIN chunks c ON c.id = v.chunk_id{where}", dim
     )

@@ -369,8 +369,9 @@ def evaluate(lib: Library, queries: Sequence[Query], overrides: dict | None = No
     out: dict[str, dict[str, Outcome]] = {}
     with lib.connect() as conn:
         text_index, image_index = lib.vectors(conn)
-        if base.dense_min_word != lib.cfg.dense_min_word:  # a run that changes which chunks dense search sees
-            text_index = load_text_index(conn, text_index.matrix.shape[1], base.dense_min_word)
+        if (base.dense_min_word, base.toc_min_entries) != (lib.cfg.dense_min_word, lib.cfg.toc_min_entries):
+            # a run that changes which chunks dense search sees
+            text_index = load_text_index(conn, text_index.matrix.shape[1], base.dense_min_word, base.toc_min_entries)
         for row in [APP, *[r for r in rows if r != APP]]:
             cfg = configure(base, ABLATIONS[row])
             out[row] = {q.id: outcome(search(conn, q.text, cfg, text_index=text_index, image_index=image_index),

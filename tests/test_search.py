@@ -184,3 +184,24 @@ def test_path_chunks_are_keyword_only(conn, cfg, fake_embedder, tmp_path) -> Non
     [r] = search(conn, "goa trip", cfg).results  # bills.txt shares no word: below the dense floor (open item s)
     assert r.filename == "IMG_2041.jpg" and r.ranks["bm25"] == 1 and r.ranks["dense"] is None
     assert all(r.ranks["bm25"] is None for r in search(conn, "jpg", cfg).results)  # the extension isn't indexed
+
+
+def test_a_contents_page_never_outranks_its_section_page(conn, cfg, fake_embedder, tmp_path) -> None:
+    """Open item n's test: a fixture PDF with a contents page (dot leaders naming every topic) and the section page.
+    The section page is shown, and the contents page is out of dense search."""
+    from conftest import build_pdf
+    from vault.search.retrievers import load_text_index
+
+    build_pdf(tmp_path / "book" / "probability.pdf", [
+        "Contents\n1 Counting ........ 1\n2 Conditional probability ........ 9\n3 Bayes' theorem ........ 17\n"
+        "4 Random variables ........ 25\n5 Expectation ........ 33",
+        "Chapter 3. Bayes' theorem relates the probability of a hypothesis given the evidence to the probability of "
+        "the evidence given the hypothesis. A positive test for a rare condition is still likely a false alarm.",
+    ])
+    index_paths(conn, [tmp_path / "book"], cfg)
+    r = search(conn, "Bayes theorem", cfg).results[0]
+    assert (r.filename, r.page) == ("probability.pdf", 2)
+    toc_chunk = conn.execute("SELECT id FROM chunks WHERE page = 1 AND source = 'pdf_text'").fetchone()[0]
+    assert toc_chunk not in set(load_text_index(conn, fake_embedder.dim, cfg.dense_min_word, cfg.toc_min_entries).ids)
+    only_toc = search(conn, "random variables expectation counting", cfg).results[0]
+    assert only_toc.page == 1 and "…" in only_toc.snippet_html and "........" not in only_toc.snippet_html

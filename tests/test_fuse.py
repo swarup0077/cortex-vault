@@ -39,3 +39,13 @@ def test_all_terms_list_lifts_the_exact_match() -> None:
     with_all = rrf({**lists, "all_terms": [(1, 10)]}, k=60)
     assert [f.file_id for f in with_all] == [1, 2]  # 2/61 beats 1/62 + 1/61
     assert with_all[0].ranks == {"bm25": 1, "all_terms": 1}
+
+
+def test_a_contents_page_stands_for_its_file_only_when_nothing_else_does() -> None:
+    """Open item n: the file's rank in a list comes from its best chunk that isn't a contents page, if any."""
+    from vault.search.fuse import collapse
+    from vault.search.retrievers import Hit
+
+    hits = [Hit(1, 10, 9.0, toc=True), Hit(2, 11, 8.0), Hit(3, 10, 7.0), Hit(4, 12, 6.0, toc=True)]
+    assert collapse(hits) == [(11, 2), (10, 3), (12, 4)]
+    assert collapse([Hit(1, 10, 9.0), Hit(2, 10, 8.0)]) == [(10, 1)]  # no contents page: as before
