@@ -1,7 +1,8 @@
 """Calibrate the provisional search thresholds on generated data (CLAUDE.md, SPEC §9 tuning rule).
 
     python bench/calibrate.py dense     # dense_min_cosine: bge cosines of matching vs unrelated pairs
-    python bench/calibrate.py tiny      # dense_min_chars: where very short chunks land for queries they do not answer
+    python bench/calibrate.py tiny      # dense_min_word: where very short chunks land for queries they do not answer
+    python bench/calibrate.py prose     # snippet_prose_words: where a meaning-only snippet starts on OCR chunks
     python bench/calibrate.py clip      # CLIP's top hit (z and cosine): drawn scenes vs queries no picture answers
     python bench/calibrate.py rule      # clip_strong_z / clip_strong_cosine end to end: scene and paraphrase recall
     python bench/calibrate.py kind      # clip_screenshot_margin: generated screen captures vs photo-like pictures
@@ -297,6 +298,28 @@ def tiny() -> dict:
                "docs": {k: mean(docs, k) for k in keys}, "by_non_space_chars": by_chars,
                "by_longest_word": by_word, "rule_min_word": rule}
     return {"summary": summary, "rows": rows}
+
+
+def prose() -> dict:
+    """snippet_prose_words: on the demo index's OCR chunks (all generated), where a meaning-only snippet starts.
+    Chrome = what the generator draws above the content: a phone status bar ("08:12 87% Notes") or a window's title
+    bar ("Documents Installer □ X", "Terminal - users", a browser's address)."""
+    import re
+    import sqlite3
+
+    from vault.search.snippet import prose_start
+
+    chrome = re.compile(r"^\s*(\d{1,2}:\d{2}\b|\S+ \S+ □ X|Terminal - |https?://|Settings\b)")
+    conn = sqlite3.connect(ROOT / "demo_index" / "vault.db")
+    texts = [t for (t,) in conn.execute("SELECT text FROM chunks WHERE source = 'ocr'")]
+    out = {"chunks": len(texts), "starting_with_chrome_today": sum(bool(chrome.match(t)) for t in texts)}
+    for run in (2, 3, 4):
+        starts = [prose_start(t, run) for t in texts]
+        rest = [t[s:] if s is not None else t for t, s in zip(texts, starts)]
+        out[f"run_{run}"] = {"still_chrome": sum(bool(chrome.match(t)) for t in rest),
+                             "no_prose": sum(s is None for s in starts),
+                             "chars_skipped_p50": int(np.median([s or 0 for s in starts]))}
+    return {"summary": out, "rows": []}
 
 
 def _longest_word(text: str) -> int:
@@ -732,7 +755,7 @@ def ocr_stop() -> dict:
 
 
 def main(argv: list[str]) -> None:
-    jobs = {"dense": dense, "tiny": tiny, "clip": clip, "rule": rule, "kind": kind, "ocr-stop": ocr_stop}
+    jobs = {"dense": dense, "tiny": tiny, "prose": prose, "clip": clip, "rule": rule, "kind": kind, "ocr-stop": ocr_stop}
     if not argv or argv[0] not in jobs:
         sys.exit(f"usage: python bench/calibrate.py {{{'|'.join(jobs)}}}")
     out = jobs[argv[0]]()

@@ -17,7 +17,7 @@ from vault.search import retrievers
 from vault.search.fuse import Fused, collapse, rrf
 from vault.search.gate import Gated, gate
 from vault.search.parse import ParsedQuery, parse
-from vault.search.snippet import make_snippet
+from vault.search.snippet import make_snippet, prose_start
 from vault.vectors import VectorIndex
 
 SNIPPET_ORDER = ("all_terms", "bm25", "dense")
@@ -135,7 +135,7 @@ def _result(file: sqlite3.Row, paths: list[str], fused: Fused | None, chunk: sql
         effective_date=file["effective_date"],
         page=chunk["page"] if chunk else None,
         chunk_id=chunk["id"] if chunk else None,
-        snippet_html=make_snippet(chunk["text"], query, cfg.snippet_chars) if chunk else "",
+        snippet_html=make_snippet(chunk["text"], query, cfg.snippet_chars, cfg.snippet_prose_words) if chunk else "",
         ranks=ranks,
         rrf_score=fused.score if fused else 0.0,
         badges=badges,
@@ -153,12 +153,31 @@ def _result(file: sqlite3.Row, paths: list[str], fused: Fused | None, chunk: sql
     )
 
 
+def _snippet_chunks(conn: sqlite3.Connection, fused: list[Fused], dense_by_file: dict[int, list[int]],
+                    cfg: Config) -> dict[int, int | None]:
+    """Each file's snippet chunk: the one holding every term if any, else BM25's best for the file, else dense's.
+    A meaning-only match takes the file's best dense chunk that reads as prose, so a status bar or title bar
+    chunk ("08:12 87% Browser") doesn't stand for a page of text (open item y)."""
+    best = {f.file_id: next((f.chunks[n] for n in SNIPPET_ORDER if n in f.chunks), None) for f in fused}
+    by_dense = {f.file_id: dense_by_file.get(f.file_id, []) for f in fused
+                if next((n for n in SNIPPET_ORDER if n in f.chunks), None) == "dense"}
+    candidates = [c for cs in by_dense.values() for c in cs]
+    if not candidates:
+        return best
+    text = dict(conn.execute(f"SELECT id, text FROM chunks WHERE id IN ({','.join('?' * len(candidates))})",
+                             candidates))
+    for fid, chunk_ids in by_dense.items():
+        prose = next((c for c in chunk_ids if prose_start(text.get(c, ""), cfg.snippet_prose_words) is not None), None)
+        if prose is not None:
+            best[fid] = prose
+    return best
+
+
 def _hydrate(conn: sqlite3.Connection, fused: list[Fused], query: str, cfg: Config, clip_gated: bool,
-             weaker: bool = False, *, clip: _Clip = _Clip(),
-             real_ranks: dict[str, dict[int, int]] | None = None) -> list[SearchResult]:
-    """Cards for fused files, in order. Snippet chunk: the one holding every term if any, else BM25's best for
-    the file, else dense's."""
-    best_chunk = {f.file_id: next((f.chunks[n] for n in SNIPPET_ORDER if n in f.chunks), None) for f in fused}
+             weaker: bool = False, *, clip: _Clip = _Clip(), real_ranks: dict[str, dict[int, int]] | None = None,
+             dense_by_file: dict[int, list[int]] | None = None) -> list[SearchResult]:
+    """Cards for fused files, in order, each with its snippet chunk (`_snippet_chunks`)."""
+    best_chunk = _snippet_chunks(conn, fused, dense_by_file or {}, cfg)
     chunk_ids = [c for c in best_chunk.values() if c is not None]
     chunks = {
         r["id"]: r
@@ -280,13 +299,17 @@ def search(
     clip_info = _Clip(bool(clip_ranked), frozenset(f for f, _ in gated.hits), gated.strong)
     real_ranks = {"dense": {f: i for i, (f, _) in enumerate(collapse(dense_all), start=1)},
                   "clip": {f: i for i, f in enumerate(clip_ranked, start=1)}}
-    results = _hydrate(conn, fused, pq.text, cfg, gated.gated, clip=clip_info)
-    weaker = _hydrate(conn, tail, pq.text, cfg, False, weaker=True, clip=clip_info, real_ranks=real_ranks)
+    dense_by_file: dict[int, list[int]] = {}  # every file's dense chunks, best first (snippet choice)
+    for h in dense_all:
+        dense_by_file.setdefault(h.file_id, []).append(h.chunk_id)
+    results = _hydrate(conn, fused, pq.text, cfg, gated.gated, clip=clip_info, dense_by_file=dense_by_file)
+    weaker = _hydrate(conn, tail, pq.text, cfg, False, weaker=True, clip=clip_info, real_ranks=real_ranks,
+                      dense_by_file=dense_by_file)
     by_id = {r.file_id: r for r in results}
     row_ids = [file_id for file_id, _ in gated.hits[: cfg.visual_row]]
     fused_by_id = {f.file_id: f for f in fused_all}
     missing = _hydrate(conn, [fused_by_id[i] for i in row_ids if i not in by_id], pq.text, cfg, gated.gated,
-                       clip=clip_info)
+                       clip=clip_info, dense_by_file=dense_by_file)
     by_id.update({r.file_id: r for r in missing})
     sw.lap("hydrate")
     clip_summary = {"candidates": gated.candidates, "kept": len(gated.hits), "strong": len(gated.strong),

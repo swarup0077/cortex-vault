@@ -36,13 +36,32 @@ def _best_start(matches: list[re.Match[str]], width: int) -> int:
     return best_start
 
 
-def make_snippet(text: str, query: str, width: int = 200) -> str:
-    """HTML-escaped window of `text` covering the most query-term matches, matches wrapped in <mark>."""
+_TOKEN = re.compile(r"\S+")
+_PROSE_WORD = re.compile(r"[\"'(\[]?[^\W\d_]{2,}[.,;:!?)\]\"']*")
+
+
+def prose_start(text: str, run: int = 3) -> int | None:
+    """Where the first `run` words of letters in a row begin: the text's first prose, past a status bar
+    ("08:12 87% Browser") or a window's title bar ("Documents Installer □ X"). None: no prose at all."""
+    tokens = list(_TOKEN.finditer(text))
+    for i in range(len(tokens) - run + 1):
+        if all(_PROSE_WORD.fullmatch(t.group()) for t in tokens[i:i + run]):
+            return tokens[i].start()
+    return None
+
+
+def make_snippet(text: str, query: str, width: int = 200, prose_run: int = 3) -> str:
+    """HTML-escaped window of `text` covering the most query-term matches, matches wrapped in <mark>. With no
+    match (a meaning-only hit), the window starts at the text's first prose, not at its status or title bar
+    (open item y)."""
     pat = term_pattern(query)
     matches = list(pat.finditer(text)) if pat else []
-    start = _best_start(matches, width) if len(text) > width else 0
+    if matches:
+        start = _best_start(matches, width) if len(text) > width else 0
+    else:
+        start = prose_start(text, prose_run) or 0
     end = min(len(text), start + width)
-    if start > 0:
+    if start > 0 and matches:
         space = text.find(" ", start, start + 30)
         start = space + 1 if space != -1 else start
     if end < len(text):

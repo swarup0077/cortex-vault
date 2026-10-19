@@ -132,6 +132,10 @@ class Config:
     # right, the best balance. Generated "photos" aren't photographs, so M6 checks it on the corpus's real ones.
     clip_screenshot_margin: float = 0.04
     snippet_chars: int = 200
+    # A meaning-only match's snippet starts at the first run of this many words of letters (past a status or title
+    # bar), and its chunk is the file's best dense chunk with such a run (open item y). Provisional: measured on the
+    # generated screenshots' chunks (SPEC §19, 19 Oct).
+    snippet_prose_words: int = 3
     # Result list (SPEC §8): the UI shows `page_results` cards, then "Show more" up to `max_results` (the CLI's
     # own default is -n 10). Below the fused list come the weaker matches (SPEC §7.4 step 4), up to the same cap;
     # the eval can switch them off. `visual_row` caps the Visual matches row (open item t).
