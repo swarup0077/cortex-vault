@@ -98,7 +98,8 @@ class Config:
     # holding every content term (SPEC §7.2, §19)
     weights: dict[str, float] = field(
         default_factory=lambda: {"bm25": 1.0, "all_terms": 1.0, "dense": 1.0, "clip": 1.0})
-    # CLIP gate (SPEC §7.3)
+    # CLIP gate (SPEC §7.3); off only for the eval's "CLIP ungated" ablation (SPEC §9), which keeps CLIP's top k
+    clip_gated: bool = True
     clip_gate_z: float = 2.0  # keep images scoring at least this many std devs above the candidates' mean
     clip_gate_max: int = 50
     clip_gate_min_candidates: int = 20  # fewer candidates than this: z is meaningless, keep the top few instead

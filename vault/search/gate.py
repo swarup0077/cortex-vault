@@ -44,6 +44,8 @@ def gate(ids: np.ndarray, scores: np.ndarray, pq: ParsedQuery, cfg: Config) -> G
     factor = cfg.clip_code_weight if (pq.phrases or is_code_like(pq.text)) else 1.0
     n = len(scores)
     order = np.argsort(-scores, kind="stable")  # ties keep the given (file id) order
+    if not cfg.clip_gated:  # the eval's ungated ablation (SPEC §9): every candidate, best first, no strong hits
+        return Gated([(int(ids[i]), float(scores[i])) for i in order[: cfg.top_k]], False, factor, n)
     if n < cfg.clip_gate_min_candidates:  # too few for a z-score: the top few, if similar enough at all
         keep = [i for i in order[: cfg.clip_gate_fallback_top] if scores[i] >= cfg.clip_min_cosine]
         strong = frozenset(int(ids[i]) for i in keep if scores[i] >= cfg.clip_strong_cosine)

@@ -22,6 +22,7 @@ from rich.table import Table
 
 from vault import db
 from vault.config import Config
+from vault import eval as ev
 from vault.demo import CORPUS_DIR, DEMO_DIR, build_demo, gps_files, strip_gps
 from vault.ingest.pipeline import IndexReport, index_paths, reindex
 from vault.search.engine import search
@@ -64,6 +65,51 @@ def _run_index(console: Console, conn: sqlite3.Connection, cfg: Config, folders:
         if folders is None:
             return reindex(conn, cfg, stop=stop, progress=progress)
         return index_paths(conn, folders, cfg, stop=stop, progress=progress)
+
+
+def cmd_eval(console: Console, cfg: Config, args: argparse.Namespace) -> int:
+    """`vault eval` (SPEC §9): import the owner's queries, or run them and write the report."""
+    paths = ev.Paths()
+    if args.import_csv:
+        rep = ev.import_queries(args.import_csv, paths)
+        ev.write_queries(rep.queries, paths)
+        public = sum(q.public for q in rep.queries)
+        console.print(f"{len(rep.queries)} queries ({public} public, {len(rep.queries) - public} private); "
+                      f"{len(rep.left_out)} left out, {len(rep.trimmed)} lost some correct files")
+        for qid, why in rep.left_out:
+            console.print(f"  left out {qid}: {why}")
+        for qid, n in rep.trimmed:
+            console.print(f"  {qid}: {n} correct file{'s' if n != 1 else ''} left out, the rest kept")
+        console.print(f"split: {paths.split_file.relative_to(paths.repo).as_posix()}, "
+                      f"full set: {paths.full_queries.relative_to(paths.repo).as_posix()} (git-ignored)")
+        return 0
+    splits = ["tune", "heldout"] if args.split == "all" else [args.split]
+    if "heldout" in splits and not args.purpose:
+        console.print("[red]A run on the held-out half needs --purpose baseline or --purpose final (SPEC §9).")
+        return 2
+    overrides = ev.parse_settings(args.set)
+    lib = ev.eval_library(cfg, paths, index=not args.no_index)
+    queries = [q for q in ev.load_queries(paths) if q.split in splits]
+    rows = list(ev.ABLATIONS) if args.rows == "all" else [ev.APP]
+    run = ev.evaluate(lib, queries, overrides, rows=rows, paths=paths)
+    detail = splits if args.purpose == "final" else [s for s in splits if s == "tune"]
+    title = {"baseline": "Eval baseline", "final": "Eval: final settings"}.get(args.purpose, "Eval (tuning half)")
+    md, data = ev.report(run, splits=splits, detail=detail, title=title)
+    ev.write_report(md, data, args.out)
+    if "heldout" in splits:
+        finals = ev.log_heldout(paths, args.purpose, overrides)
+        if args.purpose == "final" and finals > 1:
+            console.print(f"[yellow]This is final run number {finals} on the held-out half (see "
+                          f"{paths.heldout_log.relative_to(paths.repo).as_posix()}).")
+    table = Table("half", "setting", "n", "R@1", "R@5", "R@10", "MRR@10", "above divider (median)")
+    for name, entry in data["splits"].items():
+        for row, v in entry["rows"].items():
+            m = v["overall"]
+            table.add_row(name, row, str(m["n"]), str(m["r1"]), str(m["r5"]), str(m["r10"]), f"{m['mrr']:.3f}",
+                          str(entry["divider"]["median_above"]) if row == ev.APP else "")
+    console.print(table)
+    console.print(f"wrote {args.out.with_suffix('.md')} and .json")
+    return 0
 
 
 def cmd_build_demo(console: Console, cfg: Config, args: argparse.Namespace) -> int:
@@ -207,6 +253,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", type=Path, default=DEMO_DIR)
     p = sub.add_parser("scrub-exif", help="remove GPS EXIF from the images in a folder")
     p.add_argument("folder", type=Path)
+    p = sub.add_parser("eval", help="run the eval (SPEC §9): eval/results.md and .json")
+    p.add_argument("--import", dest="import_csv", nargs="+", type=Path, metavar="CSV",
+                   help="convert the owner's queries.csv (then queries_extra.csv) and split them; nothing is run")
+    p.add_argument("--split", choices=("tune", "heldout", "all"), default="tune")
+    p.add_argument("--purpose", choices=("baseline", "final"), help="required when the held-out half runs")
+    p.add_argument("--out", type=Path, default=ev.Paths().out / "results")
+    p.add_argument("--set", action="append", default=[], metavar="NAME=VALUE", help="a setting to change")
+    p.add_argument("--rows", choices=("app", "all"), default="all", help="the app only, or every ablation row")
+    p.add_argument("--no-index", action="store_true", help="use data/eval_index as it is")
     return parser
 
 
@@ -224,6 +279,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return cmd_build_demo(console, cfg, args)
     if args.cmd == "scrub-exif":
         return cmd_scrub_exif(console, args)
+    if args.cmd == "eval":
+        return cmd_eval(console, cfg, args)
     conn = db.connect(cfg.db_path)
     try:
         if args.cmd in ("index", "reindex"):
