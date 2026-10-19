@@ -96,3 +96,18 @@ def test_stats_and_remove_root(tmp_path, fake_embedder, make_search_corpus) -> N
     with lib.connect() as conn:
         assert conn.execute("SELECT count(*) FROM files").fetchone()[0] == 0
         assert db.get_roots(conn) == []
+
+
+def test_type_counts_split_plain_text_from_documents(tmp_path, fake_embedder, make_search_corpus) -> None:
+    """The Archive's counts (SPEC §8): Text is a .txt / .md doc, Document the other docs."""
+    lib, _ = make_library(tmp_path, make_search_corpus)
+    assert lib.type_counts() == {"screenshot": 0, "pdf": 2, "text": 1, "photo": 1, "doc": 2, "slides": 1}
+
+
+def test_recent_by_type_has_the_newest_of_each_type(tmp_path, fake_embedder, make_search_corpus) -> None:
+    lib, _ = make_library(tmp_path, make_search_corpus)
+    recent = lib.recent_by_type(1)
+    names = {r.name for r in recent}
+    assert len(recent) == 5 and {"recipe.txt", "IMG_red.jpg", "ml lecture.pptx"} <= names
+    assert len(names & {"household.docx", "travel.docx"}) == 1 and recent[0].name == lib.recent(1)[0].name
+    assert [r.indexed_at for r in recent] == sorted((r.indexed_at for r in recent), reverse=True)

@@ -44,6 +44,14 @@ PREVIEW_MAX_HEIGHT = 8000  # a tall scrolling screenshot keeps its width up to t
 
 ProgressFn = Callable[[int, int, str], None]
 
+# The Archive's file types (SPEC §8): the kinds, with plain-text docs split out of "doc" by their extension.
+TYPES = ("screenshot", "pdf", "text", "photo", "doc", "slides")
+TEXT_SUFFIXES = (".txt", ".md")
+_IS_TEXT = ("EXISTS (SELECT 1 FROM paths t WHERE t.file_id = f.id AND ("
+            + " OR ".join(f"lower(t.path) LIKE '%{s}'" for s in TEXT_SUFFIXES) + "))")
+_TYPE_WHERE = {t: f"AND f.kind = '{t}'" for t in TYPES if t not in ("text", "doc")} | {
+    "text": f"AND f.kind = 'doc' AND {_IS_TEXT}", "doc": f"AND f.kind = 'doc' AND NOT {_IS_TEXT}"}
+
 
 @dataclass
 class Detail:
@@ -275,18 +283,42 @@ class Library:
                 f"SELECT count(*) FROM files f WHERE f.status = 'ok' AND EXISTS (SELECT 1 FROM paths p WHERE "
                 f"p.file_id = f.id AND p.root IN ({','.join('?' * len(roots))}))", roots).fetchone()[0]
 
+    def type_counts(self) -> dict[str, int]:
+        """Files per type for The Archive (SPEC §8): the kinds, with plain-text docs (`.txt`, `.md`) as "text"."""
+        out = dict.fromkeys(TYPES, 0)
+        with self.connect() as conn:
+            for kind, is_text, n in conn.execute(
+                    f"SELECT f.kind, f.kind = 'doc' AND {_IS_TEXT}, count(*) FROM files f WHERE f.status = 'ok' "
+                    "GROUP BY 1, 2"):
+                key = "text" if is_text else kind
+                out[key] = out.get(key, 0) + n
+        return out
+
     def recent(self, limit: int = 5, roots: Iterable[str] = ()) -> list[Recent]:
         """The most recently indexed files (the home screen's "Recently added")."""
+        with self.connect() as conn:
+            return self._recent(conn, limit, list(roots))
+
+    def recent_by_type(self, limit: int = 5, roots: Iterable[str] = ()) -> list[Recent]:
+        """The `limit` newest files overall and the `limit` newest of each type, newest first: what "Recently added"
+        shows under each type filter on home (SPEC §8)."""
         roots = list(roots)
+        found: dict[int, Recent] = {}
+        with self.connect() as conn:
+            for where in ["", *(_TYPE_WHERE[t] for t in TYPES)]:
+                for r in self._recent(conn, limit, roots, where):
+                    found.setdefault(r.file_id, r)
+        return sorted(found.values(), key=lambda r: (r.indexed_at or "", r.file_id), reverse=True)
+
+    def _recent(self, conn: sqlite3.Connection, limit: int, roots: list[str], where: str = "") -> list[Recent]:
         scope = (f"AND EXISTS (SELECT 1 FROM paths p WHERE p.file_id = f.id AND p.root IN ({','.join('?' * len(roots))}))"
                  if roots else "")
-        with self.connect() as conn:
-            rows = conn.execute(f"SELECT f.id, f.kind, f.indexed_at FROM files f WHERE f.status = 'ok' {scope} "
-                                "ORDER BY f.indexed_at DESC, f.id DESC LIMIT ?", [*roots, limit]).fetchall()
-            out = []
-            for r in rows:
-                paths = self._paths(conn, r["id"])
-                out.append(Recent(r["id"], Path(paths[0]).name if paths else "", r["kind"], r["indexed_at"]))
+        rows = conn.execute(f"SELECT f.id, f.kind, f.indexed_at FROM files f WHERE f.status = 'ok' {where} {scope} "
+                            "ORDER BY f.indexed_at DESC, f.id DESC LIMIT ?", [*roots, limit]).fetchall()
+        out = []
+        for r in rows:
+            paths = self._paths(conn, r["id"])
+            out.append(Recent(r["id"], Path(paths[0]).name if paths else "", r["kind"], r["indexed_at"]))
         return out
 
     def stats(self) -> Stats:
