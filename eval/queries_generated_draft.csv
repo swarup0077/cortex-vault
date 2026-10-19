@@ -1,0 +1,33 @@
+query,expected_file,search_type
+0x80070005 access denied installer,Screenshot 2026-10-12 101530.png,exact word
+KeyError user_id traceback,Screenshot 2026-10-13 091204.png,exact word
+ERESOLVE unable to resolve dependency tree,Screenshot 2026-10-13 151022.png,exact word
+PNR 4521873906,ticket-2026-10-24.pdf|Screenshot_20261012-080102_Messages.png,exact word
+UPI transaction ID 629184736251,Screenshot_20261018-130512_Pay.png,exact word
+consumer number 110045227,electricity-bill-october.pdf,exact word
+NET::ERR_CERT_DATE_INVALID,Screenshot (3).png,exact word
+git reset --soft HEAD~1,git cheatsheet.md,exact word
+the page that defines the singular value decomposition,matrix-decompositions.pdf,meaning
+paper on generating images by gradually removing noise,2006.11239.pdf,meaning
+notes on letting every word in a sentence look at every other word,1706.03762.pdf,meaning
+default hyperparameters for the Adam optimizer,1412.6980.pdf,meaning
+slide about gradient descent with momentum,ML lecture v2.pptx,meaning
+what was decided at the project sync about freezing the API,meeting notes 2026-10-14.docx,meaning
+how long to bake bread in a covered pot,sourdough recipe.txt,meaning
+my card was declined at an online shop,Screenshot 2026-10-17 110203.png,meaning
+port 8080 already in use when starting a container,Screenshot (4).png,meaning
+advice on sleeping better and avoiding coffee,Screenshot_20261013-120000_Reader.png,meaning
+sunset over the sea,IMG_20260921_183012.jpg,picture
+two dice on a table,IMG_20260925_160010.jpg,picture
+snow covered mountains,IMG_20260923_120301.jpg,picture
+a red apple,IMG_20260926_090909.jpg,picture
+a rainbow in the sky,IMG_20260928_131313.jpg,picture
+the moon at night,IMG_20260924_221145.jpg,picture
+Bayes theorem example about a test for a rare condition,scan_0001.pdf,inside a scan
+hostel quiet hours,scan_0002.pdf,inside a scan
+lab 3 has moved to room 214,IMG_20261004_150000.jpg,inside a scan
+water supply interrupted on 21 October,IMG_20261005_091500.jpg,inside a scan
+total on the Blue Door Cafe bill,IMG_20261018_143500.jpg,inside a scan
+where is the spare key for the lab cupboard,Screenshot_20261012-193344_Notes.png,inside a scan
+back up the phone overnight while it charges,Screenshot_20261011-221530_Browser.png,inside a scan
+linear regression loss written on the whiteboard,IMG_20261003_103000.jpg,inside a scan
