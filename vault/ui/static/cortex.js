@@ -226,6 +226,7 @@
 
   /* ------------------------------------------------------------------ uploads */
   function pickFiles() {
+    if (S.uploadsFull) { say(S.busyText); return; }  // max sessions open: don't make them pick files for nothing
     const picker = $('[data-files]', S.top);
     if (picker) picker.click();
   }
@@ -233,6 +234,7 @@
   async function uploadFiles(files) {
     const list = Array.from(files || []);
     if (!list.length || !S.upload || !S.topTrigger) return;
+    if (S.uploadsFull) { say(S.busyText); return; }
     say(`Uploading ${list.length} file${list.length === 1 ? '' : 's'}…`);
     const paths = [];
     for (const file of list) {
@@ -379,6 +381,8 @@
       const slot = S.top && $('[data-status]', S.top);
       if (!src || !slot) return;
       $('[data-status-text]', slot).textContent = src.dataset.text || '';
+      S.uploadsFull = src.dataset.uploads === 'full';
+      S.busyText = src.dataset.busyText || '';
       $('.cv-dot', slot).classList.toggle('cv-dot--busy', src.dataset.busy === 'true');
     };
     S.syncStatus = sync;

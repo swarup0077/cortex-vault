@@ -457,6 +457,8 @@ body.cv-home-mode .cv-search input { font-size: 18px; }
 .cv-stats { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: var(--cv-mute); }
 .cv-stats b { font: 500 13px var(--cv-mono); color: var(--cv-ink); }
 .cv-err { color: var(--cv-t-pdf); }
+.cv-drop.cv-drop--busy { cursor: default; border-style: solid; color: var(--cv-mute); }
+.cv-drop.cv-drop--busy:hover { border-color: var(--cv-hair-strong); background: transparent; }
 
 @media (max-width: 720px) {
   .cv-app .cv-btn-primary { padding: 0; }

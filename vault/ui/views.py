@@ -23,6 +23,7 @@ from vault.search.parse import KIND_LABELS
 PAGE = 20  # items shown before "Show N more" (SPEC §8)
 UPLOAD_ROWS = 10  # upload outcome rows shown before "Show all N"
 
+DEMO_BUSY = "The demo is busy, try again in a few minutes"  # vault.session.BUSY
 UPLOAD_NOTICE = ("Uploads are processed on this server, kept only for your session, and deleted after 30 minutes. "
                  "For private use, run it on your own computer (see README).")
 
@@ -260,8 +261,9 @@ def footer(mode: Mode) -> str:
             "</span></footer>")
 
 
-def status(text: str, *, busy: bool = False, done: int = 0, total: int = 0) -> str:
-    """The header's status line (copied into place by cortex.js) and, while uploads are read, the banner."""
+def status(text: str, *, busy: bool = False, done: int = 0, total: int = 0, uploads_full: bool = False) -> str:
+    """The header's status line (copied into place by cortex.js) and, while uploads are read, the banner.
+    `uploads_full`: no new upload session can open, so Add files and the drop zone say so instead of uploading."""
     banner = ""
     if busy and total:
         left = total - done
@@ -269,8 +271,8 @@ def status(text: str, *, busy: bool = False, done: int = 0, total: int = 0) -> s
         banner = (f'<div class="cv-banner">{left} of your uploads {"is" if left == 1 else "are"} still being read. '
                   f'Search keeps working meanwhile.<span class="cv-progress"><span style="width: {pct}%"></span>'
                   "</span></div>")
-    return (f'<div class="cv-app cv-part" data-status-src data-busy="{str(busy).lower()}" data-text="{_e(text)}">'
-            f"{banner}</div>")
+    return (f'<div class="cv-app cv-part" data-status-src data-busy="{str(busy).lower()}" data-text="{_e(text)}" '
+            f'data-uploads="{"full" if uploads_full else "open"}" data-busy-text="{_e(DEMO_BUSY)}">{banner}</div>')
 
 
 # ---------------------------------------------------------------- home
@@ -292,7 +294,8 @@ LOCAL_SUGGESTIONS = (Suggestion("screenshot of an error message", "exact words")
 
 
 def home(mode: Mode, *, count: int, recent: Sequence[Recent], suggestions: Sequence[Suggestion],
-         folders: Sequence[str] = (), samples: int = 0, scope: str = "Both", now: datetime | None = None) -> str:
+         folders: Sequence[str] = (), samples: int = 0, scope: str = "Both", now: datetime | None = None,
+         uploads_full: bool = False) -> str:
     tries = "".join(
         f'<button type="button" class="cv-suggest" data-q="{_e(s.query)}">{icon("search")}'
         f'<span class="cv-suggest__q">{_e(s.query)}</span><span class="cv-suggest__how">{_e(s.how)}</span></button>'
@@ -304,10 +307,14 @@ def home(mode: Mode, *, count: int, recent: Sequence[Recent], suggestions: Seque
         f'<span class="cv-row__when">{_e(ago(r.indexed_at, now))}</span></button>'
         for r in recent) or '<p class="cv-notice">Nothing indexed yet.</p>'
     if mode.demo:
+        drop = ('<button type="button" class="cv-drop" data-act="add">' + icon("upload") +
+                'Drop your own files here to search them too <span class="cv-drop__hint">· PDF, Office, images, text · '
+                "up to 100</span></button>")
+        if uploads_full:
+            drop = (f'<div class="cv-drop cv-drop--busy" role="status">{_e(DEMO_BUSY)} '
+                    '<span class="cv-drop__hint">· searching the sample files works as usual</span></div>')
         extra = (
-            '<button type="button" class="cv-drop" data-act="add">' + icon("upload") +
-            'Drop your own files here to search them too <span class="cv-drop__hint">· PDF, Office, images, text · '
-            "up to 100</span></button>"
+            drop +
             f'<p class="cv-note">{_e(UPLOAD_NOTICE)}</p>'
             f'<p class="cv-note">This demo searches {samples} generated sample files. Text, meaning and pictures are '
             "read by three small models (bge-small, CLIP ViT-B/32, PP-OCRv6) running on this server; nothing is "
@@ -518,6 +525,13 @@ def empty(resp: SearchResponse, mode: Mode, *, query: str, scope: str = "Both") 
 
 UPLOAD_ICONS = {"indexed": ("ok", "check", "added"), "duplicate": ("skip", "same", "already in your uploads"),
                 "rejected": ("bad", "x", None), "error": ("bad", "x", None)}
+
+
+def demo_busy(scope: str = "Both") -> str:
+    """An upload that found every session slot taken: nothing was kept."""
+    return (f'<div class="cv-app cv-part cv-fill" {_render()} data-view="upload" data-query="" data-scope="{_e(scope)}">'
+            f'<div class="cv-empty"><strong>{_e(DEMO_BUSY)}</strong>Your files weren\'t kept. Searching the sample '
+            "files works as usual.</div></div>")
 
 
 def upload_outcome(files: Sequence, *, received: int, scope: str = "My uploads") -> str:

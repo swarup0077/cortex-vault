@@ -97,14 +97,21 @@ class UiContext:
 # ---------------------------------------------------------------- handlers
 
 
+def uploads_full(ctx: UiContext, session: str | None) -> bool:
+    """A visitor without a session can't open one now; one who has a session can still add to it."""
+    return bool(ctx.sessions) and ctx.session(session) is None and ctx.sessions.full
+
+
 def status_html(ctx: UiContext, session: str | None, *, busy: tuple[int, int] | None = None) -> str:
+    full = uploads_full(ctx, session)
     if busy is not None:
         done, total = busy
-        return views.status(f"Reading {min(done + 1, total)} of {total} uploads", busy=True, done=done, total=total)
+        return views.status(f"Reading {min(done + 1, total)} of {total} uploads", busy=True, done=done, total=total,
+                            uploads_full=full)
     lib, _, _ = ctx.target(session, "Both")
     n = lib.count()
     if ctx.demo:
-        return views.status(f"{n} files · up to date")
+        return views.status(f"{n} files · up to date", uploads_full=full)
     stats = ctx.library.stats()
     if not stats.last_indexed:
         return views.status(f"{n} files · not indexed yet")
@@ -115,7 +122,8 @@ def home_html(ctx: UiContext, session: str | None, scope: str = "Both") -> str:
     lib, roots, _ = ctx.target(session, scope)
     folders = [] if ctx.demo else ctx.library.stats().roots
     return views.home(ctx.view_mode, count=lib.count(roots), recent=lib.recent(5, roots), suggestions=ctx.suggestions,
-                      folders=folders, samples=ctx.library.count() if ctx.demo else 0, scope=scope)
+                      folders=folders, samples=ctx.library.count() if ctx.demo else 0, scope=scope,
+                      uploads_full=uploads_full(ctx, session))
 
 
 def run_search(ctx: UiContext, session: str | None, query: object, scope: object = "Both",
@@ -184,6 +192,9 @@ def handle_upload(ctx: UiContext, session: str | None, paths: object) -> Iterato
             session
         return
     _, result = outcome["result"]
+    if result.busy:  # every session slot is taken: nothing was kept
+        yield views.demo_busy(), status_html(ctx, session), session
+        return
     sid = result.session_id or session
     main = views.upload_outcome(result.files, received=len(files), scope="My uploads" if sid else "Both")
     yield main, status_html(ctx, sid), sid

@@ -346,3 +346,27 @@ def test_folders_panel_handlers(tmp_path, fake_embedder, make_search_corpus) -> 
     assert views._e(str(root.resolve())) in stats and roots["choices"] == [str(root.resolve())]
     assert "files · indexed" in layout.status_html(ctx, None)
     assert "6 files left" in layout.remove_folder(ctx, str(root.resolve()))
+
+
+def test_with_twenty_sessions_open_uploads_say_busy_and_search_still_works(demo_ctx) -> None:
+    """Owner's check (SPEC §8): max_sessions = 20 open, a new visitor's Add files and drop zone say the demo is busy;
+    searching the sample files works for everyone, and a visitor who has a session can still add to it."""
+    assert demo_ctx.sessions.cfg.max_sessions == 20
+    _, _, first = upload(demo_ctx, {"first.txt": "Notes from the first visitor about robotics."})
+    for _ in range(19):
+        demo_ctx.sessions._create()
+    assert demo_ctx.sessions.full and len(demo_ctx.sessions.sessions) == 20
+
+    home = layout.home_html(demo_ctx, None)
+    assert views._e(views.DEMO_BUSY) in home and 'data-act="add"' not in home.split("cv-home")[1]
+    assert 'data-uploads="full"' in layout.status_html(demo_ctx, None)
+    path = gradio_file(demo_ctx, "late.txt", "A latecomer's file.")
+    *_, (main, status, sid) = layout.handle_upload(demo_ctx, None, [path])
+    assert sid is None and views._e(views.DEMO_BUSY) in main and "late.txt" not in main
+    assert not Path(path).exists()  # nothing kept, Gradio's copy included
+    assert "diffusion.pdf" in layout.run_search(demo_ctx, None, "denoising diffusion")
+
+    assert 'data-uploads="open"' in layout.status_html(demo_ctx, first)  # the first visitor can still add files
+    main, _, again = upload(demo_ctx, {"second.txt": "More robotics notes."}, sid=first)
+    assert again == first and "1 added" in main
+    assert "second.txt" in layout.run_search(demo_ctx, first, "robotics notes", "My uploads")

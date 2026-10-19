@@ -29,6 +29,7 @@ from vault.library import Library, ProgressFn
 log = logging.getLogger(__name__)
 
 DEFAULT_ROOT = Path(tempfile.gettempdir()) / "vault_sessions"
+BUSY = "The demo is busy, try again in a few minutes"  # max_sessions upload sessions are open
 _UUID4 = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 _UNSAFE = re.compile(r'[\x00-\x1f<>:"/\\|?*]')
 
@@ -45,6 +46,7 @@ class UploadResult:
     session_id: str | None
     files: list[FileStatus]
     report: IndexReport | None = None  # None when nothing new was indexed
+    busy: bool = False  # no session could be opened: max_sessions are in use
 
 
 @dataclass
@@ -119,6 +121,12 @@ class SessionManager:
             if s is not None:
                 s.last_used = self.clock()
             return s
+
+    @property
+    def full(self) -> bool:
+        """No new upload session can open now (a visitor who has one can still add to it)."""
+        with self._lock:
+            return len(self.sessions) >= self.cfg.max_sessions
 
     def library(self, session_id: str | None) -> Library | None:
         s = self.get(session_id)
@@ -223,10 +231,11 @@ class SessionManager:
             return session, UploadResult(session.id if session else None, statuses)
         if session is None:
             session = self._create()
-            if session is None:
-                for _, _, _, st in accepted:
-                    st.reason = "the demo is busy (too many people uploading right now); try again in a few minutes"
-                return None, UploadResult(None, statuses)
+            if session is None:  # max_sessions are open: nothing is kept, Gradio's copies included
+                for real, _, _, st in accepted:
+                    st.reason = BUSY
+                    real.unlink(missing_ok=True)
+                return None, UploadResult(None, statuses, busy=True)
 
         session.busy = True
         try:
