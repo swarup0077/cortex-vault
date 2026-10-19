@@ -81,7 +81,7 @@ def main() -> None:
     threading.Thread(target=warm_up, args=(ctx,), daemon=True).start()
     port = int(os.environ.get("GRADIO_SERVER_PORT", "7860"))
     log.info("Cortex Vault (%s mode) on http://%s:%d", mode, HOST, port)
-    uvicorn.run(app, host=HOST, port=port, log_level="warning")
+    uvicorn.run(app, host=HOST, port=port, log_level="warning", access_log=False)  # no URLs (they hold ?q=) logged
 
 
 if __name__ == "__main__":

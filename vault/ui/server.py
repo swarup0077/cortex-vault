@@ -3,7 +3,7 @@
 `/thumb/{id}`, `/preview/{id}`, `/detail/{id}` (highlight boxes and the passage text, as JSON) and, in demo mode,
 `/file/{id}` (a download) look the file up in the index; a session's files also need its `s=<uuid4>`. Anything
 that isn't a plain id, an unknown id and another session's file all get the same 404, so nothing reveals whether
-a file exists. The app's own assets (stylesheet, script, fonts, logo) are static files under `/cv/`.
+a file exists. The app's own assets (stylesheet, script, logo) are static files under `/cv/`.
 """
 
 from __future__ import annotations
@@ -24,9 +24,12 @@ STATIC = Path(__file__).parent / "static"
 
 Resolve = Callable[[str | None], Library | None]  # session id (None: the main index) → its library
 
-# Dark unless the URL asks for ?__theme=light (SPEC §8): Gradio reads __theme, so it's set before Gradio starts.
-THEME_JS = ("(function(){var u=new URL(window.location.href);if(!u.searchParams.get('__theme')){"
-            "u.searchParams.set('__theme','dark');window.history.replaceState(null,'',u);}})();")
+# Theme (SPEC §8): with no ?__theme=, Gradio follows the OS; a choice made with the header toggle is kept in this
+# browser (cortex.js, `cv-theme`) and applied here, before Gradio reads __theme. ?__theme=light|dark wins.
+THEME_JS = ("(function(){try{var u=new URL(window.location.href),t=u.searchParams.get('__theme'),s=null;"
+            "if(t==='light'||t==='dark')return;try{s=window.localStorage.getItem('cv-theme');}catch(e){}"
+            "if(s==='light'||s==='dark'){u.searchParams.set('__theme',s);window.history.replaceState(null,'',u);}"
+            "}catch(e){}})();")
 HEAD = ('<meta name="robots" content="noindex">'
         '<link rel="icon" href="/cv/logo/favicon.ico" sizes="any">'
         '<link rel="icon" href="/cv/logo/cortex-vault-icon.svg" type="image/svg+xml">'
@@ -37,11 +40,12 @@ HEAD = ('<meta name="robots" content="noindex">'
 
 
 def theme() -> gr.themes.Base:
-    """Plain font names (no gr.themes.GoogleFont), so nothing loads from Google Fonts; Geist comes from /cv/fonts."""
-    return gr.themes.Base(font=["Geist", "system-ui", "sans-serif"], font_mono=["Geist Mono", "monospace"]).set(
-        body_background_fill="#F7F7F5", body_background_fill_dark="#0B0B0C",
-        body_text_color="#17171A", body_text_color_dark="#EDEDEF",
-        block_background_fill="#F7F7F5", block_background_fill_dark="#0B0B0C",
+    """System fonts named as plain strings (no gr.themes.GoogleFont), so nothing loads from the internet."""
+    return gr.themes.Base(font=["Arial", "Helvetica", "sans-serif"],
+                          font_mono=["ui-monospace", "Consolas", "monospace"]).set(
+        body_background_fill="#F4F0E8", body_background_fill_dark="#262521",
+        body_text_color="#25221E", body_text_color_dark="#EEE8DC",
+        block_background_fill="#F4F0E8", block_background_fill_dark="#262521",
     )
 
 

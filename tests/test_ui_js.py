@@ -1,6 +1,7 @@
-"""cortex.js decisions (SPEC §8), run in Node: search as you type, Enter, Esc, chips and "Show more".
+"""cortex.js decisions (SPEC §8), run in Node: search as you type, Enter, Esc, the type filter and "Show more", the
+count line, and recent searches.
 
-Skipped where Node isn't installed; the browser behaviour itself is checked by hand (design/README.md).
+Skipped where Node isn't installed; the browser behaviour itself is checked by hand in headless Edge.
 """
 
 import json
@@ -17,7 +18,7 @@ pytestmark = pytest.mark.skipif(NODE is None, reason="Node.js is not installed")
 
 def run(expr: str):
     code = f"const C = require({json.dumps(str(JS))}); process.stdout.write(JSON.stringify({expr}));"
-    out = subprocess.run([NODE, "-e", code], capture_output=True, text=True, check=True)
+    out = subprocess.run([NODE, "-e", code], capture_output=True, text=True, encoding="utf-8", check=True)
     return json.loads(out.stdout)
 
 
@@ -37,21 +38,49 @@ def test_enter_opens_only_when_the_results_belong_to_the_text_in_the_box() -> No
     assert run("C.enterAction('e', 'error', true)") == "none"  # too short to search
 
 
-def test_esc_closes_the_phone_sheet_first_and_otherwise_clears_the_box() -> None:
+def test_esc_closes_the_drawer_or_sheet_first_and_otherwise_clears_the_box() -> None:
     assert run("[C.escAction(true, 'dice'), C.escAction(false, 'dice'), C.escAction(false, '  ')]") == \
         ["close-sheet", "clear", "none"]
 
 
-def test_chips_and_show_more_keep_the_top_ranked_wherever_their_group_is() -> None:
-    # display order: 25 close matches (fused ranks 0, 2-25), then a visual match at fused rank 1, then 4 related
-    kinds = ["pdf"] * 25 + ["photo"] + ["doc"] * 4
-    ranks = [0, *range(2, 26), 1, *range(26, 30)]
-    out = run(f"C.visibility({json.dumps(kinds)}, {json.dumps(ranks)}, 'all', false, 20)")
-    assert sum(out["visible"]) == 20 and out["visible"][25] is True and out["more"] == 10
-    out = run(f"C.visibility({json.dumps(kinds)}, {json.dumps(ranks)}, 'doc', false, 20)")
+def test_the_type_filter_and_show_more_keep_the_top_ranked() -> None:
+    # list order is fused order: 25 PDFs, a photo, then 4 weaker docs
+    types = ["pdf"] * 25 + ["photo"] + ["doc"] * 4
+    ranks = list(range(30))
+    out = run(f"C.visibility({json.dumps(types)}, {json.dumps(ranks)}, 'all', false, 20)")
+    assert out["visible"] == [True] * 20 + [False] * 10 and out["more"] == 10
+    out = run(f"C.visibility({json.dumps(types)}, {json.dumps(ranks)}, 'doc', false, 20)")
     assert out["visible"][26:] == [True] * 4 and sum(out["visible"]) == 4 and out["more"] == 0
-    out = run(f"C.visibility({json.dumps(kinds)}, {json.dumps(ranks)}, 'pdf', true, 20)")
+    out = run(f"C.visibility({json.dumps(types)}, {json.dumps(ranks)}, 'photo', false, 20)")
+    assert out["visible"][25] is True and sum(out["visible"]) == 1  # the photo at #26 shows under its filter
+    out = run(f"C.visibility({json.dumps(types)}, {json.dumps(ranks)}, 'pdf', true, 20)")
     assert sum(out["visible"]) == 25 and out["more"] == 0
+
+
+def test_the_count_line_says_when_a_filter_is_on_and_matches_the_server() -> None:
+    from vault.ui.views import TYPE_PLURALS, count_words
+
+    cases = [(14, 36, ""), (1, 0, ""), (3, 0, "Photos"), (0, 2, "PDFs"), (1, 1, "Text files")]
+    assert run("[" + ", ".join(f"C.countWords({n}, {w}, {json.dumps(label)})" for n, w, label in cases) + "]") == \
+        [count_words(n, w, label) for n, w, label in cases]
+    assert run("C.countWords(3, 0, C.PLURALS.photo)") == "matches in Photos"
+    assert run("C.PLURALS") == TYPE_PLURALS
+
+
+def test_recent_searches_keep_the_newest_five_once_each() -> None:
+    assert run("C.remember(['dice', 'sunset'], '  error   0x80070005 ')") == ["error 0x80070005", "dice", "sunset"]
+    assert run("C.remember(['dice', 'sunset'], 'Sunset')") == ["Sunset", "dice"]  # once, case aside
+    assert run("C.remember(['a1', 'a2', 'a3', 'a4', 'a5'], 'new')") == ["new", "a1", "a2", "a3", "a4"]
+    assert run("C.remember(['dice'], 'x')") == ["dice"]  # too short to have been a search
+    assert run("C.forget(['dice', 'sunset'], 'dice')") == ["sunset"]
+    assert run("[C.SAVE_MS, C.RECENT_MAX]") == [1500, 5]
+
+
+def test_recent_searches_from_storage_are_made_safe() -> None:
+    assert run("C.parseRecent(null)") == [] and run("C.parseRecent('not json')") == []
+    assert run("C.parseRecent('{\"a\": 1}')") == []
+    raw = json.dumps(json.dumps(["dice", 7, "x", " sunset  beach ", "y" * 300, "a", "b1", "c1", "d1", "e1"]))
+    assert run(f"C.parseRecent({raw})") == ["dice", "sunset beach", "b1", "c1", "d1"]
 
 
 def test_normalize_matches_the_server() -> None:

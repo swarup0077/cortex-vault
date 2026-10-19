@@ -359,7 +359,7 @@ The UI is called **Cortex Vault**: the page title, header, favicon and footer sa
 - Count line: "14 matches · 36 weaker · 0.21 s": the matches above the weaker-matches divider, with the weaker matches (§7.4 step 4) counted separately; with a type filter on, only that type is counted.
 - One list in fused order, numbered 01, 02…, with a thin "Weaker matches" divider before the weaker matches, whose numbers continue. Under a type filter each result keeps its number.
 - The top 20 show, then "Show N more" up to 50, N being the real remaining count under the current filter.
-- A row: number, tinted file-type glyph, file name and date, a one-line snippet with `<mark>`; screenshots and photos also show a thumbnail strip captioned "Matched text", or "Picture match" when only CLIP found them; then the meta line "<page or slide, if any> · <how the text was read> · <size> · Found by ● exact words #1 ● meaning #2", each method with its real rank.
+- A row: number, tinted file-type glyph, file name and date, a snippet of up to two lines with `<mark>` (as in the design); screenshots and photos also show a thumbnail strip captioned "Matched text", or "Picture match" when only CLIP found them; then the meta line "<page or slide, if any> · <how the text was read> · <size> · Found by ● exact words #1 ● meaning #2", each method with its real rank.
 - When nothing is above the divider, "No close matches for …" shows above the weaker matches.
 
 **Detail view** (the preview): a sticky column at ≥ 1200 px, a drawer from the right below that, and a full-screen sheet on phones (≤ 760 px). ↑/↓ updates it; where it isn't a column, clicking a row opens it.

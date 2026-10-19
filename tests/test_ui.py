@@ -1,6 +1,7 @@
-"""The Cortex Vault UI (SPEC §8): server-built HTML, grouping, the id-only routes, demo safety, and the handlers,
-without a browser and without real models."""
+"""The Cortex Vault UI (SPEC §8): server-built HTML, the numbered list, The Archive, the id-only routes, demo
+safety, no query logging, and the handlers, without a browser and without real models."""
 
+import logging
 import re
 import time
 import uuid
@@ -58,8 +59,9 @@ def test_a_hostile_file_name_shows_as_plain_text_everywhere() -> None:
     pages = [
         views.results(response([r], weaker=[result(2, filename=EVIL, weaker=True)]), DEMO, place, query=EVIL),
         views.results(response([visual(3, filename=EVIL)]), DEMO, place, query="q"),
-        views.upload_outcome([FileStatus(EVIL, "indexed"), FileStatus(EVIL, "rejected", EVIL)], received=2),
-        views.home(DEMO, count=1, recent=[Recent(1, EVIL, "photo", "2026-10-18T10:00:00")], suggestions=[]),
+        views.upload_outcome([FileStatus(EVIL, "indexed"), FileStatus(EVIL, "rejected", EVIL)], DEMO, views.Archive(),
+                             received=2),
+        views.home(DEMO, views.Archive(), recent=[Recent(1, EVIL, "photo", "2026-10-18T10:00:00")]),
         views.empty(response([]), DEMO, query=EVIL),
     ]
     for page in pages:
@@ -73,58 +75,97 @@ def test_snippets_keep_only_mark() -> None:
     assert "<script" not in page and "<mark>denied</mark>" in page
 
 
-# ---------------------------------------------------------------- grouping and counts
+# ---------------------------------------------------------------- the numbered list
 
 
-def groups(page: str) -> list[str]:
-    return re.findall(r'data-group="(\w+)"', page)
+def option_ids(page: str) -> list[str]:
+    return re.findall(r'role="option" id="cv-r-(\d+)"', page)
 
 
-def test_groups_follow_the_best_fused_rank_and_related_come_last() -> None:
-    """Owner's rule: Close and Visual matches in the order of their best item's fused rank; Related last."""
-    text_first = response([result(1), visual(2), result(3)], weaker=[result(4, weaker=True)])
-    assert groups(views.results(text_first, DEMO, place, query="q")) == ["close", "visual", "related"]
+def detail_url(page: str, file_id: int) -> str:
+    return re.search(rf'id="cv-r-{file_id}"[^>]*data-detail="([^"]*)"', page).group(1)
 
 
-def test_a_query_whose_top_result_only_clip_found_shows_visual_matches_first() -> None:
-    picture_first = response([visual(1), result(2), visual(3)], weaker=[result(4, weaker=True)])
-    page = views.results(picture_first, DEMO, place, query="sunset")
-    assert groups(page) == ["visual", "close", "related"]
-    assert re.findall(r'role="option" id="cv-r-(\d+)"', page) == ["1", "3", "2", "4"]  # the arrow keys' order
+def test_one_numbered_list_in_fused_order_with_the_weaker_after_the_divider() -> None:
+    """Owner's rule (SPEC §8): one list, 01, 02…, a picture-only match in its fused place, the weaker matches after
+    a thin divider with their numbers continuing."""
+    page = views.results(response([result(1), visual(2), result(3)], weaker=[result(4, weaker=True)]), DEMO, place,
+                         query="q")
+    assert option_ids(page) == ["1", "2", "3", "4"]  # also the arrow keys' order
+    assert re.findall(r'cv-card__rank">(\d+)<', page) == ["01", "02", "03", "04"]
+    assert re.findall(r'data-group="(\w+)"', page) == ["matches", "weaker"]
+    divider = page.index("Weaker matches")
+    assert page.index('id="cv-r-3"') < divider < page.index('id="cv-r-4"')
+    assert re.findall(r'id="cv-r-(\d+)"[^>]*data-weaker', page) == ["4"]
+
+
+def test_the_count_line_counts_the_weaker_matches_separately() -> None:
+    page = views.results(response([result(i) for i in range(1, 15)],
+                                  weaker=[result(i, weaker=True) for i in range(15, 51)]), DEMO, place, query="q")
+    assert "data-count-n>14<" in page and "matches · 36 weaker" in page and "in 0.21 s" in page
+    assert views.count_words(1, 0) == "match" and views.count_words(3, 2, "Photos") == "matches in Photos · 2 weaker"
+    assert "data-clear-filter" in page  # the × that clears a type filter (shown by cortex.js)
 
 
 def test_show_n_more_counts_what_is_left_after_twenty() -> None:
     page = views.results(response([result(i) for i in range(1, 31)],
                                   weaker=[result(i, weaker=True) for i in range(31, 51)]), DEMO, place, query="q")
     assert "Show 30 more" in page and page.count("data-more hidden") == 30
-    assert "Show" not in views.results(response([result(i) for i in range(1, 6)]), DEMO, place, query="q")
+    assert re.search(r'data-group="weaker" hidden', page)  # all 20 weaker are past the first 20
+    assert "data-more-btn" not in views.results(response([result(i) for i in range(1, 6)]), DEMO, place, query="q")
 
 
-def test_the_top_twenty_by_rank_show_even_if_their_group_comes_later() -> None:
-    """A visual match at #2 after a long Close group stays visible; Show more holds the lowest ranked."""
-    page = views.results(response([result(1), visual(2), *[result(i) for i in range(3, 31)]]), DEMO, place, query="q")
-    assert groups(page) == ["close", "visual"]
-    thumb = re.search(r'<div class="cv-thumb" [^>]*>', page).group(0)
-    assert "hidden" not in thumb and 'data-rank="1"' in thumb
-    assert "Show 10 more" in page and page.count("data-more hidden") == 10
+def test_a_row_says_where_how_the_text_was_read_its_size_and_found_by() -> None:
+    pdf = result(1, kind="pdf", filename="IT_helpdesk_guide.pdf", page=4, pages=12, size_bytes=380_000,
+                 chunk_source="pdf_text", ranks={"dense": 1, "bm25": 2}, width=None, height=None)
+    assert views.row_meta(pdf) == ["page 4 of 12", "PDF text", "371 KB"]
+    assert views.row_meta(result(1)) == ["OCR", "1920 × 1080 · 209 KB"]
+    assert views.row_meta(visual(1)) == ["no text", "1920 × 1080 · 209 KB"]
+    row = views.row(pdf, "q", DEMO, None)
+    assert "meaning <b>#1</b>" in row and "exact words <b>#2</b>" in row and "12 Oct 2026" in row
+    assert views.found_by_rows(result(1, ranks={"bm25": 1, "all_terms": 1, "dense": 2, "clip": None})) == \
+        [("bm25", 1), ("all_terms", 1), ("dense", 2)]
 
 
-def test_chip_counts_come_from_the_full_result_set() -> None:
-    rs = [result(1), result(2, kind="pdf"), visual(3), result(4, kind="doc", filename="a.docx")]
-    page = views.results(response(rs, weaker=[result(5, kind="slides", weaker=True)]), DEMO, place, query="q")
-    counts = dict(re.findall(r'data-filter="(\w+)"[^>]*>[^<]*<span class="cv-kind__n">(\d+)', page))
-    assert counts == {"all": "5", "screenshot": "1", "photo": "1", "pdf": "1", "slides": "1", "doc": "1"}
-    assert 'data-meta="5 results · 0.21 s"' in page
+def test_picture_only_matches_show_their_thumbnail_and_get_no_boxes() -> None:
+    """SPEC §8: "Picture match", and the detail request carries neither the query nor a chunk, so no box is drawn.
+    A screenshot found by its text says "Matched text" and asks for boxes on that text."""
+    page = views.results(response([result(1), visual(2)]), DEMO, place, query="red error")
+    text_row, pic_row = page.split('id="cv-r-1"')[1].split('id="cv-r-2"')
+    assert "Matched text" in text_row and "Picture match" not in text_row
+    assert "Picture match" in pic_row.split('role="option"')[0] and "/thumb/2" in pic_row
+    assert "q=" not in detail_url(page, 2) and "chunk=" not in detail_url(page, 2)
+    assert "q=red+error" in detail_url(page, 1) and "chunk=101" in detail_url(page, 1)
 
 
-# ---------------------------------------------------------------- preview facts
+def test_the_archive_shows_index_counts_per_type() -> None:
+    archive = views.Archive({"screenshot": 18, "pdf": 10, "text": 3, "photo": 16, "doc": 2, "slides": 0})
+    page = views.results(response([result(1)]), DEMO, place, archive, query="q")
+    counts = dict(re.findall(r'data-filter="(\w+)"[^>]*>.*?<span class="cv-filter__n">(\d+)', page))
+    assert counts == {"all": "49", "screenshot": "18", "pdf": "10", "text": "3", "photo": "16", "doc": "2",
+                      "slides": "0"}
+    assert re.search(r'data-filter="slides"[^>]*disabled', page) and "49 files" in page
+    assert "Search in" in page and 'data-act="add"' in page and 'data-act="folders"' not in page
+    local = views.results(response([result(1)]), LOCAL, place, archive, query="q")
+    assert "Search in" not in local and 'data-act="folders"' in local and 'data-act="add"' not in local
 
 
-def test_found_by_names_each_method_with_its_real_rank() -> None:
-    assert views.found_by(result(1, ranks={"bm25": 1, "all_terms": 1, "dense": 2, "clip": None})) == \
-        "Exact words (rank 1), every word (rank 1) and meaning (rank 2)"
-    assert views.found_by(result(1, ranks={"dense": 37}, weaker=True)) == "Meaning (rank 37)"
-    assert views.found_by(result(1, ranks={})) == ""
+def test_type_of_splits_plain_text_from_documents() -> None:
+    assert views.type_of("doc", "notes.md") == "text" and views.type_of("doc", "a.TXT") == "text"
+    assert views.type_of("doc", "a.docx") == "doc" and views.type_of("pdf", "a.pdf") == "pdf"
+
+
+# ---------------------------------------------------------------- the detail view
+
+
+def test_detail_rows_show_each_method_with_its_real_rank() -> None:
+    r = result(1, ranks={"bm25": 1, "dense": 37}, weaker=True)
+    tpl = views.preview_template(r, response([r]), DEMO, place, None, 15)
+    assert "Result 15 / Screenshot" in tpl
+    assert re.findall(r'cv-detail__method"><span>([^<]+)</span><b>rank (\d+)', tpl) == [("exact words", "1"),
+                                                                                       ("meaning", "37")]
+    assert "Download" in tpl and "Extracted text" in tpl and "OCR, on this server" in tpl
+    assert "Open" in views.preview_template(r, response([r]), LOCAL, place, None, 1)
 
 
 def test_details_show_the_rrf_shares_and_the_gate() -> None:
@@ -155,6 +196,24 @@ def test_copy_link_and_every_url_carry_ids_never_paths() -> None:
             assert "secret" not in value and "Users" not in value and "C:" not in value
 
 
+# ---------------------------------------------------------------- wording per mode
+
+
+def test_the_upload_lifetime_comes_from_the_config(tmp_path, fake_embedder) -> None:
+    """Owner's note (19 Oct): every text that says when uploads are deleted takes the minutes from session_ttl_s."""
+    cfg = Config(data_dir=tmp_path / "demo", session_ttl_s=45 * 60)
+    lib = Library(cfg)
+    ctx = UiContext("demo", lib, sessions=SessionManager(lib, cfg, tmp_path / "sessions"))
+    texts = [views.footer(ctx.view_mode), layout.home_html(ctx, None),
+             views.upload_outcome([], ctx.view_mode, views.Archive(), received=0)]
+    for text in texts:
+        assert "45 minutes" in text and "30 minutes" not in text
+    assert "Demo server · no cloud services" in views.top(ctx.view_mode)
+    local = views.Mode(demo=False)
+    assert "Local only · nothing leaves this device" in views.top(local)
+    assert "Nothing leaves this device" in views.footer(local) and "minutes" not in views.footer(local)
+
+
 # ---------------------------------------------------------------- nothing served loads from the internet
 
 
@@ -162,20 +221,21 @@ def test_no_served_html_css_or_js_contains_an_external_url() -> None:
     served = [p for p in STATIC.rglob("*") if p.suffix in (".css", ".js", ".svg", ".html")]
     assert {p.suffix for p in served} >= {".css", ".js", ".svg"}
     texts = [p.read_text(encoding="utf-8") for p in served]
-    texts += [HEAD, views.top(DEMO), views.top(LOCAL), views.footer(DEMO), views.sprite()]
+    texts += [HEAD, views.top(DEMO, views.DEMO_SUGGESTIONS), views.top(LOCAL), views.footer(DEMO), views.sprite()]
     texts.append(views.results(response([result(1), visual(2)], weaker=[result(3, weaker=True)]), DEMO, place,
                                query="q"))
-    texts.append(views.home(DEMO, count=1, recent=[], suggestions=views.DEMO_SUGGESTIONS, samples=52))
+    texts.append(views.home(DEMO, views.Archive(), recent=[], samples=52))
     for text in texts:
         urls = re.findall(r"https?://[^\s\"')<>]+", text)
         assert [u for u in urls if u != "http://www.w3.org/2000/svg"] == []
+    assert not (STATIC / "fonts").exists()  # system fonts only (SPEC §8)
 
 
-def test_the_theme_names_plain_fonts() -> None:
+def test_the_theme_names_plain_system_fonts() -> None:
     from vault.ui.server import theme
 
     fonts = str(theme().font)
-    assert "Geist" in fonts and "GoogleFont" not in fonts
+    assert "Arial" in fonts and "Geist" not in fonts and "GoogleFont" not in fonts
 
 
 # ---------------------------------------------------------------- routes and demo safety
@@ -277,21 +337,23 @@ def test_the_folders_panel_exists_only_in_local_mode(demo_ctx, tmp_path, fake_em
 
 def test_search_handler_home_results_and_empty(demo_ctx) -> None:
     home = layout.run_search(demo_ctx, None, "  ")
-    assert 'data-view="home"' in home and "Search 2 files" in home and "bayes theorem" in home
+    assert 'data-view="home"' in home and "2 files" in home and "IMG_red.jpg" in home
+    assert "bayes theorem" in views.top(demo_ctx.view_mode, demo_ctx.suggestions)  # the example searches
     page = layout.run_search(demo_ctx, None, "  denoising   diffusion ")
     assert 'data-query="denoising diffusion"' in page and "diffusion.pdf" in page
     nonsense = layout.run_search(demo_ctx, None, "zzzqqq xylophone")
-    assert "No close matches for “zzzqqq xylophone”" in nonsense and "Related matches" in nonsense
+    assert "No close matches for “zzzqqq xylophone”" in nonsense and "Weaker matches" in nonsense
     assert "Nothing uploaded yet" in layout.run_search(demo_ctx, None, "diffusion", "My uploads")
 
 
 def test_upload_outcome_then_scopes(demo_ctx) -> None:
     main, status, sid = upload(demo_ctx, {"minutes.txt": "Minutes: the diffusion reading group meets Friday."})
-    assert sid and "1 file received · 1 added" in main and "minutes.txt" in main
-    assert views._e(views.UPLOAD_NOTICE) in main and 'data-text="3 files · up to date"' in status
+    assert sid and "1</span> file received · 1 added" in main and "minutes.txt" in main
+    assert views._e(demo_ctx.view_mode.upload_notice) in main and 'data-index="3 files · up to date"' in status
+    assert layout.archive(demo_ctx, sid).counts["text"] == 1  # The Archive counts the upload with the samples
     mine = layout.run_search(demo_ctx, sid, "diffusion", "My uploads")
     samples = layout.run_search(demo_ctx, sid, "diffusion", "Samples")
-    assert "minutes.txt" in mine and "diffusion.pdf" not in mine.split("Related matches")[0]
+    assert "minutes.txt" in mine and "diffusion.pdf" not in mine.split("Weaker matches")[0]
     assert "diffusion.pdf" in samples and "minutes.txt" not in samples and f"s={sid}" in mine
 
 
@@ -311,11 +373,36 @@ def test_upload_outcome_shows_while_the_files_are_still_read(demo_ctx, monkeypat
     monkeypatch.setattr(demo_ctx.sessions, "add_files", slow)
     steps = list(layout.handle_upload(demo_ctx, None, [gradio_file(demo_ctx, f"n{i}.txt", "x") for i in range(3)]))
     first_main = next(i for i, (main, _, _) in enumerate(steps) if isinstance(main, str))
-    assert "3 files received · 3 added" in steps[first_main][0] and first_main < len(steps) - 1
+    assert "3</span> files received · 3 added" in steps[first_main][0] and first_main < len(steps) - 1
     busy = [status for _, status, _ in steps[first_main:-1]]
     assert any("Reading 2 of 3 uploads" in s for s in busy) and all('data-busy="true"' in s for s in busy[1:])
-    assert any("still being read" in s for s in busy)
+    assert any('data-dial="Reading 2 of 3"' in s and 'data-pct="33"' in s for s in busy)  # the dial and progress bar
     assert 'data-busy="false"' in steps[-1][1]
+
+
+def test_the_server_logs_no_queries_in_either_mode(demo_ctx, tmp_path, make_search_corpus, caplog) -> None:
+    """Owner's rule (SPEC §8): a query is never logged on the server, in either mode: not by the handlers, the
+    search, the routes (`/detail` carries the query), uvicorn's access log or Caddy. Recent searches stay in the
+    browser."""
+    caplog.set_level(logging.DEBUG)  # every logger, every level
+    secret = "quokka zebra 7731 diffusion"
+    client = TestClient(make_app(build_blocks(demo_ctx), demo_ctx.resolve, demo=True))
+    hit = demo_ctx.library.search("denoising diffusion").results[0]
+    layout.run_search(demo_ctx, None, secret)
+    client.get(f"/detail/{hit.file_id}?chunk={hit.chunk_id}&q=" + secret.replace(" ", "+"))
+    _, _, sid = upload(demo_ctx, {"notes.txt": "Robotics club notes."})
+    layout.run_search(demo_ctx, sid, secret, "My uploads")
+    local = Library(Config(data_dir=tmp_path / "local"))
+    local.index([make_search_corpus(tmp_path / "files")])
+    layout.run_search(UiContext("local", local), None, secret)
+    # "httpx" is the test's own client logging its requests (the app sets it to WARNING); everything else is ours,
+    # Gradio's, FastAPI's or uvicorn's
+    logged = " ".join(r.getMessage() for r in caplog.records if r.name != "httpx")
+    assert caplog.records and "quokka" not in logged and "7731" not in logged
+
+    repo = Path(__file__).resolve().parents[1]
+    assert re.search(r"uvicorn\.run\([^)]*access_log=False", (repo / "app.py").read_text(encoding="utf-8"))
+    assert not re.search(r"^\s*log\b", (repo / "deploy" / "Caddyfile").read_text(encoding="utf-8"), re.M)
 
 
 def test_upload_refuses_paths_outside_gradios_folder(demo_ctx, tmp_path) -> None:
@@ -358,7 +445,7 @@ def test_with_twenty_sessions_open_uploads_say_busy_and_search_still_works(demo_
     assert demo_ctx.sessions.full and len(demo_ctx.sessions.sessions) == 20
 
     home = layout.home_html(demo_ctx, None)
-    assert views._e(views.DEMO_BUSY) in home and 'data-act="add"' not in home.split("cv-home")[1]
+    assert views._e(views.DEMO_BUSY) in home and 'data-act="add"' not in home  # neither Add files nor the drop zone
     assert 'data-uploads="full"' in layout.status_html(demo_ctx, None)
     path = gradio_file(demo_ctx, "late.txt", "A latecomer's file.")
     *_, (main, status, sid) = layout.handle_upload(demo_ctx, None, [path])

@@ -1,7 +1,8 @@
 """The Gradio app (SPEC §8): one Cortex Vault screen in both modes.
 
-The page is four gr.HTML parts built on the server by `vault.ui.views` (top: header and search bar; status; main:
-home, results or an upload outcome; footer) and driven by `static/cortex.js`, which sends events back here with
+The page is four gr.HTML parts built on the server by `vault.ui.views` (top: header, hero, search box and the
+recent / example searches; status; main: The Archive beside home, the results or an upload outcome; footer) and
+driven by `static/cortex.js`, which sends events back here with
 `trigger`. Handlers are plain functions over a `UiContext`, so tests call them without a browser. They take file
 ids and query text from the page, never paths. The local Folders panel and its handlers exist only in local mode.
 """
@@ -59,7 +60,8 @@ class UiContext:
     view_mode: views.Mode = field(init=False)
 
     def __post_init__(self) -> None:
-        self.view_mode = views.Mode(demo=self.demo)
+        ttl_s = self.sessions.cfg.session_ttl_s if self.sessions else self.library.cfg.session_ttl_s
+        self.view_mode = views.Mode(demo=self.demo, ttl_min=max(1, round(ttl_s / 60)))
 
     @property
     def demo(self) -> bool:
@@ -103,27 +105,35 @@ def uploads_full(ctx: UiContext, session: str | None) -> bool:
 
 
 def status_html(ctx: UiContext, session: str | None, *, busy: tuple[int, int] | None = None) -> str:
+    """The header status, the dial's state, the footer's index line and the upload progress (SPEC §8)."""
     full = uploads_full(ctx, session)
-    if busy is not None:
-        done, total = busy
-        return views.status(f"Reading {min(done + 1, total)} of {total} uploads", busy=True, done=done, total=total,
-                            uploads_full=full)
     lib, _, _ = ctx.target(session, "Both")
     n = lib.count()
     if ctx.demo:
-        return views.status(f"{n} files · up to date", uploads_full=full)
-    stats = ctx.library.stats()
-    if not stats.last_indexed:
-        return views.status(f"{n} files · not indexed yet")
-    return views.status(f"{n} files · indexed {views.ago(stats.last_indexed)}")
+        index = f"{n} files · up to date"
+    else:
+        last = ctx.library.stats().last_indexed
+        index = f"{n} files · " + (f"indexed {views.ago(last)}" if last else "not indexed yet")
+    if busy is not None:
+        done, total = busy
+        reading = f"Reading {min(done + 1, total)} of {total}"
+        return views.status(f"{reading} uploads", index=index, dial_state=reading, busy=True, done=done, total=total,
+                            uploads_full=full)
+    return views.status(ctx.view_mode.status, index=index, uploads_full=full)
+
+
+def archive(ctx: UiContext, session: str | None, scope: str = "Both") -> views.Archive:
+    """The Archive's facts: files per type in everything this visitor can search (the samples plus this session's
+    uploads in demo mode), whatever the scope (SPEC §8)."""
+    lib, _, _ = ctx.target(session, "Both")
+    return views.Archive(lib.type_counts(), scope, uploads_full(ctx, session))
 
 
 def home_html(ctx: UiContext, session: str | None, scope: str = "Both") -> str:
     lib, roots, _ = ctx.target(session, scope)
     folders = [] if ctx.demo else ctx.library.stats().roots
-    return views.home(ctx.view_mode, count=lib.count(roots), recent=lib.recent(5, roots), suggestions=ctx.suggestions,
-                      folders=folders, samples=ctx.library.count() if ctx.demo else 0, scope=scope,
-                      uploads_full=uploads_full(ctx, session))
+    return views.home(ctx.view_mode, archive(ctx, session, scope), recent=lib.recent_by_type(views.RECENT, roots),
+                      folders=folders, samples=ctx.library.count() if ctx.demo else 0)
 
 
 def run_search(ctx: UiContext, session: str | None, query: object, scope: object = "Both",
@@ -134,14 +144,14 @@ def run_search(ctx: UiContext, session: str | None, query: object, scope: object
     if not q:
         return home_html(ctx, session, scope)
     if ctx.demo and scope == "My uploads" and ctx.session(session) is None:
-        return views.nothing_uploaded(q)
+        return views.nothing_uploaded(ctx.view_mode, archive(ctx, session, scope), q)
     lib, roots, url_session = ctx.target(session, scope)
     try:
         resp = lib.search(q, roots=roots)
     except db.ModelMismatchError as e:
-        return views.needs_rebuild(q, str(e))
-    return views.results(resp, ctx.view_mode, ctx.place(session), query=q, session=url_session, scope=scope,
-                         select=select, page=ctx.page_results)
+        return views.needs_rebuild(ctx.view_mode, archive(ctx, session, scope), q, str(e))
+    return views.results(resp, ctx.view_mode, ctx.place(session), archive(ctx, session, scope), query=q,
+                         session=url_session, select=select, page=ctx.page_results)
 
 
 def handle_upload(ctx: UiContext, session: str | None, paths: object) -> Iterator[tuple[object, str, str | None]]:
@@ -179,8 +189,8 @@ def handle_upload(ctx: UiContext, session: str | None, paths: object) -> Iterato
         if "listed" in outcome and not shown:  # the per-file outcome, as soon as the files are listed
             shown = True
             sid = outcome["listed"].session_id or session
-            main = views.upload_outcome(outcome["listed"].files, received=len(files),
-                                        scope="My uploads" if sid else "Both")
+            main = views.upload_outcome(outcome["listed"].files, ctx.view_mode,
+                                        archive(ctx, sid, "My uploads" if sid else "Both"), received=len(files))
         elif shown:
             sid = outcome["listed"].session_id or session
         if progress["total"] and progress["phase"] == "read":
@@ -188,15 +198,15 @@ def handle_upload(ctx: UiContext, session: str | None, paths: object) -> Iterato
         elif shown:
             yield main, status_html(ctx, sid), sid
     if "error" in outcome:
-        yield views.message("The upload couldn't be read. Please try again.", ok=False), status_html(ctx, session), \
-            session
+        yield views.upload_failed(ctx.view_mode, archive(ctx, session)), status_html(ctx, session), session
         return
     _, result = outcome["result"]
     if result.busy:  # every session slot is taken: nothing was kept
-        yield views.demo_busy(), status_html(ctx, session), session
+        yield views.demo_busy(ctx.view_mode, archive(ctx, session)), status_html(ctx, session), session
         return
     sid = result.session_id or session
-    main = views.upload_outcome(result.files, received=len(files), scope="My uploads" if sid else "Both")
+    main = views.upload_outcome(result.files, ctx.view_mode, archive(ctx, sid, "My uploads" if sid else "Both"),
+                                received=len(files))
     yield main, status_html(ctx, sid), sid
 
 
@@ -275,7 +285,7 @@ def build_blocks(ctx: UiContext) -> gr.Blocks:
     with gr.Blocks(title="Cortex Vault", analytics_enabled=False,
                    delete_cache=(300, 1800) if ctx.demo else None) as blocks:
         session = gr.State(None)  # demo: the upload session's id, kept server-side
-        top = gr.HTML(views.top(ctx.view_mode), js_on_load=TOP_JS, elem_id="cv-top", **part)
+        top = gr.HTML(views.top(ctx.view_mode, ctx.suggestions), js_on_load=TOP_JS, elem_id="cv-top", **part)
         status = gr.HTML(status_html(ctx, None), js_on_load=STATUS_JS, elem_id="cv-status-src", **part)
         if not ctx.demo:  # the Folders panel and its handlers exist only in local mode (SPEC §8)
             with gr.Column(visible=False, elem_id="cv-folders") as folders:
