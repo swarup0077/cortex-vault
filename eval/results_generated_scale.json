@@ -1,0 +1,794 @@
+{
+ "title": "Generated-file set",
+ "purpose": "scale",
+ "when": "2026-10-19T23:39:28",
+ "corpus": {
+  "files": 1095,
+  "private_paths": 24,
+  "public_paths": 1071
+ },
+ "settings": {},
+ "models": {
+  "text": "BAAI/bge-small-en-v1.5",
+  "clip": "Qdrant/clip-ViT-B-32-vision+Qdrant/clip-ViT-B-32-text",
+  "ocr": "PP-OCRv6_det_small.onnx+PP-OCRv6_rec_small.onnx"
+ },
+ "commit": "ef51e68",
+ "splits": {
+  "guard": {
+   "rows": {
+    "6. All three, CLIP gated (the app)": {
+     "overall": {
+      "n": 32,
+      "r1": 26,
+      "r1_pct": 81.2,
+      "r5": 31,
+      "r5_pct": 96.9,
+      "r10": 31,
+      "r10_pct": 96.9,
+      "mrr": 0.875
+     },
+     "search type": {
+      "exact word": {
+       "n": 8,
+       "r1": 8,
+       "r1_pct": 100.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "inside a scan": {
+       "n": 8,
+       "r1": 8,
+       "r1_pct": 100.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "meaning": {
+       "n": 10,
+       "r1": 6,
+       "r1_pct": 60.0,
+       "r5": 10,
+       "r5_pct": 100.0,
+       "r10": 10,
+       "r10_pct": 100.0,
+       "mrr": 0.75
+      },
+      "picture": {
+       "n": 6,
+       "r1": 4,
+       "r1_pct": 66.7,
+       "r5": 5,
+       "r5_pct": 83.3,
+       "r10": 5,
+       "r10_pct": 83.3,
+       "mrr": 0.75
+      }
+     },
+     "file type": {
+      "doc": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "pdf": {
+       "n": 8,
+       "r1": 5,
+       "r1_pct": 62.5,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 0.771
+      },
+      "photo": {
+       "n": 10,
+       "r1": 8,
+       "r1_pct": 80.0,
+       "r5": 9,
+       "r5_pct": 90.0,
+       "r10": 9,
+       "r10_pct": 90.0,
+       "mrr": 0.85
+      },
+      "screenshot": {
+       "n": 10,
+       "r1": 10,
+       "r1_pct": 100.0,
+       "r5": 10,
+       "r5_pct": 100.0,
+       "r10": 10,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "slides": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "text": {
+       "n": 2,
+       "r1": 1,
+       "r1_pct": 50.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 0.667
+      }
+     },
+     "set": {
+      "public": {
+       "n": 32,
+       "r1": 26,
+       "r1_pct": 81.2,
+       "r5": 31,
+       "r5_pct": 96.9,
+       "r10": 31,
+       "r10_pct": 96.9,
+       "mrr": 0.875
+      }
+     }
+    }
+   },
+   "divider": {
+    "median_above": 4.5,
+    "all_correct_above": 32,
+    "of": 32,
+    "set": {
+     "public": {
+      "median_above": 4.5,
+      "all_correct_above": 32,
+      "of": 32
+     }
+    }
+   },
+   "latency_ms": {
+    "p50": 233.8,
+    "p95": 438.8
+   },
+   "queries": [
+    {
+     "id": "g01",
+     "split": "guard",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "0x80070005 access denied installer",
+     "relevant": [
+      "corpus/screenshots/Screenshot 2026-10-12 101530.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 1,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g02",
+     "split": "guard",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "KeyError user_id traceback",
+     "relevant": [
+      "corpus/screenshots/Screenshot 2026-10-13 091204.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 1,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g03",
+     "split": "guard",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "ERESOLVE unable to resolve dependency tree",
+     "relevant": [
+      "corpus/screenshots/Screenshot 2026-10-13 151022.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 2,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g04",
+     "split": "guard",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "PNR 4521873906",
+     "relevant": [
+      "corpus/receipts/ticket-2026-10-24.pdf",
+      "corpus/screenshots/phone/Screenshot_20261012-080102_Messages.png"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 2,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "clip": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g05",
+     "split": "guard",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "UPI transaction ID 629184736251",
+     "relevant": [
+      "corpus/screenshots/Screenshot_20261018-130512_Pay.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 1,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g06",
+     "split": "guard",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "consumer number 110045227",
+     "relevant": [
+      "corpus/receipts/electricity-bill-october.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 4,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 14
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g07",
+     "split": "guard",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "NET::ERR_CERT_DATE_INVALID",
+     "relevant": [
+      "corpus/screenshots/Screenshot (3).png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 1,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g08",
+     "split": "guard",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "git reset --soft HEAD~1",
+     "relevant": [
+      "corpus/notes/git cheatsheet.md"
+     ],
+     "file_type": "text",
+     "rank": 1,
+     "above_divider": 7,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g09",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "the page that defines the singular value decomposition",
+     "relevant": [
+      "corpus/papers/matrix-decompositions.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 3,
+     "above_divider": 21,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 2,
+      "dense": 2
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g10",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "paper on generating images by gradually removing noise",
+     "relevant": [
+      "corpus/papers/2006.11239.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 3,
+     "above_divider": 18,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 2
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g11",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "notes on letting every word in a sentence look at every other word",
+     "relevant": [
+      "corpus/papers/1706.03762.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 5,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 11
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g12",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "default hyperparameters for the Adam optimizer",
+     "relevant": [
+      "corpus/papers/1412.6980.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 2,
+     "above_divider": 9,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 6,
+      "dense": 3
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g13",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "slide about gradient descent with momentum",
+     "relevant": [
+      "corpus/decks/ML lecture v2.pptx"
+     ],
+     "file_type": "slides",
+     "rank": 1,
+     "above_divider": 2,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g14",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "what was decided at the project sync about freezing the API",
+     "relevant": [
+      "corpus/notes/meeting notes 2026-10-14.docx"
+     ],
+     "file_type": "doc",
+     "rank": 1,
+     "above_divider": 20,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g15",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "how long to bake bread in a covered pot",
+     "relevant": [
+      "corpus/notes/sourdough recipe.txt"
+     ],
+     "file_type": "text",
+     "rank": 3,
+     "above_divider": 7,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g16",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "my card was declined at an online shop",
+     "relevant": [
+      "corpus/screenshots/Screenshot 2026-10-17 110203.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 4,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g17",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "port 8080 already in use when starting a container",
+     "relevant": [
+      "corpus/screenshots/Screenshot (4).png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 2,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 7
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g18",
+     "split": "guard",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "advice on sleeping better and avoiding coffee",
+     "relevant": [
+      "corpus/screenshots/phone/Screenshot_20261013-120000_Reader.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 6,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g19",
+     "split": "guard",
+     "search_type": "picture",
+     "set": "public",
+     "query": "sunset over the sea",
+     "relevant": [
+      "corpus/photos/IMG_20260921_183012.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 6,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g20",
+     "split": "guard",
+     "search_type": "picture",
+     "set": "public",
+     "query": "two dice on a table",
+     "relevant": [
+      "corpus/photos/IMG_20260925_160010.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 5,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g21",
+     "split": "guard",
+     "search_type": "picture",
+     "set": "public",
+     "query": "snow covered mountains",
+     "relevant": [
+      "corpus/photos/IMG_20260923_120301.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 2,
+     "above_divider": 2,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g22",
+     "split": "guard",
+     "search_type": "picture",
+     "set": "public",
+     "query": "a red apple",
+     "relevant": [
+      "corpus/photos/IMG_20260926_090909.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 7,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g23",
+     "split": "guard",
+     "search_type": "picture",
+     "set": "public",
+     "query": "a rainbow in the sky",
+     "relevant": [
+      "corpus/photos/IMG_20260928_131313.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 50,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g24",
+     "split": "guard",
+     "search_type": "picture",
+     "set": "public",
+     "query": "the moon at night",
+     "relevant": [
+      "corpus/photos/IMG_20260924_221145.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 35,
+     "above_divider": 38,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g25",
+     "split": "guard",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "Bayes theorem example about a test for a rare condition",
+     "relevant": [
+      "corpus/scans/scan_0001.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 23,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g26",
+     "split": "guard",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "hostel quiet hours",
+     "relevant": [
+      "corpus/scans/scan_0002.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 4,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g27",
+     "split": "guard",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "lab 3 has moved to room 214",
+     "relevant": [
+      "corpus/photos/notices/IMG_20261004_150000.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 7,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g28",
+     "split": "guard",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "water supply interrupted on 21 October",
+     "relevant": [
+      "corpus/photos/notices/IMG_20261005_091500.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 1,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g29",
+     "split": "guard",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "total on the Blue Door Cafe bill",
+     "relevant": [
+      "corpus/photos/notices/IMG_20261018_143500.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 1,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g30",
+     "split": "guard",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "where is the spare key for the lab cupboard",
+     "relevant": [
+      "corpus/screenshots/phone/Screenshot_20261012-193344_Notes.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 4,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g31",
+     "split": "guard",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "back up the phone overnight while it charges",
+     "relevant": [
+      "corpus/screenshots/phone/Screenshot_20261011-221530_Browser.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 2,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1,
+      "clip": 30
+     },
+     "single_method_rank": {}
+    },
+    {
+     "id": "g32",
+     "split": "guard",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "linear regression loss written on the whiteboard",
+     "relevant": [
+      "corpus/photos/notices/IMG_20261003_103000.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 14,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 2,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {}
+    }
+   ]
+  }
+ }
+}
