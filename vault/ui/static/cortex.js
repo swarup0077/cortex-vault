@@ -119,8 +119,16 @@
     return Number(indexVersion) > Number(resultsVersion);
   }
 
+  /* A /detail response (Copy text, the boxes) lands only where it was asked for: `asked` is the request (its
+     ticket, file id and render), `now` the page: the latest ticket, the selected row, the render on screen, and
+     the file and render of the preview in the pane. Anything older or for another row is dropped. */
+  function detailFits(asked, now) {
+    return asked.ticket === now.ticket && asked.id === now.selected && asked.id === now.paneFile
+      && asked.render === now.render && asked.render === now.paneRender;
+  }
+
   const api = { MIN_CHARS, DELAY_MS, PAGE, SAVE_MS, RECENT_MAX, PLURALS, normalize, searchFor, enterAction, escAction,
-    visibility, countWords, remember, forget, parseRecent, barText, barValue, percent, stale };
+    visibility, countWords, remember, forget, parseRecent, barText, barValue, percent, stale, detailFits };
   if (!win) return api;
 
   /* ------------------------------------------------------------------ browser */
@@ -130,7 +138,8 @@
   const S = {
     top: null, main: null, topTrigger: null, mainTrigger: null, upload: null,
     scope: 'Both', last: '', shown: null, timer: 0, filter: 'all', expanded: false,
-    selected: null, text: '', toast: null, toastTimer: 0, saveTimer: 0, turn: 0, recent: [], status: null,
+    selected: null, ticket: 0, detailAbort: null,
+    text: '', toast: null, toastTimer: 0, saveTimer: 0, turn: 0, recent: [], status: null,
     uploadsFull: false, busyText: '', lastRender: null,
     transfer: null, notSent: 0, dismissed: '', reportOpen: false, said: '', homeFor: '', awaiting: null,
   };
@@ -293,24 +302,51 @@
     fillDetail(opt);
   }
 
+  /* Empty the pane and make any /detail response still on its way stale. */
+  function clearPane(body) {
+    S.ticket += 1;
+    if (S.detailAbort) S.detailAbort.abort();
+    S.detailAbort = null;
+    S.selected = null;
+    S.text = '';
+    if (!body) return;
+    body.replaceChildren();
+    ['file', 'render', 'detailFor'].forEach((k) => { delete body.dataset[k]; });
+  }
+
+  /* The selected row's preview: a clone of its hidden copy in this render, found by file id and the render's
+     token (views.preview), so the header, the picture and the text are all that row's. With no copy for it the
+     pane stays empty rather than show another file. Then /detail adds Copy text and the boxes, if still wanted. */
   function fillDetail(opt) {
     const root = viewRoot();
     const body = root && $('[data-pv]', root);
-    const tpl = root && $(`template[data-preview="${opt.dataset.id}"]`, root);
-    if (!body || !tpl) return;
-    S.selected = opt.dataset.id;
-    S.text = '';
-    body.replaceChildren(tpl.content.cloneNode(true));
+    clearPane(body);
+    if (!body || !opt) return;
+    const id = opt.dataset.id;
+    const render = root.dataset.render;
+    S.selected = id;
+    const src = $(`[data-previews] > [data-preview="${id}"][data-render="${render}"]`, root);
+    if (!src) return;
+    body.replaceChildren(...Array.from(src.childNodes, (n) => n.cloneNode(true)));
+    $$('img[data-src]', body).forEach((img) => { img.src = img.dataset.src; img.removeAttribute('data-src'); });
+    body.dataset.file = id;
+    body.dataset.render = render;
+    const asked = { ticket: S.ticket, id, render };
+    const abort = typeof win.AbortController === 'function' ? new win.AbortController() : null;
+    S.detailAbort = abort;
     const copy = $('[data-act="copy"]', body);
-    win.fetch(opt.dataset.detail, { credentials: 'same-origin' })
+    win.fetch(opt.dataset.detail, { credentials: 'same-origin', signal: abort ? abort.signal : undefined })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (!data || S.selected !== opt.dataset.id) return;
+        const now = viewRoot();
+        if (!data || !now || !detailFits(asked, { ticket: S.ticket, selected: S.selected, render: now.dataset.render,
+          paneFile: body.dataset.file, paneRender: body.dataset.render })) return;
         S.text = typeof data.text === 'string' ? data.text : '';
         if (copy) copy.disabled = !S.text;
         addBoxes(body, Array.isArray(data.boxes) ? data.boxes : []);
+        body.dataset.detailFor = `${id}:${render}`;
       })
-      .catch(() => {});
+      .catch(() => {});  // aborted (a newer request), or the network: the preview itself is already right
   }
 
   function addBoxes(body, boxes) {
@@ -510,14 +546,15 @@
     const update = $('[data-act="update-results"]', bar);
     update.hidden = !(root && root.dataset.view === 'results' && stale(root.dataset.version, st.version));
     const report = $('[data-act="report"]', bar);
-    const tpl = S.statusEl && $('template[data-report]', S.statusEl);
-    report.hidden = !tpl || state.stage === 'upload';
+    const src = S.statusEl && $('[data-report]', S.statusEl);  // the hidden copy, only if it's this upload's
+    const rows = src && src.dataset.upload === st.upload ? src : null;
+    report.hidden = !rows || state.stage === 'upload';
     report.textContent = S.reportOpen ? 'Hide report' : 'Upload report';
     report.setAttribute('aria-expanded', String(S.reportOpen));
     const panel = $('[data-bar-report]', bar);
-    panel.hidden = !S.reportOpen || !tpl;
-    if (S.reportOpen && tpl && panel.dataset.upload !== st.upload + st.stage) {  // rows as the server wrote them
-      panel.replaceChildren(tpl.content.cloneNode(true));
+    panel.hidden = !S.reportOpen || !rows;
+    if (S.reportOpen && rows && panel.dataset.upload !== st.upload + st.stage) {  // rows as the server wrote them
+      panel.replaceChildren(...Array.from(rows.childNodes, (n) => n.cloneNode(true)));
       panel.dataset.upload = st.upload + st.stage;
     }
     $('[data-act="dismiss"]', bar).hidden = reading;
@@ -706,6 +743,7 @@
     if (!root || !S.top || root.dataset.render === S.lastRender) return;
     S.lastRender = root.dataset.render;
     const view = root.dataset.view;
+    clearPane($('[data-pv]', root));  // new results: an empty pane until the new selection's preview is in
     doc.body.classList.toggle('cv-off-home', view !== 'home');  // the hero shows only on home
     doc.body.classList.remove('cv-overlay');
     if (root.dataset.scope) setScope(root.dataset.scope, false);

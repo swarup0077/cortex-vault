@@ -160,12 +160,46 @@ def test_type_of_splits_plain_text_from_documents() -> None:
 
 def test_detail_rows_show_each_method_with_its_real_rank() -> None:
     r = result(1, ranks={"bm25": 1, "dense": 37}, weaker=True)
-    tpl = views.preview_template(r, response([r]), DEMO, place, None, 15)
+    tpl = views.preview(r, response([r]), DEMO, place, None, 15)
     assert "Result 15 / Screenshot" in tpl
     assert re.findall(r'cv-detail__method"><span>([^<]+)</span><b>rank (\d+)', tpl) == [("exact words", "1"),
                                                                                        ("meaning", "37")]
     assert "Download" in tpl and "Extracted text" in tpl and "OCR, on this server" in tpl
-    assert "Open" in views.preview_template(r, response([r]), LOCAL, place, None, 1)
+    assert "Open" in views.preview(r, response([r]), LOCAL, place, None, 1)
+
+
+def test_each_preview_copy_is_keyed_by_file_id_and_the_render() -> None:
+    """Owner's bug (20 Oct): row 03, a photo, showed "Result 03 / PDF" and an earlier search's PDF. Gradio updates
+    an HTML part in place, node by node, and a <template>'s content isn't a child node, so the copies kept old
+    content under new file ids. Now they are plain hidden copies, keyed by file id and this render's token, and
+    their pictures load only once cortex.js puts one in the pane."""
+    rows = [result(1), visual(2, filename="dice.jpg"), result(3, kind="pdf", filename="paper.pdf", page=2)]
+    page = views.results(response(rows), DEMO, place, query="q")
+    render = re.search(r'data-render="([0-9a-f]+)"', page).group(1)
+    copies = re.findall(r'<div data-preview="(\d+)" data-render="([0-9a-f]+)">', page)
+    assert copies == [("1", render), ("2", render), ("3", render)]
+    assert "<template" not in page and '<div hidden data-previews>' in page
+    for file_id, number, kind, name in ((1, 1, "Screenshot", "shot 1.png"), (2, 2, "Photo", "dice.jpg"),
+                                        (3, 3, "PDF", "paper.pdf")):
+        copy = page.split(f'<div data-preview="{file_id}" ')[1]
+        copy = copy[:copy.index('<div data-preview="') if '<div data-preview="' in copy else len(copy)]
+        assert f"Result {number:02d} / {kind}" in copy and f">{name}</h2>" in copy
+        assert re.search(rf'<img data-src="/preview/{file_id}\b', copy) and "<img src=" not in copy
+    second = views.results(response(rows), DEMO, place, query="q")
+    assert re.search(r'data-render="([0-9a-f]+)"', second).group(1) != render  # each render its own token
+
+
+def test_no_ui_part_holds_a_template() -> None:
+    """The general cause: no Gradio HTML value may hold a <template>, whose content Gradio's in-place update
+    never touches. The upload report is a hidden copy keyed by its upload too."""
+    rows = [result(1), visual(2)]
+    report = views.upload_report([FileStatus("a.txt", "indexed")], DEMO, received=1)
+    parts = [views.results(response(rows), DEMO, place, query="q"),
+             views.results(response(rows), LOCAL, place, query="q"),
+             views.home(DEMO, views.Archive(), recent=[]), views.top(DEMO, views.DEMO_SUGGESTIONS),
+             views.status("Ready", upload_id="u1", report=report, stage="done"), views.footer(DEMO)]
+    assert all("<template" not in p for p in parts)
+    assert '<div hidden data-report data-upload="u1">' in parts[4]
 
 
 def test_details_show_the_rrf_shares_and_the_gate() -> None:
@@ -389,7 +423,7 @@ def test_the_bar_reports_listing_then_reading_with_real_counts(demo_ctx, monkeyp
     stages = [re.search(r'data-stage="(\w+)"', status).group(1) for status, _ in steps]
     assert stages[0] == "list" and 'data-total="0"' in steps[0][0] and stages[-1] == "done"
     assert stages.index("read") > 0 and "list" not in stages[stages.index("read"):]
-    first_report = next(i for i, (status, _) in enumerate(steps) if "<template data-report>" in status)
+    first_report = next(i for i, (status, _) in enumerate(steps) if "data-report data-upload=" in status)
     assert first_report < len(steps) - 1  # shown while the files are still read
     reading = [status for status, _ in steps if 'data-stage="read"' in status]
     assert any('data-done="1" data-total="3"' in r and 'data-dial="Reading 2 of 3"' in r for r in reading)

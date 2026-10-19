@@ -41,9 +41,10 @@ def _e(value: object) -> str:
     return html.escape(str(value), quote=True)
 
 
-def _render() -> str:
-    """A fresh token on each view's root, so cortex.js can tell a new render from its own edits."""
-    return f'data-render="{secrets.token_hex(6)}"'
+def _render(token: str | None = None) -> str:
+    """A fresh token on each view's root, so cortex.js can tell a new render from its own edits. The results view
+    passes its own, so each preview copy can carry it too."""
+    return f'data-render="{token or secrets.token_hex(6)}"'
 
 
 @dataclass(frozen=True)
@@ -414,12 +415,14 @@ def status(text: str, *, index: str = "", dial_state: str = "Ready", stage: str 
     rows) and `summary` the line that opens it; `message` says why nothing was kept. `uploads_full`: no new upload
     session can open, so Add files and the drop zone say so instead of uploading."""
     busy = stage in ("list", "read")
+    # A hidden copy keyed by the upload it belongs to, not a <template> (see `preview`)
+    report_copy = f'<div hidden data-report data-upload="{_e(upload_id)}">{report}</div>' if report else ""
     return (f'<div class="cv-app cv-part" data-status-src data-busy="{str(busy).lower()}" data-text="{_e(text)}" '
             f'data-index="{_e(index)}" data-dial="{_e(dial_state)}" data-stage="{_e(stage)}" data-done="{int(done)}" '
             f'data-total="{int(total)}" data-version="{int(version)}" data-upload="{_e(upload_id)}" '
             f'data-summary="{_e(summary)}" data-message="{_e(message)}" data-new-session="{str(new_session).lower()}" '
             f'data-uploads="{"full" if uploads_full else "open"}" data-busy-text="{_e(DEMO_BUSY)}">'
-            f'{f"<template data-report>{report}</template>" if report else ""}</div>')
+            f"{report_copy}</div>")
 
 
 # ---------------------------------------------------------------- The Archive (sidebar)
@@ -456,10 +459,11 @@ def rail(mode: Mode, archive: Archive) -> str:
     )
 
 
-def _page(view: str, mode: Mode, archive: Archive, content: str, *, query: str = "", **data: object) -> str:
+def _page(view: str, mode: Mode, archive: Archive, content: str, *, query: str = "", render: str | None = None,
+          **data: object) -> str:
     """One main-part view: The Archive beside `content`. `data` becomes data-* attributes on the root."""
     attrs = "".join(f' data-{k.replace("_", "-")}="{_e(v)}"' for k, v in data.items() if v is not None)
-    return (f'<div class="cv-app cv-part" {_render()} data-view="{view}" data-query="{_e(query)}" '
+    return (f'<div class="cv-app cv-part" {_render(render)} data-view="{view}" data-query="{_e(query)}" '
             f'data-scope="{_e(archive.scope)}"{attrs}><div class="cv-wrap cv-layout">{rail(mode, archive)}'
             f'<div class="cv-content">{content}</div></div></div>')
 
@@ -536,10 +540,13 @@ def details(r: SearchResult, resp: SearchResponse) -> str:
     return f'<details class="cv-details"><summary>Details</summary><dl>{"".join(rows)}</dl></details>'
 
 
-def preview_template(r: SearchResult, resp: SearchResponse, mode: Mode, place: Place, session: str | None,
-                     number: int) -> str:
-    """The detail view for one result, filled in by cortex.js when it's selected (the boxes and the text for
-    Copy text come from `/detail/{id}`)."""
+def preview(r: SearchResult, resp: SearchResponse, mode: Mode, place: Place, session: str | None, number: int,
+            render: str = "") -> str:
+    """The detail view for one result: a hidden copy that cortex.js clones into the pane when the result is
+    selected (the boxes and the text for Copy text come from `/detail/{id}`). Keyed by file id and the render's
+    token. Not a <template>: Gradio updates an HTML part by syncing it node by node in place, and a template's
+    content isn't a child node, so it kept an earlier search's preview under the new file id. The picture's URL is
+    in data-src, so the hidden copies load no images."""
     if r.kind in ("photo", "screenshot", "pdf"):
         src = url("preview", r.file_id, session, page=r.page if r.kind == "pdf" else None)
     elif r.thumb_url:
@@ -547,7 +554,7 @@ def preview_template(r: SearchResult, resp: SearchResponse, mode: Mode, place: P
     else:
         src = ""
     t = type_of(r.kind, r.filename)
-    media = (f'<div class="cv-detail__media"><div class="cv-frame"><img src="{_e(src)}" alt="Preview of '
+    media = (f'<div class="cv-detail__media"><div class="cv-frame"><img data-src="{_e(src)}" alt="Preview of '
              f'{_e(r.filename)}"></div></div>' if src else
              f'<div class="cv-detail__media"><div class="cv-detail__ph">{icon("image")}No preview</div></div>')
     found = "".join(f'<div class="cv-detail__method"><span>{_e(METHODS[m])}</span><b>rank {rank}</b>{icon("check")}'
@@ -557,14 +564,14 @@ def preview_template(r: SearchResult, resp: SearchResponse, mode: Mode, place: P
     text_sec = (f'<section class="cv-detail__sec"><h3>Extracted text</h3><p class="cv-detail__text">{r.snippet_html}'
                 "</p></section>" if r.snippet_html else "")
     open_label, open_icon = ("Download", "download") if mode.demo else ("Open", "open")
-    return (f'<template data-preview="{r.file_id}"><div class="cv-detail__kicker">Result {number:02d} / '
-            f'{_e(TYPE_NAMES[t])}</div>{media}{glyph(t)}<h2 class="cv-detail__title">{_e(r.filename)}</h2>'
+    return (f'<div data-preview="{r.file_id}" data-render="{_e(render)}"><div class="cv-detail__kicker">'
+            f'Result {number:02d} / {_e(TYPE_NAMES[t])}</div>{media}{glyph(t)}<h2 class="cv-detail__title">{_e(r.filename)}</h2>'
             f'<p class="cv-detail__meta">{_e(detail_meta(r, place))}</p>'
             f'<div class="cv-detail__actions"><button type="button" data-act="open">{icon(open_icon)}{open_label}'
             f'<small>Enter</small></button><button type="button" data-act="copy" disabled>{icon("copy")}Copy text'
             f'</button><button type="button" data-act="link">{icon("link")}Copy link</button></div>'
             f'{found_sec}<section class="cv-detail__sec"><h3>Text read by</h3><p>{_e(text_read_by(r, mode))}</p>'
-            f"</section>{text_sec}</template>")
+            f"</section>{text_sec}</div>")
 
 
 def _option_attrs(r: SearchResult, query: str, mode: Mode, session: str | None, hidden: bool, rank: int) -> str:
@@ -634,7 +641,8 @@ def results(resp: SearchResponse, mode: Mode, place: Place, archive: Archive | N
     more_btn = (f'<button type="button" class="cv-more" data-more-btn>Show {more} more</button>' if more > 0 else "")
     filter_empty = ('<div class="cv-empty" data-filter-empty hidden><strong data-filter-empty-text></strong>'
                     '<button type="button" class="cv-more" data-clear-filter>Show all types</button></div>')
-    templates = "".join(preview_template(r, resp, mode, place, session, i + 1) for i, r in enumerate(items))
+    render = secrets.token_hex(6)
+    previews = "".join(preview(r, resp, mode, place, session, i + 1, render) for i, r in enumerate(items))
     content = (
         f'<div class="cv-toolbar">{count}</div><div class="cv-split">'
         f'<div class="cv-results">{top_note}<div id="cv-list" role="listbox" aria-label="Results">{"".join(groups)}'
@@ -643,9 +651,9 @@ def results(resp: SearchResponse, mode: Mode, place: Place, archive: Archive | N
         '<aside class="cv-detail" aria-label="Selected result"><div class="cv-detail__bar"><span>Preview</span>'
         f'<button type="button" class="cv-iconbtn" aria-label="Close" data-close>{icon("x")}</button></div>'
         '<div class="cv-detail__body" data-pv></div></aside></div>'
-        f'<div hidden data-templates>{templates}</div>'
+        f'<div hidden data-previews>{previews}</div>'
     )
-    return _page("results", mode, archive, content, query=query, select=select or "", page=page,
+    return _page("results", mode, archive, content, query=query, render=render, select=select or "", page=page,
                  matches=n, weaker=w, version=version)
 
 

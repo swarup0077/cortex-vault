@@ -1,7 +1,8 @@
 """cortex.js decisions (SPEC §8), run in Node: search as you type, Enter, Esc, the type filter and "Show more", the
 count line, recent searches, and the upload bar.
 
-Skipped where Node isn't installed; the browser behaviour itself is checked by hand in headless Edge.
+Skipped where Node isn't installed. The preview pane and the upload report are also checked in a real browser
+(test_ui_browser.py); the rest of the browser behaviour by hand in headless Edge.
 """
 
 import json
@@ -111,3 +112,19 @@ def test_the_upload_bar_says_real_numbers_only() -> None:
 
 def test_update_results_shows_only_when_the_index_is_newer() -> None:
     assert run("[C.stale('6', 8), C.stale(8, 8), C.stale('', 0), C.stale(9, '8')]") == [True, False, False, False]
+
+
+def test_a_detail_response_lands_only_on_the_pane_it_was_asked_for() -> None:
+    """Owner's bug (20 Oct): a slow /detail response from an earlier, half-typed search must not reach the pane.
+    It lands only for the latest request, for the selected row, in the render on screen, with that row's preview
+    in the pane."""
+    now = "{ticket: 7, selected: '37', render: 'r2', paneFile: '37', paneRender: 'r2'}"
+    cases = [
+        "{ticket: 7, id: '37', render: 'r2'}",  # the latest request for this row and render
+        "{ticket: 6, id: '37', render: 'r2'}",  # an older request for the same row
+        "{ticket: 7, id: '60', render: 'r2'}",  # another row
+        "{ticket: 7, id: '37', render: 'r1'}",  # the same file in an earlier search's results
+    ]
+    assert run(f"[{', '.join(f'C.detailFits({c}, {now})' for c in cases)}]") == [True, False, False, False]
+    emptied = "{ticket: 7, selected: '37', render: 'r2', paneFile: undefined, paneRender: undefined}"  # a new render
+    assert run(f"C.detailFits({cases[0]}, {emptied})") is False
