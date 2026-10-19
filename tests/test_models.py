@@ -1,3 +1,6 @@
+import threading
+import time
+
 import numpy as np
 import pytest
 
@@ -124,3 +127,29 @@ def test_rapidocr_is_quiet_on_an_image_without_text(real_ocr) -> None:
     finally:
         rapid.removeHandler(handler)
     assert records == []
+
+
+def test_a_loaded_model_never_waits_for_another_models_load(monkeypatch, fake_embedder) -> None:
+    """The app warms the query models first, then OCR and CLIP vision (app.py): a search in between must not wait
+    for those loads. Each model has its own lock, and a loaded one is returned without taking any."""
+    started, release = threading.Event(), threading.Event()
+
+    class SlowOcr:
+        name = "slow"
+
+        def __init__(self, cfg) -> None:
+            started.set()
+            release.wait(10)
+
+    monkeypatch.setattr(models, "RapidOcrEngine", SlowOcr)
+    models.set_ocr_engine(None)
+    loading = threading.Thread(target=models.ocr_engine)
+    loading.start()
+    try:
+        assert started.wait(10)
+        t0 = time.monotonic()
+        assert models.text_embedder() is fake_embedder and time.monotonic() - t0 < 0.5
+    finally:
+        release.set()
+        loading.join(10)
+        models.set_ocr_engine(None)

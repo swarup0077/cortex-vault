@@ -60,13 +60,17 @@ class FastembedTextEmbedder:
         return l2_normalise(next(iter(self._model.query_embed([text]))))
 
 
-_lock = threading.Lock()
+# One lock per model, and a loaded model is returned without taking any: a search never waits while the app warms
+# up a model it doesn't use (OCR, CLIP vision), and no model is ever loaded twice.
+_locks = {name: threading.Lock() for name in ("text", "clip_vision", "clip_text", "ocr")}
 _text: TextEmbedder | None = None
 
 
 def text_embedder(cfg: Config | None = None) -> TextEmbedder:
     global _text
-    with _lock:
+    if _text is not None:
+        return _text
+    with _locks["text"]:
         if _text is None:
             _text = FastembedTextEmbedder(cfg or Config())
         return _text
@@ -75,7 +79,7 @@ def text_embedder(cfg: Config | None = None) -> TextEmbedder:
 def set_text_embedder(embedder: TextEmbedder | None) -> None:
     """Install a specific embedder (tests), or None to fall back to lazy loading."""
     global _text
-    with _lock:
+    with _locks["text"]:
         _text = embedder
 
 
@@ -147,7 +151,9 @@ def clip_vision_name(cfg: Config) -> str:
 
 def clip_vision(cfg: Config | None = None) -> ClipVision:
     global _clip_vision
-    with _lock:
+    if _clip_vision is not None:
+        return _clip_vision
+    with _locks["clip_vision"]:
         if _clip_vision is None:
             _clip_vision = FastembedClipVision(cfg or Config())
         return _clip_vision
@@ -155,7 +161,9 @@ def clip_vision(cfg: Config | None = None) -> ClipVision:
 
 def clip_text(cfg: Config | None = None) -> ClipText:
     global _clip_text
-    with _lock:
+    if _clip_text is not None:
+        return _clip_text
+    with _locks["clip_text"]:
         if _clip_text is None:
             _clip_text = FastembedClipText(cfg or Config())
         return _clip_text
@@ -164,7 +172,7 @@ def clip_text(cfg: Config | None = None) -> ClipText:
 def set_clip(vision: ClipVision | None, text: ClipText | None) -> None:
     """Install specific CLIP halves (tests), or None to fall back to lazy loading."""
     global _clip_vision, _clip_text
-    with _lock:
+    with _locks["clip_vision"], _locks["clip_text"]:
         _clip_vision, _clip_text = vision, text
 
 
@@ -238,7 +246,9 @@ _ocr: OcrEngine | None = None
 
 def ocr_engine(cfg: Config | None = None) -> OcrEngine:
     global _ocr
-    with _lock:
+    if _ocr is not None:
+        return _ocr
+    with _locks["ocr"]:
         if _ocr is None:
             _ocr = RapidOcrEngine(cfg or Config())
         return _ocr
@@ -247,5 +257,5 @@ def ocr_engine(cfg: Config | None = None) -> OcrEngine:
 def set_ocr_engine(engine: OcrEngine | None) -> None:
     """Install a specific OCR engine (tests, tuning), or None to fall back to lazy loading."""
     global _ocr
-    with _lock:
+    with _locks["ocr"]:
         _ocr = engine

@@ -339,6 +339,7 @@ def test_the_folders_panel_exists_only_in_local_mode(demo_ctx, tmp_path, fake_em
 def test_search_handler_home_results_and_empty(demo_ctx) -> None:
     home = layout.run_search(demo_ctx, None, "  ")
     assert 'data-view="home"' in home and "2 files" in home and "IMG_red.jpg" in home
+    assert "This demo searches 2 sample files." in home and "generated" not in home  # counted from the index
     assert "bayes theorem" in views.top(demo_ctx.view_mode, demo_ctx.suggestions)  # the example searches
     page = layout.run_search(demo_ctx, None, "  denoising   diffusion ")
     assert 'data-query="denoising diffusion"' in page and "diffusion.pdf" in page

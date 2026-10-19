@@ -483,8 +483,8 @@ def home(mode: Mode, archive: Archive, *, recent: Sequence[Recent], folders: Seq
         extra = (
             drop +
             f'<p class="cv-note">{_e(mode.upload_notice)}</p>'
-            f'<p class="cv-note">This demo searches {samples} generated sample files. Text, meaning and pictures are '
-            "read by three small models (bge-small, CLIP ViT-B/32, PP-OCRv6) running on this server; nothing is "
+            f'<p class="cv-note">This demo searches {samples} sample file{"s" if samples != 1 else ""}. '
+            "Text, meaning and pictures are read by three small models (bge-small, CLIP ViT-B/32, PP-OCRv6) running on this server; nothing is "
             "sent to any outside service. On your own computer, the same app indexes your folders and never leaves "
             "the machine.</p>")
     else:
