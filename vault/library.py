@@ -292,13 +292,17 @@ class Library:
                                         "WHERE status = 'ok'").fetchone()
         return files + ready
 
-    def type_counts(self) -> dict[str, int]:
-        """Files per type for The Archive (SPEC §8): the kinds, with plain-text docs (`.txt`, `.md`) as "text"."""
+    def type_counts(self, roots: Iterable[str] = ()) -> dict[str, int]:
+        """Files per type for The Archive (SPEC §8): the kinds, with plain-text docs (`.txt`, `.md`) as "text".
+        With `roots`, only the files under them (the scope, as `search` and `recent` take it)."""
+        roots = list(roots)
+        scope = (f" AND EXISTS (SELECT 1 FROM paths p WHERE p.file_id = f.id AND p.root IN "
+                 f"({','.join('?' * len(roots))}))" if roots else "")
         out = dict.fromkeys(TYPES, 0)
         with self.connect() as conn:
             for kind, is_text, n in conn.execute(
-                    f"SELECT f.kind, f.kind = 'doc' AND {_IS_TEXT}, count(*) FROM files f WHERE f.status = 'ok' "
-                    "GROUP BY 1, 2"):
+                    f"SELECT f.kind, f.kind = 'doc' AND {_IS_TEXT}, count(*) FROM files f WHERE f.status = 'ok'{scope} "
+                    "GROUP BY 1, 2", roots):
                 key = "text" if is_text else kind
                 out[key] = out.get(key, 0) + n
         return out

@@ -71,11 +71,14 @@ def _context(mode: str, tmp: Path):
     from vault.ui import views
     from vault.ui.layout import UiContext
 
+    from gradio.utils import get_upload_folder
+
     demo = REPO_ROOT / "demo_index"
     if mode == "demo":
         cfg = Config(data_dir=demo)
         lib = Library(cfg, read_only=True, base_dir=REPO_ROOT)
-        return UiContext("demo", lib, suggestions=views.DEMO_SUGGESTIONS, upload_dir=tmp / "uploads",
+        # Gradio's own upload folder, as app.py: a session reads only files from there
+        return UiContext("demo", lib, suggestions=views.DEMO_SUGGESTIONS, upload_dir=Path(get_upload_folder()),
                          sessions=SessionManager(lib, cfg, tmp / "sessions"))
     copy = tmp / "index"  # local mode on a copy of the demo index: never the owner's data/vault.db
     shutil.copytree(demo, copy)
@@ -161,3 +164,57 @@ def test_the_upload_report_shows_the_latest_upload(served, tmp_path) -> None:
     assert first["shown"] and "2 files received" in first["text"] and "first-alpha" in first["text"]
     assert second["shown"] and "1 file received" in second["text"] and "second-gamma" in second["text"]
     assert "first-alpha" not in second["text"] and first["upload"] != second["upload"]
+    words = lambda r: " ".join(r["text"].split()).replace(".txtadded", ".txt added")  # noqa: E731
+    assert "first-alpha.txt added" in words(first) and "second-gamma.txt added" in words(second)  # kept, not refused
+
+
+@needs_browser
+@pytest.mark.parametrize("served", ["demo"], indirect=True)
+def test_the_archive_follows_the_scope_in_a_browser(served, tmp_path) -> None:
+    """Owner, 20 Oct (v1.0.3): The Archive's total and per-type counts, and the phone's filter chips (the same
+    buttons), follow "Search in"; they update on a scope switch, and after an upload without the results moving.
+    The results and their "N matches" line follow the scope too."""
+    from vault.library import Library
+
+    samples = Library(Config(data_dir=REPO_ROOT / "demo_index"), read_only=True, base_dir=REPO_ROOT).type_counts()
+    n = sum(samples.values())
+    batches = []
+    for name, files in (("first", ["quokka-1.txt", "quokka-2.txt", "quokka-3.txt"]),
+                        ("second", ["later-1.txt", "later-2.txt"])):
+        (tmp_path / name).mkdir()
+        for f in files:
+            (tmp_path / name / f).write_text(f"quokka field notes from the {f} survey" if name == "first"
+                                             else f"plain text {f}", encoding="utf-8")
+        batches.append([str(tmp_path / name / f) for f in files])
+
+    def run(**more) -> dict:
+        options = {"url": served, "browser": BROWSER, "uploads": batches, "query": "quokka field notes", **more}
+        out = subprocess.run([NODE, str(DRIVER.parent / "scope_check.mjs"), json.dumps(options)], capture_output=True,
+                             text=True, encoding="utf-8", timeout=300)
+        state = json.loads(out.stdout)
+        assert "error" not in state, state.get("error")
+        return state
+
+    def expect(extra_text: int, only_uploads: bool = False) -> dict:
+        types = dict.fromkeys(samples, 0) if only_uploads else dict(samples)
+        types["text"] += extra_text
+        return {"all": sum(types.values()), **types}
+
+    s = run()
+    assert s["start"]["scope"] == "Both" and s["start"]["total"] == n and s["start"]["types"] == expect(0)
+    assert s["afterFirst"]["scope"] == "My uploads" and s["afterFirst"]["total"] == 3  # home switches to My uploads
+    assert s["scopes"]["Samples"]["total"] == n and s["scopes"]["Samples"]["types"] == expect(0)
+    assert s["scopes"]["My uploads"]["total"] == 3 and s["scopes"]["My uploads"]["types"] == expect(3, True)
+    assert s["scopes"]["Both"]["total"] == n + 3 and s["scopes"]["Both"]["types"] == expect(3)
+    mine, theirs, both = (s["results"][k] for k in ("My uploads", "Samples", "Both"))
+    assert mine["matches"] == 3 and mine["cards"] and all(c.startswith("quokka-") for c in mine["cards"])
+    assert not any(c.startswith("quokka-") for c in theirs["cards"])
+    assert sum(c.startswith("quokka-") for c in both["cards"]) == 3 and both["matches"] >= 3
+    assert (mine["total"], theirs["total"], both["total"]) == (3, n, n + 3)
+    before, after = s["afterSecond"]["before"], s["afterSecond"]["after"]
+    assert after["render"] == before["render"] and after["cards"] == before["cards"]  # the results didn't move
+    assert after["scope"] == "Both" and after["total"] == n + 5 and after["types"] == expect(5)
+    phone = run(phone=True)  # another visitor, on a phone: no Search in, the scope is Both
+    assert phone["afterFirst"]["scope"] == "Both" and not phone["afterFirst"]["scopeShown"]
+    assert phone["afterFirst"]["chips"] == "flex" and phone["afterFirst"]["total"] == n + 3
+    assert phone["afterFirst"]["types"] == expect(3)

@@ -122,6 +122,8 @@ def status_html(ctx: UiContext, session: str | None, *, busy: tuple[str, int, in
         index = f"{n} files · " + (f"indexed {views.ago(last)}" if last else "not indexed yet")
     kw: dict = dict(index=index, version=lib.version(), uploads_full=full, upload_id=upload_id, message=message,
                     new_session=new_session)
+    if ctx.demo:  # The Archive's numbers for every scope: cortex.js repaints them as an upload is listed and read
+        kw.update(counts={scope: scoped_counts(ctx, session, scope) for scope in SCOPES})
     if files is not None:
         kw.update(report=views.upload_report(files, ctx.view_mode, received=received),
                   summary=views.upload_summary(files))
@@ -133,11 +135,18 @@ def status_html(ctx: UiContext, session: str | None, *, busy: tuple[str, int, in
     return views.status(ctx.view_mode.status, stage="done" if upload_id and not message else "idle", **kw)
 
 
+def scoped_counts(ctx: UiContext, session: str | None, scope: str) -> dict[str, int]:
+    """Files per type in the scope (SPEC §8, owner 20 Oct): the samples, this session's uploads, or both in demo
+    mode; the vault in local mode. My uploads before any upload is empty, not every sample."""
+    if ctx.demo and scope == "My uploads" and ctx.session(session) is None:
+        return dict.fromkeys(views.TYPES, 0)
+    lib, roots, _ = ctx.target(session, scope)
+    return lib.type_counts(roots)
+
+
 def archive(ctx: UiContext, session: str | None, scope: str = "Both") -> views.Archive:
-    """The Archive's facts: files per type in everything this visitor can search (the samples plus this session's
-    uploads in demo mode), whatever the scope (SPEC §8)."""
-    lib, _, _ = ctx.target(session, "Both")
-    return views.Archive(lib.type_counts(), scope, uploads_full(ctx, session))
+    """The Archive's facts: files per type in the selected scope, as searches see it (SPEC §8)."""
+    return views.Archive(scoped_counts(ctx, session, scope), scope, uploads_full(ctx, session))
 
 
 def home_html(ctx: UiContext, session: str | None, scope: str = "Both") -> str:

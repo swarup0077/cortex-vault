@@ -127,8 +127,23 @@
       && asked.render === now.render && asked.render === now.paneRender;
   }
 
+  /* The Archive's numbers for one scope, from the status part's counts for every scope (JSON): the files per
+     type and their total, or null when there are none for that scope. Only whole numbers ≥ 0 are taken. */
+  function scopeCounts(raw, scope) {
+    let all;
+    try { all = JSON.parse(raw || 'null'); } catch (e) { return null; }
+    const counts = all && typeof all === 'object' ? all[scope] : null;
+    if (!counts || typeof counts !== 'object') return null;
+    const types = {};
+    Object.keys(PLURALS).forEach((t) => {
+      const n = Number(counts[t]);
+      types[t] = Number.isInteger(n) && n >= 0 ? n : 0;
+    });
+    return { types, total: Object.values(types).reduce((a, n) => a + n, 0) };
+  }
+
   const api = { MIN_CHARS, DELAY_MS, PAGE, SAVE_MS, RECENT_MAX, PLURALS, normalize, searchFor, enterAction, escAction,
-    visibility, countWords, remember, forget, parseRecent, barText, barValue, percent, stale, detailFits };
+    visibility, countWords, remember, forget, parseRecent, barText, barValue, percent, stale, detailFits, scopeCounts };
   if (!win) return api;
 
   /* ------------------------------------------------------------------ browser */
@@ -497,6 +512,25 @@
     paintBar();
   }
 
+  /* The Archive's numbers (the rail, and the phone's filter chips, which are the same buttons) for the scope on
+     screen, from the status part, so they follow each upload while the results stay put (SPEC §8). Called only when
+     the status changes: a new render brings its own numbers, as fresh as the search. */
+  function paintArchive() {
+    const root = viewRoot();
+    const now = root && S.status && scopeCounts(S.status.counts, root.dataset.scope || effectiveScope());
+    if (!now) return;
+    const head = $('.cv-rail__count', root);
+    if (head) head.textContent = `${now.total} file${now.total === 1 ? '' : 's'}`;
+    $$('.cv-rail [data-filter]', root).forEach((b) => {
+      const all = b.dataset.filter === 'all';
+      const n = all ? now.total : (now.types[b.dataset.filter] || 0);
+      const slot = $('.cv-filter__n', b);
+      if (slot) slot.textContent = String(n);
+      if (!all) b.disabled = !n;
+    });
+    if (S.filter !== 'all' && !now.types[S.filter]) setFilter('all');  // that type left this scope (an expiry)
+  }
+
   /* ------------------------------------------------------------------ the upload bar */
   function barState() {
     if (S.transfer) {
@@ -824,11 +858,12 @@
       S.status = { text: d.text || '', index: d.index || '', dial: d.dial || '', busy: d.busy === 'true',
         stage: d.stage || 'idle', done: Number(d.done) || 0, total: Number(d.total) || 0,
         version: Number(d.version) || 0, upload: d.upload || '', summary: d.summary || '', message: d.message || '',
-        newSession: d.newSession === 'true' };
+        newSession: d.newSession === 'true', counts: d.counts || '' };
       S.uploadsFull = d.uploads === 'full';
       S.busyText = d.busyText || '';
       if (S.awaiting !== null && S.status.upload && S.status.upload !== S.awaiting) S.awaiting = null;
       paintStatus();
+      paintArchive();
       afterUpload();
     };
     new win.MutationObserver(sync).observe(element, { childList: true, subtree: true, attributes: true });

@@ -128,3 +128,20 @@ def test_a_detail_response_lands_only_on_the_pane_it_was_asked_for() -> None:
     assert run(f"[{', '.join(f'C.detailFits({c}, {now})' for c in cases)}]") == [True, False, False, False]
     emptied = "{ticket: 7, selected: '37', render: 'r2', paneFile: undefined, paneRender: undefined}"  # a new render
     assert run(f"C.detailFits({cases[0]}, {emptied})") is False
+
+
+def test_the_archive_numbers_come_from_the_selected_scope() -> None:
+    """Owner, 20 Oct (v1.0.3): The Archive's total and per-type counts follow the scope, and after an upload come
+    from the status part's counts for every scope. Only whole numbers >= 0 are taken."""
+    raw = json.dumps({"Samples": {"pdf": 11, "photo": 26}, "My uploads": {"text": 10},
+                      "Both": {"pdf": 11, "photo": 26, "text": 10}})
+    out = run(f"[C.scopeCounts({json.dumps(raw)}, 'Samples'), C.scopeCounts({json.dumps(raw)}, 'My uploads'), "
+              f"C.scopeCounts({json.dumps(raw)}, 'Both')]")
+    assert [o["total"] for o in out] == [37, 10, 47]
+    assert out[0]["types"] == {"screenshot": 0, "pdf": 11, "text": 0, "photo": 26, "doc": 0, "slides": 0}
+    assert out[1]["types"]["text"] == 10 and out[1]["types"]["pdf"] == 0
+    bad = json.dumps({"Both": {"pdf": -3, "photo": "7x", "text": 2.5, "doc": 4}})
+    assert run(f"C.scopeCounts({json.dumps(bad)}, 'Both')") == {
+        "types": {"screenshot": 0, "pdf": 0, "text": 0, "photo": 0, "doc": 4, "slides": 0}, "total": 4}
+    assert run("[C.scopeCounts('', 'Both'), C.scopeCounts('not json', 'Both'), C.scopeCounts('{}', 'Both')]") == \
+        [None, None, None]

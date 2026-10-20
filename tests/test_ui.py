@@ -2,6 +2,8 @@
 safety, no query logging, and the handlers, without a browser and without real models."""
 
 import hashlib
+import html
+import json
 import logging
 import re
 import threading
@@ -383,6 +385,46 @@ def test_the_stylesheet_and_script_urls_change_with_their_content(demo_ctx, tmp_
     for name in ("cortex.js", "cortex.css"):
         got = client.get(server.asset(name))
         assert got.status_code == 200 and got.content == (STATIC / name).read_bytes()
+
+
+def rail_counts(page: str) -> tuple[int, dict[str, int]]:
+    """The Archive as rendered: its "N files" and each filter's count ("all" and the six types)."""
+    total = int(re.search(r'cv-rail__count">(\d+) files?<', page).group(1))
+    return total, {t: int(n) for t, n in re.findall(r'data-filter="(\w+)".*?cv-filter__n">(\d+)<', page, re.S)}
+
+
+def status_counts(status: str) -> dict[str, dict[str, int]]:
+    return json.loads(html.unescape(re.search(r'data-counts="([^"]*)"', status).group(1)))
+
+
+def test_the_archive_counts_follow_the_scope(demo_ctx) -> None:
+    """Owner, 20 Oct (v1.0.3): with samples and uploads, every scope counted both. Now the total and each type's
+    count are the selected scope's, as searches see it; the status part carries every scope's counts, so the
+    rail follows each upload without the results moving."""
+    none = {s: rail_counts(layout.home_html(demo_ctx, None, s)) for s in layout.SCOPES}
+    assert none["Samples"][0] == none["Both"][0] == 2 and none["My uploads"] == (0, {t: 0 for t in
+                                                                                     ["all", *views.TYPES]})
+    status, sid = upload(demo_ctx, {"one.txt": "first quokka notes", "two.txt": "second quokka notes",
+                                    "three.md": "third list"})
+    pages = {s: layout.home_html(demo_ctx, sid, s) for s in layout.SCOPES}
+    counts = {s: rail_counts(p) for s, p in pages.items()}
+    assert counts["Samples"] == (2, {"all": 2, "screenshot": 0, "pdf": 1, "text": 0, "photo": 1, "doc": 0, "slides": 0})
+    assert counts["My uploads"] == (3, {"all": 3, "screenshot": 0, "pdf": 0, "text": 3, "photo": 0, "doc": 0,
+                                        "slides": 0})
+    assert counts["Both"] == (5, {"all": 5, "screenshot": 0, "pdf": 1, "text": 3, "photo": 1, "doc": 0, "slides": 0})
+    assert all(f'data-scope="{s}"' in pages[s] for s in layout.SCOPES)  # what cortex.js repaints for
+    # the results and the count line follow the scope too
+    found = {s: layout.run_search(demo_ctx, sid, "quokka notes", s) for s in layout.SCOPES}
+    assert "data-count-n>2<" in found["My uploads"] and "data-count-n>2<" in found["Both"]
+    assert "one.txt" in found["My uploads"] and "one.txt" not in found["Samples"]
+    assert rail_counts(found["Samples"])[0] == 2 and rail_counts(found["My uploads"])[0] == 3
+    # the status part: every scope's counts, after each upload
+    by_scope = status_counts(status)
+    assert {s: sum(c.values()) for s, c in by_scope.items()} == {"Samples": 2, "My uploads": 3, "Both": 5}
+    status, sid = upload(demo_ctx, {"four.txt": "fourth"}, sid)
+    assert {s: sum(c.values()) for s, c in status_counts(status).items()} == {"Samples": 2, "My uploads": 4, "Both": 6}
+    assert status_counts(status)["My uploads"]["text"] == 4
+    assert rail_counts(layout.home_html(demo_ctx, sid, "My uploads"))[0] == 4
 
 
 def test_the_folders_panel_exists_only_in_local_mode(demo_ctx, tmp_path, fake_embedder) -> None:

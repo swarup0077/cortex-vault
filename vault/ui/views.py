@@ -9,6 +9,7 @@ by path. `cortex.js` reads the `data-*` attributes and never builds HTML from th
 from __future__ import annotations
 
 import html
+import json
 import secrets
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -407,21 +408,24 @@ def upload_bar() -> str:
 
 def status(text: str, *, index: str = "", dial_state: str = "Ready", stage: str = "idle", done: int = 0,
            total: int = 0, version: int = 0, uploads_full: bool = False, upload_id: str = "", report: str = "",
-           summary: str = "", message: str = "", new_session: bool = False) -> str:
+           summary: str = "", message: str = "", new_session: bool = False,
+           counts: dict[str, dict[str, int]] | None = None) -> str:
     """What cortex.js copies into place: the header status, the dial's state, the footer's index line, and the
     upload bar's server stages. `stage`: "list" or "read" while an upload is indexed (`done` of `total`, real
     counts), "done" after it, else "idle". `version`: the index's `Library.version()`, so results older than the
     index offer "Update results". `upload_id` names one upload; `report` is its per-file outcome (server-rendered
     rows) and `summary` the line that opens it; `message` says why nothing was kept. `uploads_full`: no new upload
-    session can open, so Add files and the drop zone say so instead of uploading."""
+    session can open, so Add files and the drop zone say so instead of uploading. `counts`: files per type in each
+    scope (demo), so The Archive follows an upload without the results moving."""
     busy = stage in ("list", "read")
     # A hidden copy keyed by the upload it belongs to, not a <template> (see `preview`)
     report_copy = f'<div hidden data-report data-upload="{_e(upload_id)}">{report}</div>' if report else ""
+    counts_attr = f' data-counts="{_e(json.dumps(counts))}"' if counts else ""
     return (f'<div class="cv-app cv-part" data-status-src data-busy="{str(busy).lower()}" data-text="{_e(text)}" '
             f'data-index="{_e(index)}" data-dial="{_e(dial_state)}" data-stage="{_e(stage)}" data-done="{int(done)}" '
             f'data-total="{int(total)}" data-version="{int(version)}" data-upload="{_e(upload_id)}" '
             f'data-summary="{_e(summary)}" data-message="{_e(message)}" data-new-session="{str(new_session).lower()}" '
-            f'data-uploads="{"full" if uploads_full else "open"}" data-busy-text="{_e(DEMO_BUSY)}">'
+            f'data-uploads="{"full" if uploads_full else "open"}" data-busy-text="{_e(DEMO_BUSY)}"{counts_attr}>'
             f"{report_copy}</div>")
 
 
