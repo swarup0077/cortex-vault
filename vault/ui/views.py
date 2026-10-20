@@ -81,14 +81,14 @@ class Mode:
     @property
     def private_note(self) -> str:
         if self.demo:
-            return (f"Files are read on this server by three small models. Delete your uploads any time with Delete "
-                    f"my uploads; otherwise they're {self.deleted}.")
+            return (f"Files are read on this server by three small models. Delete your uploads any time under Manage "
+                    f"uploads; otherwise they're {self.deleted}.")
         return "Indexing runs on this computer. Nothing leaves this device."
 
     @property
     def upload_notice(self) -> str:
-        return (f"Uploads are processed on this server and kept only for your session. Delete them any time with "
-                f"Delete my uploads; otherwise they're {self.deleted}. For private use, run it on your own computer "
+        return (f"Uploads are processed on this server and kept only for your session. Delete them any time under "
+                f"Manage uploads; otherwise they're {self.deleted}. For private use, run it on your own computer "
                 "(see README).")
 
 
@@ -99,7 +99,7 @@ class Archive:
     counts: dict[str, int] = field(default_factory=dict)
     scope: str = "Both"
     uploads_full: bool = False  # demo: no new upload session can open now
-    uploads: int = 0  # demo: files in this session's uploads (Delete my uploads shows when there are some)
+    uploads: int = 0  # demo: files in this session's uploads (Manage uploads shows when there are some)
 
     @property
     def total(self) -> int:
@@ -345,7 +345,7 @@ def top(mode: Mode, suggestions: Sequence[Suggestion] = ()) -> str:
     """Header, hero, search box and the recent / example searches: rendered once; cortex.js keeps them in step
     with the other parts (the status, the query, the recent searches it keeps in this browser)."""
     upload = ('<input type="file" class="cv-sr" data-files multiple tabindex="-1" aria-hidden="true">'
-              + drop_overlay() + tray(mode) if mode.demo else "")
+              + drop_overlay() + tray(mode) + manage_panel() if mode.demo else "")
     examples = "".join(
         f'<button type="button" class="cv-chip" data-q="{_e(s.query)}" title="Found by {_e(s.how)}">{_e(s.query)}'
         "</button>" for s in suggestions)
@@ -425,6 +425,23 @@ def tray(mode: Mode) -> str:
             '<button type="button" class="cv-tray__go" data-act="tray-upload">Upload</button></div></div></div>')
 
 
+def manage_panel() -> str:
+    """Demo, Manage uploads: this session's uploaded files (cortex.js fetches them from /session/uploads, by the
+    browser's cookie), to delete some (checkboxes, Select all, Delete selected) or all of them. A dialog, like the
+    upload tray."""
+    return ('<div class="cv-tray cv-manage" data-manage hidden><div class="cv-tray__panel" role="dialog" '
+            'aria-modal="true" aria-labelledby="cv-manage-h">'
+            '<div class="cv-tray__head"><div><h2 id="cv-manage-h">Your uploads</h2>'
+            '<p class="cv-tray__sum" data-manage-sum></p></div>'
+            f'<button type="button" class="cv-iconbtn" data-act="manage-close" aria-label="Close">{icon("x")}</button>'
+            '</div><label class="cv-manage__all"><input type="checkbox" data-manage-all> Select all</label>'
+            '<ul class="cv-tray__list" data-manage-list aria-label="Your uploaded files"></ul>'
+            '<p class="cv-tray__empty" data-manage-empty hidden>No uploads left.</p>'
+            '<div class="cv-tray__foot"><button type="button" class="cv-tray__btn" data-act="delete-uploads">'
+            'Delete all uploads</button><button type="button" class="cv-tray__go cv-manage__go" '
+            'data-act="delete-selected" disabled>Delete selected (0)</button></div></div></div>')
+
+
 def upload_bar() -> str:
     """The upload progress bar (SPEC §8): a slim strip under the header, in the page flow, so search, the type
     filter and the detail view stay usable. cortex.js fills it from its own transfer counts (stage 1) and from the
@@ -445,7 +462,7 @@ def status(text: str, *, index: str = "", dial_state: str = "Ready", stage: str 
            total: int = 0, version: int = 0, uploads_full: bool = False, upload_id: str = "", report: str = "",
            summary: str = "", message: str = "", new_session: bool = False,
            counts: dict[str, dict[str, int]] | None = None, toast: str = "", claim: str = "", forget: bool = False,
-           reattach: bool = False, limits: dict | None = None) -> str:
+           reattach: bool = False, limits: dict | None = None, removed: Sequence[int] | None = None) -> str:
     """What cortex.js copies into place: the header status, the dial's state, the footer's index line, and the
     upload bar's server stages. `stage`: "list" or "read" while an upload is indexed (`done` of `total`, real
     counts), "done" after it, else "idle". `version`: the index's `Library.version()`, so results older than the
@@ -456,7 +473,8 @@ def status(text: str, *, index: str = "", dial_state: str = "Ready", stage: str 
     (Delete my uploads). `claim`: a new session's one-time ticket, which the page trades for its cookie at
     `/session/claim`; `forget`: the page's cookie names no live session, so the page clears it (`/session/forget`);
     `reattach`: the page was opened on a session with uploads. `limits`: what the upload tray checks before anything is
-    sent (`SessionManager.limits`)."""
+    sent (`SessionManager.limits`). `removed`: the ids of files just deleted under Manage uploads, which cortex.js
+    takes out of the results on screen (once: a fresh id each time)."""
     busy = stage in ("list", "read")
     # A hidden copy keyed by the upload it belongs to, not a <template> (see `preview`)
     report_copy = f'<div hidden data-report data-upload="{_e(upload_id)}">{report}</div>' if report else ""
@@ -471,6 +489,8 @@ def status(text: str, *, index: str = "", dial_state: str = "Ready", stage: str 
         extra += ' data-reattach="true"'
     if limits:
         extra += f' data-limits="{_e(json.dumps(limits))}"'
+    if removed is not None:
+        extra += f' data-removed="{_e(json.dumps([int(i) for i in removed]))}" data-removed-id="{secrets.token_hex(6)}"'
     return (f'<div class="cv-app cv-part" data-status-src data-busy="{str(busy).lower()}" data-text="{_e(text)}" '
             f'data-index="{_e(index)}" data-dial="{_e(dial_state)}" data-stage="{_e(stage)}" data-done="{int(done)}" '
             f'data-total="{int(total)}" data-version="{int(version)}" data-upload="{_e(upload_id)}" '
@@ -502,10 +522,10 @@ def rail(mode: Mode, archive: Archive) -> str:
         action = f'<div class="cv-add cv-add--busy" role="status">{_e(DEMO_BUSY)}</div>'
     else:
         action = f'<button type="button" class="cv-add" data-act="add">{icon("upload")}Add files</button>'
-    if mode.demo:  # only while this session has uploads (cortex.js asks first, and shows or hides it after uploads)
+    if mode.demo:  # only while this session has uploads (cortex.js shows or hides it, and its count, after uploads)
         hidden = "" if archive.uploads else " hidden"
-        action += (f'<button type="button" class="cv-delete" data-act="delete-uploads"{hidden}>{icon("trash")}'
-                   "Delete my uploads</button>")
+        action += (f'<button type="button" class="cv-delete" data-act="manage-uploads"{hidden}>{icon("trash")}'
+                   f'<span>Manage uploads (<span data-manage-n>{archive.uploads}</span>)</span></button>')
     return (
         '<aside class="cv-rail" aria-label="The Archive">'
         '<div class="cv-rail__head"><h2>The Archive</h2>'
@@ -754,6 +774,14 @@ NOTHING_TO_DELETE = "You have no uploads to delete."
 def expired_text(ttl_min: int) -> str:
     """Said once when a reloaded page's session has expired (its cookie is cleared then)."""
     return f"Your earlier uploads were deleted after {ttl_min} minute{'s' if ttl_min != 1 else ''}"
+
+
+NOTHING_DELETED = "Nothing was deleted."
+
+
+def removed_text(n: int) -> str:
+    """The toast after Delete selected (Manage uploads)."""
+    return f"{n} upload{'s' if n != 1 else ''} deleted"
 
 
 def deleted_text(n: int) -> str:

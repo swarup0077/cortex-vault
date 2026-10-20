@@ -33,6 +33,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from vault.config import Config
+from vault.ingest import thumbs
 from vault.ingest.discover import INDEX_EXTS, sha256_file
 from vault.ingest.pipeline import IndexReport
 from vault.library import Library, ProgressFn
@@ -282,6 +283,71 @@ class SessionManager:
         self._wipe(s)
         log.info("session %s deleted by its visitor", s.id[:8])
         return True
+
+    def uploads(self, session_id: str | None) -> list[dict]:
+        """Manage uploads: this session's own uploaded files (newest first), by their id in its index, with name,
+        size and date. Never the samples, never another session's."""
+        s = self.get(session_id, touch=False)
+        if s is None:
+            return []
+        with s.library.connect() as conn:
+            rows = conn.execute("SELECT f.id, p.path, f.indexed_at FROM paths p JOIN files f ON f.id = p.file_id "
+                                "WHERE p.root = ? ORDER BY f.id DESC", (s.root,)).fetchall()
+        out = []
+        for file_id, stored, when in rows:
+            path = Path(stored)
+            if path.is_file() and path.resolve().is_relative_to(s.uploads.resolve()):
+                out.append({"id": file_id, "name": path.name, "size": path.stat().st_size, "added": when or ""})
+        return out
+
+    def remove(self, session_id: str | None, file_ids: Sequence[object]) -> list[int] | bool | None:
+        """Manage uploads, Delete selected: delete some of this session's own uploads by their id in its index. Each
+        file is overwritten with zeros and removed, with its thumbnail, then the indexer's sweep forgets it
+        (`Library.remove_files`: one transaction per file, FTS rows explicitly, a compaction). Ids that aren't this
+        session's uploads are ignored. None: no such live session; False: one of its uploads is being checked or read
+        (nothing is touched), as for `delete`. Returns the ids removed. The session's idle time doesn't restart."""
+        if not session_id or not _UUID4.match(session_id):
+            return None
+        wanted = sorted({int(i) for i in list(file_ids)[:1000] if isinstance(i, int) or str(i).isdigit()})
+        with self._lock:
+            s = self.sessions.get(session_id)
+            if s is None:
+                return None
+            if s.busy:
+                return False
+            s.busy = True  # no upload, delete or expiry while files are removed
+        try:
+            return self._remove(s, wanted)
+        finally:
+            s.busy = False
+
+    def _remove(self, s: Session, wanted: list[int]) -> list[int]:
+        if not wanted:
+            return []
+        marks = ",".join("?" * len(wanted))
+        with s.library.connect() as conn:
+            rows = conn.execute(f"SELECT f.id, p.path, f.sha256 FROM paths p JOIN files f ON f.id = p.file_id "
+                                f"WHERE p.root = ? AND f.id IN ({marks})", (s.root, *wanted)).fetchall()
+        uploads = s.uploads.resolve()
+        gone: list[tuple[int, str, str, int]] = []
+        for file_id, stored, sha in rows:
+            path = Path(stored)
+            if not path.resolve().is_relative_to(uploads):
+                continue
+            size = path.stat().st_size if path.is_file() else 0
+            _shred(path)
+            path.unlink(missing_ok=True)
+            thumb = s.dir / thumbs.rel_path(sha)
+            if thumb.is_file():
+                _shred(thumb)  # the sweep removes it
+            gone.append((file_id, stored, sha, size))
+        s.library.remove_files([stored for _, stored, _, _ in gone])
+        for _, _, sha, size in gone:
+            s.shas.discard(sha)  # the same file can be uploaded again
+            s.files -= 1
+            s.bytes -= size
+        log.info("session %s: %d upload(s) deleted by its visitor", s.id[:8], len(gone))
+        return sorted({file_id for file_id, _, _, _ in gone})
 
     def _wipe(self, s: Session) -> None:
         """A session off the disk: every file overwritten with zeros, then its folder removed (the uploads, its copy

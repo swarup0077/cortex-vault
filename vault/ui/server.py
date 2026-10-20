@@ -4,9 +4,10 @@
 `/file/{id}` (a download) look the file up in the index: the visitor's own upload session's copy when their
 browser's cookie names a live one, else the main index. No URL names a session. Anything that isn't a plain id, an
 unknown id and another session's file all get the same 404, so nothing reveals whether a file exists. In demo mode
-`/session/claim` trades a new session's one-time ticket for its cookie and `/session/forget` clears a cookie that
-names no live session (SPEC §8). The app's own assets (stylesheet, script, logo) are static files under `/cv/`; the
-page names the stylesheet and the script with a hash of their content (`asset`).
+`/session/claim` trades a new session's one-time ticket for its cookie, `/session/forget` clears a cookie that names
+no live session, and `/session/uploads` lists the cookie's session's own uploads for Manage uploads (SPEC §8). The
+app's own assets (stylesheet, script, logo) are static files under `/cv/`; the page names the stylesheet and the
+script with a hash of their content (`asset`).
 """
 
 from __future__ import annotations
@@ -160,6 +161,12 @@ def make_app(blocks: gr.Blocks, resolve: Resolve, *, demo: bool = True,
             response = Response(status_code=204, headers={"Cache-Control": "no-store"})
             set_cookie(response, token)
             return response
+
+        @app.get("/session/uploads")
+        def uploads(request: Request) -> JSONResponse:
+            """Manage uploads: the files this browser's session uploaded (by its cookie only), newest first."""
+            files = sessions.uploads(sessions.by_token(request.cookies.get(COOKIE)))
+            return JSONResponse({"files": files}, headers={"Cache-Control": "private, no-store"})
 
         @app.post("/session/forget")
         def forget(request: Request) -> Response:

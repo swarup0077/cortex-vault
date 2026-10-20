@@ -130,7 +130,8 @@ def uploads_full(ctx: UiContext, session: str | None) -> bool:
 
 def status_html(ctx: UiContext, session: str | None, *, busy: tuple[str, int, int] | None = None,
                 upload_id: str = "", files: Sequence | None = None, received: int = 0, message: str = "",
-                new_session: bool = False, toast: str = "", forget: bool = False, reattach: bool = False) -> str:
+                new_session: bool = False, toast: str = "", forget: bool = False, reattach: bool = False,
+                removed: Sequence[int] | None = None) -> str:
     """The header status, the dial's state, the footer's index line, and the upload bar's server stages (SPEC §8):
     `busy` = (phase, done, total) while an upload is listed or read, with real counts (total 0: not known yet);
     `files` is its per-file outcome once listed; `message` says why nothing was kept. A new session's unused ticket
@@ -145,7 +146,7 @@ def status_html(ctx: UiContext, session: str | None, *, busy: tuple[str, int, in
         last = ctx.library.stats().last_indexed
         index = f"{n} files · " + (f"indexed {views.ago(last)}" if last else "not indexed yet")
     kw: dict = dict(index=index, version=lib.version(), uploads_full=full, upload_id=upload_id, message=message,
-                    new_session=new_session, toast=toast, forget=forget, reattach=reattach,
+                    new_session=new_session, toast=toast, forget=forget, reattach=reattach, removed=removed,
                     claim=(ctx.sessions.ticket(session) if ctx.sessions else None) or "")
     if ctx.demo:  # The Archive's numbers for every scope: cortex.js repaints them as an upload is listed and read
         kw.update(counts={scope: scoped_counts(ctx, session, scope) for scope in SCOPES})
@@ -229,6 +230,21 @@ def delete_uploads(ctx: UiContext, session: str | None, query: object) -> tuple[
         return None, status_html(ctx, session, toast=views.DELETE_BUSY), session
     toast = views.deleted_text(n) if done else views.NOTHING_TO_DELETE
     return run_search(ctx, None, q, "Samples"), status_html(ctx, None, toast=toast, forget=True), None
+
+
+def delete_files(ctx: UiContext, session: str | None, ids: object) -> str:
+    """Demo, Manage uploads → Delete selected → the status. Only the files of the session the browser's cookie
+    names, by their id there (SessionManager.remove); refused while one of its uploads is being read, as Delete all
+    is. The results on screen stay: the status names the deleted ids, which cortex.js takes out of them, and carries
+    the new counts."""
+    wanted = ids if isinstance(ids, list) else []
+    done = ctx.sessions.remove(session, wanted) if ctx.sessions else None
+    if done is False:
+        return status_html(ctx, session, toast=views.DELETE_BUSY)
+    if done is None:
+        return status_html(ctx, None, toast=views.NOTHING_TO_DELETE, forget=True)
+    return status_html(ctx, session, toast=views.removed_text(len(done)) if done else views.NOTHING_DELETED,
+                       removed=done)
 
 
 def home_html(ctx: UiContext, session: str | None, scope: str = "Both") -> str:
@@ -450,11 +466,15 @@ def build_blocks(ctx: UiContext) -> gr.Blocks:
                        show_progress="hidden", api_name=False)
 
             def on_delete(evt: gr.EventData, request: gr.Request):
-                """Delete my uploads: the session its browser's cookie names; nothing in the event names one."""
-                if _event(evt, "action") != "delete-uploads":
-                    return gr.skip(), gr.skip()
-                page, state, _ = delete_uploads(ctx, ctx.sid(cookie(request)), _event(evt, "q", ""))
-                return (gr.skip() if page is None else page), state
+                """Manage uploads: Delete all, or Delete selected (by file id). Always the session its browser's
+                cookie names; nothing in the event names one."""
+                action = _event(evt, "action")
+                if action == "delete-uploads":
+                    page, state, _ = delete_uploads(ctx, ctx.sid(cookie(request)), _event(evt, "q", ""))
+                    return (gr.skip() if page is None else page), state
+                if action == "delete-files":
+                    return gr.skip(), delete_files(ctx, ctx.sid(cookie(request)), _event(evt, "ids", []))
+                return gr.skip(), gr.skip()
 
             main.click(on_delete, None, [main, status], concurrency_limit=4, show_progress="hidden",
                        api_name=False)

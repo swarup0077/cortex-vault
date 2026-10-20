@@ -9,7 +9,7 @@
 // drop zone's text only. Prints one JSON object.
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch, openApp, sleep, waitFor } from "./cdp.mjs";
+import { deleteAll, launch, openApp, sleep, waitFor } from "./cdp.mjs";
 
 const opt = JSON.parse(process.argv[2]);
 const READ = `(() => {
@@ -77,7 +77,7 @@ try {
     out.second = await dropAll(opt.files[1], 500, 600, "results");  // on the results list
     if (opt.cleanup) {  // a live check: delete the uploads again, answering OK to the confirmation
       b.on((m) => { if (m.method === "Page.javascriptDialogOpening") b.send("Page.handleJavaScriptDialog", { accept: true }); });
-      await b.js("document.querySelector('[data-act=delete-uploads]').click()");
+      await deleteAll(b);
       await waitFor(async () => (await read()).myUploads === 0, 30000, "the delete");
       out.cleaned = await read();
     }

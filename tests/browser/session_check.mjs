@@ -6,7 +6,7 @@
 // upload, wait that long without searching, and reload). Otherwise: search (no cookie yet), upload, read the
 // cookie as the browser keeps it, reload, open a second tab, then open the app in another browser, and there set a
 // forged cookie and reload. Prints one JSON object: the state after each step.
-import { launch, sleep, upload as uploadFiles, waitFor } from "./cdp.mjs";
+import { deleteAll, launch, sleep, upload as uploadFiles, waitFor } from "./cdp.mjs";
 
 const opt = JSON.parse(process.argv[2]);
 const READ = `(() => {
@@ -107,7 +107,7 @@ try {
   }
   if (opt.cleanup) {  // a live check: delete the uploads again, answering OK to the confirmation
     a.on((m) => { if (m.method === "Page.javascriptDialogOpening") a.send("Page.handleJavaScriptDialog", { accept: true }); });
-    await a.js("document.querySelector('[data-act=\"delete-uploads\"]').click()");
+    await deleteAll(a);
     await waitFor(async () => (await read(a)).myUploads === 0, 30000, "the delete");
     await sleep(1000);
     out.cleaned = { ...(await read(a)), cookie: await cookie(a) };

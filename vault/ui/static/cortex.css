@@ -422,6 +422,15 @@ body.cv-tray-open { overflow: hidden; }
 .cv-app .cv-tray__btn:disabled, .cv-app .cv-tray__go:disabled { opacity: 0.45; cursor: default; }
 .cv-app .cv-tray button:focus-visible { outline: 2px solid var(--cv-brass); outline-offset: 2px; }
 
+/* Manage uploads (demo): the same dialog, with a checkbox per file */
+.cv-app .cv-manage__all { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 13px; color: var(--cv-ink);
+  cursor: pointer; }
+.cv-app .cv-manage__row { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.cv-app .cv-manage input[type="checkbox"] { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--cv-brass); }
+.cv-app .cv-manage .cv-tray__item { padding: 8px 2px; }
+.cv-app .cv-manage__go { border-color: var(--cv-rust); background: var(--cv-rust); color: #fff; }
+.cv-app .cv-manage input:focus-visible { outline: 2px solid var(--cv-brass); outline-offset: 2px; }
+
 /* The full-page drop overlay (demo), while files are dragged over the page */
 .cv-dropover { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 24px;
   background: var(--cv-backdrop); pointer-events: none; }
@@ -496,6 +505,8 @@ body.cv-tray-open { overflow: hidden; }
   .cv-app .cv-tray__go { flex-basis: 100%; order: -1; margin: 0 0 4px; padding: 13px 18px; font-size: 15px; }
   .cv-app .cv-tray__btn { flex: 1; padding: 11px 14px; }
   .cv-app .cv-tray__drop { width: 44px; height: 44px; }
+  .cv-app .cv-manage .cv-tray__item { padding: 12px 2px; }
+  .cv-app .cv-manage input[type="checkbox"] { width: 22px; height: 22px; }
   .cv-rail__scope, .cv-rail__types .cv-rail__label { display: none; }
   .cv-filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px 2px; }
   .cv-filters::-webkit-scrollbar { display: none; }

@@ -482,14 +482,19 @@ class _Indexer:
                 stale = self.conn.execute(
                     "SELECT path, file_id FROM paths WHERE root = ? AND seen_run != ?", (str(root), self.run_id)
                 ).fetchall()
-                by_file: dict[int, list[str]] = {}
-                for r in stale:
-                    by_file.setdefault(r["file_id"], []).append(r["path"])
-                for file_id, paths in by_file.items():
-                    with db.transaction(self.conn):
-                        self.conn.executemany("DELETE FROM paths WHERE path = ?", [(p,) for p in paths])
-                        self._drop_if_orphan(file_id)
-                    self.report.deleted += len(paths)
+                self.forget([(r["path"], r["file_id"]) for r in stale])
+
+    def forget(self, stale: Iterable[tuple[str, int]]) -> None:
+        """Delete these (path, file id) rows, one transaction per file, and each file with all its rows (its FTS rows
+        explicitly) once no path points at it."""
+        by_file: dict[int, list[str]] = {}
+        for path, file_id in stale:
+            by_file.setdefault(file_id, []).append(path)
+        for file_id, paths in by_file.items():
+            with db.transaction(self.conn):
+                self.conn.executemany("DELETE FROM paths WHERE path = ?", [(p,) for p in paths])
+                self._drop_if_orphan(file_id)
+            self.report.deleted += len(paths)
 
     def refresh_path_chunks(self) -> None:
         """Rewrite path chunks whose text no longer matches the file's paths (FTS only; they have no vector).
@@ -660,6 +665,23 @@ def reindex(
     with db.transaction(conn):
         db.wipe_index(conn)
     return index_paths(conn, roots, cfg, embedder=embedder, stop=stop, progress=progress, compact=True)
+
+
+def remove_paths(conn: sqlite3.Connection, paths: Iterable[str], cfg: Config | None = None) -> int:
+    """Forget files by their stored paths, the way the sweep forgets files that went from disk (demo: a visitor
+    deleting some of their uploads, whose files are already gone): one transaction per file, its paths, then the file
+    with all its rows (FTS rows explicitly); then path chunks, thumbnails no longer indexed, and a compaction, so none
+    of their text stays in the index file. Returns how many files were deleted."""
+    cfg = cfg or Config()
+    indexer = _Indexer(conn, cfg, None, compact=True)
+    stale = [(p, r[0]) for p in paths
+             if (r := conn.execute("SELECT file_id FROM paths WHERE path = ?", (p,)).fetchone()) is not None]
+    with indexer.timed("sweep"):
+        indexer.forget(stale)
+    indexer.refresh_path_chunks()
+    thumbs.sweep(conn, cfg)
+    indexer.compact()
+    return indexer.report.files_deleted
 
 
 def remove_root(conn: sqlite3.Connection, root: str, cfg: Config | None = None) -> int:

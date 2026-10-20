@@ -164,6 +164,20 @@ class Library:
             self.refresh()
         return report
 
+    def remove_files(self, paths: Iterable[str]) -> int:
+        """Forget files by their stored paths (`pipeline.remove_paths`); the caller has removed them from disk. The
+        version stays where it was, so results found before don't look newer than the index afterwards."""
+        if self.read_only:
+            raise PermissionError("this index is read-only")
+        with self.connect() as conn:
+            before = self.version(conn)
+            removed = pipeline.remove_paths(conn, list(paths), self.cfg)
+            dropped = before - self.version(conn)
+            with db.transaction(conn):
+                db.set_meta(conn, "removed", str(int(db.get_meta(conn, "removed") or 0) + dropped))
+        self.refresh()
+        return removed
+
     def remove_root(self, root: str) -> int:
         if self.read_only:
             raise PermissionError("this index is read-only")
@@ -284,13 +298,15 @@ class Library:
                 f"SELECT count(*) FROM files f WHERE f.status = 'ok' AND EXISTS (SELECT 1 FROM paths p WHERE "
                 f"p.file_id = f.id AND p.root IN ({','.join('?' * len(roots))}))", roots).fetchone()[0]
 
-    def version(self) -> int:
+    def version(self, conn: sqlite3.Connection | None = None) -> int:
         """Grows whenever indexing lists or reads a file (files + files read), so the UI can tell that results on
-        screen are older than the index ("Update results", SPEC §8)."""
-        with self.connect() as conn:
-            files, ready = conn.execute("SELECT count(*), coalesce(sum(stage = 'ready'), 0) FROM files "
-                                        "WHERE status = 'ok'").fetchone()
-        return files + ready
+        screen are older than the index ("Update results", SPEC §8). Removing files never lowers it (`removed`)."""
+        if conn is None:
+            with self.connect() as conn:
+                return self.version(conn)
+        files, ready = conn.execute("SELECT count(*), coalesce(sum(stage = 'ready'), 0) FROM files "
+                                    "WHERE status = 'ok'").fetchone()
+        return files + ready + int(db.get_meta(conn, "removed") or 0)
 
     def type_counts(self, roots: Iterable[str] = ()) -> dict[str, int]:
         """Files per type for The Archive (SPEC §8): the kinds, with plain-text docs (`.txt`, `.md`) as "text".

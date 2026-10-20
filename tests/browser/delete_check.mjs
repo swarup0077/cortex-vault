@@ -3,14 +3,15 @@
 //   node delete_check.mjs '<json options>'
 //
 // Options: url, browser, files (paths to upload), query (one those files match), phone. Uploads the files,
-// searches, clicks Delete my uploads and answers Cancel to the confirmation, then clicks again and answers OK,
-// then searches again. Prints one JSON object: the state after each step and the confirmation's text.
+// searches, opens Manage uploads, clicks Delete all uploads there and answers Cancel to the confirmation, then
+// clicks again and answers OK, then searches again. Prints one JSON object: the state after each step and the
+// confirmation's text. (Delete all uploads was Delete my uploads in The Archive until v1.1.0.)
 import { launch, openApp, sleep, upload, waitFor } from "./cdp.mjs";
 
 const opt = JSON.parse(process.argv[2]);
 const READ = `(() => {
   const root = document.querySelector('[data-view]');
-  const del = document.querySelector('[data-act="delete-uploads"]');
+  const del = document.querySelector('[data-act="manage-uploads"]');
   const st = document.querySelector('[data-status-src]').dataset;
   let mine = null;
   try { mine = Object.values(JSON.parse(st.counts || '{}')['My uploads'] || {}).reduce((a, n) => a + n, 0); } catch (e) {}
@@ -38,7 +39,7 @@ try {
   const out = { start: await read() };
   await upload(b, opt.files);
   await waitFor(() => b.js("document.querySelector('[data-status-src]').dataset.stage === 'done'"), 120000, "the upload");
-  await waitFor(async () => (await read()).deleteShown, 10000, "the delete button");
+  await waitFor(async () => (await read()).deleteShown, 10000, "the Manage uploads button");
   await sleep(1200);  // home switches to My uploads after the first upload (desktop)
   out.uploaded = await read();
   const search = async (q) => {
@@ -49,8 +50,8 @@ try {
   };
   await search(opt.query);
   out.searched = await read();
-  const press = async () => {  // a real click, or a tap on a phone
-    const box = await b.js(`(() => { const d = document.querySelector('[data-act="delete-uploads"]');
+  const tap = async (selector) => {  // a real click, or a tap on a phone
+    const box = await b.js(`(() => { const d = document.querySelector(${JSON.stringify(selector)});
       d.scrollIntoView({block: 'center'}); const r = d.getBoundingClientRect();
       return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()`);
     if (opt.phone) {
@@ -61,6 +62,12 @@ try {
         await b.send("Input.dispatchMouseEvent", { type, x: box.x, y: box.y, button: "left", clickCount: 1 });
       }
     }
+  };
+  const press = async () => {  // Manage uploads, then Delete all uploads in its panel
+    if (!(await b.js("!document.querySelector('[data-manage]').hidden"))) await tap('[data-act="manage-uploads"]');
+    await waitFor(() => b.js("!document.querySelector('[data-manage] [data-act=delete-uploads]').disabled"), 15000,
+      "the uploads list");
+    await tap('[data-manage] [data-act="delete-uploads"]');
   };
   await press();  // answered Cancel
   await sleep(1500);

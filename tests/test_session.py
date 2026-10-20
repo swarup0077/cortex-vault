@@ -5,6 +5,7 @@ import hashlib
 import json
 import shutil
 import subprocess
+import uuid
 from pathlib import Path
 
 import pytest
@@ -408,3 +409,112 @@ def test_the_upload_trays_checks_mirror_the_server(demo, inbox, tmp_path) -> Non
     assert tray == server
     assert [bool(r) for r in tray] == [False, True, True, True, True, False, True, False, True, True]
     assert tray[6] == "over the 2 KB per-session total" and tray[8] == "over the 4-file limit"
+
+
+# ---------------------------------------------------------------- Manage uploads: delete some (owner, 20 Oct: v1.1.0)
+
+
+def words_file(inbox: Path, name: str, words: str, seed: int) -> Path:
+    d = inbox / f"w{seed}"
+    d.mkdir()
+    (d / name).write_text(f"{words}. Upload {seed}.", encoding="utf-8")
+    return d / name
+
+
+def fts_hits(lib: Library, word: str) -> int:
+    with lib.connect() as conn:
+        return conn.execute("SELECT count(*) FROM chunks_fts WHERE chunks_fts MATCH ?", (word,)).fetchone()[0]
+
+
+def test_deleting_some_uploads_takes_them_off_the_disk_and_out_of_the_index(demo, inbox, tmp_path, monkeypatch) -> None:
+    """The selected files go: overwritten then removed, their thumbnails too, and the indexer's sweep forgets them
+    (paths, files, chunks, FTS rows, vectors). The other uploads and the samples stay; the counts and limits follow,
+    the same file can be uploaded again, and the index version doesn't go back."""
+    import vault.session as session_mod
+
+    shredded: list[Path] = []
+    real_shred = session_mod._shred
+    monkeypatch.setattr(session_mod, "_shred", lambda p: (shredded.append(Path(p)), real_shred(p)))
+    sm = manager(demo, tmp_path)
+    s, _ = sm.add_files(None, [words_file(inbox, "wombat.txt", "wombat burrow survey", 1),
+                               words_file(inbox, "quokka.txt", "quokka island census", 2),
+                               words_file(inbox, "numbat.md", "numbat termite diet", 3)], inbox)
+    listed = {f["name"]: f for f in sm.uploads(s.id)}
+    assert set(listed) == {"wombat.txt", "quokka.txt", "numbat.md"} and all(f["size"] > 0 for f in listed.values())
+    with s.library.connect() as conn:
+        thumbs_of = {r[0]: s.dir / r[1]
+                     for r in conn.execute("SELECT id, thumb_path FROM files WHERE thumb_path IS NOT NULL")}
+        samples = conn.execute("SELECT count(*) FROM paths WHERE root != ?", (s.root,)).fetchone()[0]
+    gone = [listed["wombat.txt"]["id"], listed["numbat.md"]["id"]]
+    paths = {n: s.uploads / n for n in listed}
+    version, size, digest = s.library.version(), s.bytes, demo_digest(demo)
+    assert sm.remove(s.id, [str(gone[0]), gone[1], "x", -5, 10**9]) == sorted(gone)
+    assert not paths["wombat.txt"].exists() and not paths["numbat.md"].exists() and paths["quokka.txt"].exists()
+    assert paths["wombat.txt"] in shredded and paths["numbat.md"] in shredded  # overwritten before removal
+    for fid in gone:
+        if fid in thumbs_of:
+            assert not thumbs_of[fid].exists() and thumbs_of[fid] in shredded
+    with s.library.connect() as conn:
+        assert conn.execute(f"SELECT count(*) FROM files WHERE id IN ({gone[0]}, {gone[1]})").fetchone()[0] == 0
+        assert conn.execute(f"SELECT count(*) FROM chunks WHERE file_id IN ({gone[0]}, {gone[1]})").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM chunks_fts").fetchone()[0] == \
+            conn.execute("SELECT count(*) FROM chunks").fetchone()[0]  # no FTS row left behind
+        assert conn.execute("SELECT count(*) FROM paths WHERE root != ?", (s.root,)).fetchone()[0] == samples
+    assert fts_hits(s.library, "wombat") == 0 and fts_hits(s.library, "numbat") == 0 and fts_hits(s.library, "quokka")
+    hits = [r.filename for r in s.library.search("quokka island census", roots=[s.root]).results]
+    assert hits == ["quokka.txt"] and [f["name"] for f in sm.uploads(s.id)] == ["quokka.txt"]
+    assert s.files == 1 and s.bytes == size - sum(listed[n]["size"] for n in ("wombat.txt", "numbat.md"))
+    assert sm.limits(s.id)["files"] == 1 and s.library.version() == version and demo_digest(demo) == digest
+    _, again = sm.add_files(s.id, [words_file(inbox, "wombat.txt", "wombat burrow survey", 1 + 100)], inbox)
+    assert again.files[0].status == "indexed"  # not "already uploaded": it was deleted
+    assert s.library.version() > version
+
+
+def test_deleting_some_uploads_touches_nothing_else(demo, inbox, tmp_path) -> None:
+    """Only the session's own uploads: a sample's id, another session's file id and unknown ids are ignored; a
+    session that isn't live gets None; while one of its uploads is being read, False and nothing is touched."""
+    sm = manager(demo, tmp_path)
+    a, _ = sm.add_files(None, [words_file(inbox, "a.txt", "alpha notes", 1)], inbox)
+    b, _ = sm.add_files(None, [words_file(inbox, "b1.txt", "beta notes", 2),
+                               words_file(inbox, "b2.txt", "beta two", 3)], inbox)
+    a_ids = [f["id"] for f in sm.uploads(a.id)]
+    b_ids = [f["id"] for f in sm.uploads(b.id)]
+    with a.library.connect() as conn:
+        sample_ids = [r[0] for r in conn.execute("SELECT DISTINCT file_id FROM paths WHERE root != ?", (a.root,))]
+    before = {x.id: x.library.count() for x in (a, b)}
+    only_b = [i for i in b_ids if i not in a_ids]
+    assert sm.remove(a.id, sample_ids + only_b) == [] and {x.id: x.library.count() for x in (a, b)} == before
+    for nobody in (None, "../x", str(uuid.uuid4())):
+        assert sm.remove(nobody, b_ids) is None
+    b.busy = True
+    assert sm.remove(b.id, b_ids) is False and len(sm.uploads(b.id)) == 2
+    b.busy = False
+    assert sm.remove(b.id, b_ids[:1]) == b_ids[:1] and len(sm.uploads(b.id)) == 1 and len(sm.uploads(a.id)) == 1
+    assert sm.uploads(None) == [] and sm.uploads(a.id)[0]["name"] == "a.txt"
+
+
+def test_the_sweep_forgets_each_file_in_its_own_transaction(tmp_path, fake_embedder, monkeypatch) -> None:
+    """pipeline.remove_paths is the sweep's own step (`_Indexer.forget`): one transaction per file."""
+    from vault import db
+    from vault.ingest import pipeline
+
+    root = tmp_path / "files"
+    root.mkdir()
+    for i in range(3):
+        (root / f"n{i}.txt").write_text(f"note number {i} about kiwis", encoding="utf-8")
+    lib = Library(Config(data_dir=tmp_path / "data"))
+    lib.index([root])
+    opened = []
+    real = db.transaction
+
+    def counting(conn):
+        opened.append(1)
+        return real(conn)
+
+    monkeypatch.setattr(pipeline.db, "transaction", counting)
+    with lib.connect() as conn:
+        stored = [r[0] for r in conn.execute("SELECT path FROM paths ORDER BY path")][:2]
+        n = pipeline.remove_paths(conn, stored, lib.cfg)
+    assert n == 2 and len(opened) == 2  # nothing else needed one
+    with lib.connect() as conn:
+        assert conn.execute("SELECT count(*) FROM files").fetchone()[0] == 1

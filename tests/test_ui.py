@@ -676,12 +676,12 @@ def test_delete_my_uploads_goes_back_to_samples(demo_ctx) -> None:
 
     demo_ctx.sessions.cfg = dc_replace(demo_ctx.sessions.cfg, max_sessions=1)
     _, sid = upload(demo_ctx, {"one.txt": "quokka notes one", "two.txt": "quokka notes two", "three.md": "quokka"})
-    assert demo_ctx.sessions.full and 'data-act="delete-uploads">' in layout.home_html(demo_ctx, sid, "My uploads")
+    assert demo_ctx.sessions.full and 'data-act="manage-uploads">' in layout.home_html(demo_ctx, sid, "My uploads")
     folder = demo_ctx.session(sid).dir
     page, status, new_sid = layout.delete_uploads(demo_ctx, sid, "quokka")
     assert new_sid is None and demo_ctx.session(sid) is None and not folder.exists() and not demo_ctx.sessions.full
     assert 'data-scope="Samples"' in page and 'data-query="quokka"' in page and "one.txt" not in page
-    assert rail_counts(page)[0] == 2 and 'data-act="delete-uploads" hidden' in page
+    assert rail_counts(page)[0] == 2 and 'data-act="manage-uploads" hidden' in page
     assert 'data-toast="Your 3 uploads were deleted"' in status and 'data-toast-id="' in status
     assert {s: sum(c.values()) for s, c in status_counts(status).items()} == {"Samples": 2, "My uploads": 0, "Both": 2}
     assert rail_counts(layout.home_html(demo_ctx, None, "My uploads"))[0] == 0
@@ -700,18 +700,25 @@ def test_delete_my_uploads_when_there_is_nothing_or_an_upload_is_being_read(demo
     demo_ctx.session(sid).busy = False
 
 
-def test_delete_my_uploads_shows_only_in_demo_mode_with_uploads(demo_ctx, tmp_path, fake_embedder) -> None:
-    assert 'data-act="delete-uploads" hidden' in layout.home_html(demo_ctx, None)
-    _, sid = upload(demo_ctx, {"one.txt": "first"})
+def test_manage_uploads_shows_only_in_demo_mode_with_uploads(demo_ctx, tmp_path, fake_embedder) -> None:
+    """v1.1.0: Manage uploads (N) took Delete my uploads' place under Add files; Delete all uploads is in its panel,
+    and the privacy texts point there."""
+    assert 'data-act="manage-uploads" hidden' in layout.home_html(demo_ctx, None)
+    _, sid = upload(demo_ctx, {"one.txt": "first", "two.txt": "second"})
     page = layout.home_html(demo_ctx, sid, "Both")
-    assert 'data-act="delete-uploads">' in page and page.index('data-act="add"') < page.index("delete-uploads")
+    assert 'data-act="manage-uploads">' in page and page.index('data-act="add"') < page.index("manage-uploads")
+    assert "Manage uploads (<span data-manage-n>2</span>)" in page
+    top = views.top(DEMO)
+    assert top.count("data-manage hidden") == 1 and 'data-act="delete-uploads">Delete all uploads' in top
+    assert 'data-act="delete-selected" disabled>Delete selected (0)' in top and "data-manage-all" in top
     lib = Library(Config(data_dir=tmp_path / "local"))
-    assert "delete-uploads" not in layout.home_html(UiContext("local", lib), None)
+    assert "manage-uploads" not in layout.home_html(UiContext("local", lib), None)
+    assert "data-manage" not in views.top(LOCAL)
     notice = views.Mode(demo=True).upload_notice
-    assert "Delete them any time with Delete my uploads; otherwise they're deleted 60 minutes after your last " \
+    assert "Delete them any time under Manage uploads; otherwise they're deleted 60 minutes after your last " \
            "search or upload." in notice
-    assert "Delete my uploads" in views.Mode(demo=True).private_note
-    assert "Delete my uploads" not in views.Mode(demo=False).private_note
+    assert "Manage uploads" in views.Mode(demo=True).private_note
+    assert "Manage uploads" not in views.Mode(demo=False).private_note
 
 
 # ---------------------------------------------------------------- the session cookie (owner, 20 Oct: v1.1.0)
@@ -1023,3 +1030,68 @@ def test_the_status_carries_what_the_tray_checks(demo_ctx, tmp_path, fake_embedd
     lib = Library(Config(data_dir=tmp_path / "local"))
     local = UiContext("local", lib)
     assert "data-limits" not in layout.status_html(local, None) and "data-tray" not in views.top(LOCAL)
+
+
+# ---------------------------------------------------------------- Manage uploads (owner, 20 Oct: v1.1.0)
+
+
+def upload_ids(ctx: UiContext, sid: str) -> dict[str, int]:
+    return {f["name"]: f["id"] for f in ctx.sessions.uploads(sid)}
+
+
+def test_delete_selected_names_the_deleted_files_and_the_new_counts(demo_ctx) -> None:
+    """The status says which ids went (cortex.js takes them out of the results on screen, which aren't rendered
+    again) and carries the new counts; refused while an upload is being read, as Delete all is."""
+    _, sid = upload(demo_ctx, {"one.txt": "quokka one", "two.txt": "quokka two", "three.md": "quokka three"})
+    ids = upload_ids(demo_ctx, sid)
+    demo_ctx.session(sid).busy = True
+    status = layout.delete_files(demo_ctx, sid, [ids["one.txt"]])
+    assert "still being read" in html.unescape(status) and "data-removed" not in status
+    demo_ctx.session(sid).busy = False
+    assert len(upload_ids(demo_ctx, sid)) == 3
+    status = layout.delete_files(demo_ctx, sid, [ids["one.txt"], ids["three.md"]])
+    removed = json.loads(html.unescape(re.search(r'data-removed="([^"]+)"', status).group(1)))
+    assert removed == sorted([ids["one.txt"], ids["three.md"]]) and 'data-toast="2 uploads deleted"' in status
+    assert status_counts(status)["My uploads"]["text"] == 1 and "data-forget" not in status
+    assert list(upload_ids(demo_ctx, sid)) == ["two.txt"]
+    page = layout.run_search(demo_ctx, sid, "quokka", "My uploads")
+    assert "two.txt" in page and "one.txt" not in page and "three.md" not in page
+    assert views.NOTHING_DELETED in html.unescape(layout.delete_files(demo_ctx, sid, [10**6]))
+    gone = layout.delete_files(demo_ctx, None, [ids["two.txt"]])
+    assert views.NOTHING_TO_DELETE in html.unescape(gone) and "data-forget" in gone and "data-removed" not in gone
+    assert list(upload_ids(demo_ctx, sid)) == ["two.txt"]
+
+
+def test_the_uploads_list_is_the_cookies_sessions_own(demo_ctx) -> None:
+    app = app_for(demo_ctx)
+    _, a = upload(demo_ctx, {"alpha.txt": "alpha notes", "beta.md": "beta notes"})
+    _, b = upload(demo_ctx, {"gamma.txt": "gamma notes"})
+    mine = browser(app, token_for(demo_ctx, a)).get("/session/uploads")
+    assert mine.status_code == 200 and mine.headers["cache-control"] == "private, no-store"
+    assert sorted(f["name"] for f in mine.json()["files"]) == ["alpha.txt", "beta.md"]
+    assert all(set(f) == {"id", "name", "size", "added"} and f["size"] > 0 for f in mine.json()["files"])
+    assert [f["name"] for f in browser(app, token_for(demo_ctx, b)).get("/session/uploads").json()["files"]] == \
+        ["gamma.txt"]
+    for nobody in (browser(app), browser(app, "forged-" + uuid.uuid4().hex)):
+        assert nobody.get("/session/uploads").json() == {"files": []}
+    assert browser(app).get(f"/session/uploads?s={a}").json() == {"files": []}  # a URL names no session
+
+
+@pytest.mark.filterwarnings("ignore:'future.no_silent_downcasting' is deprecated")
+@pytest.mark.filterwarnings("ignore:The copy keyword is deprecated")
+def test_delete_selected_reaches_only_the_cookies_session(demo_ctx, served_demo) -> None:
+    """Another visitor's Delete selected, naming the first visitor's file ids (and session, every way it can), deletes
+    nothing of theirs: ids are looked up in the caller's own session, where those don't exist."""
+    _, victim = upload(demo_ctx, {"v1.txt": "victim one", "v2.txt": "victim two", "v3.txt": "victim three"})
+    victim_ids = upload_ids(demo_ctx, victim)
+    _, own = upload(demo_ctx, {"mine.txt": "attacker's own"})
+    own_ids = upload_ids(demo_ctx, own)
+    targets = [i for i in victim_ids.values() if i not in own_ids.values()]
+    assert targets, "the test needs ids only the victim's session has"
+    named = {"action": "delete-files", "ids": targets, "q": "", "session": victim, "s": victim}
+    attacker = Browser(served_demo, token_for(demo_ctx, own))
+    out = attacker.event("click", named)
+    assert views.NOTHING_DELETED in out and upload_ids(demo_ctx, victim) == victim_ids
+    assert upload_ids(demo_ctx, own) == own_ids
+    assert views.NOTHING_TO_DELETE in Browser(served_demo).event("click", named)  # and no cookie at all
+    assert upload_ids(demo_ctx, victim) == victim_ids

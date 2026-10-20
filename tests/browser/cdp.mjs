@@ -101,3 +101,12 @@ export async function upload(b, files) {
   await waitFor(() => b.js("!document.querySelector('[data-tray]').hidden"), 10000, "the upload tray");
   await b.js("document.querySelector('[data-act=tray-upload]').click()");
 }
+
+/* Delete all uploads the way a visitor does: Manage uploads, then Delete all uploads in its panel, once the panel has
+   listed the files (the caller answers the confirmation). */
+export async function deleteAll(b) {
+  await b.js("document.querySelector('[data-act=manage-uploads]').click()");
+  await waitFor(() => b.js("!document.querySelector('[data-manage] [data-act=delete-uploads]').disabled"), 15000,
+    "the uploads list");
+  await b.js("document.querySelector('[data-manage] [data-act=delete-uploads]').click()");
+}

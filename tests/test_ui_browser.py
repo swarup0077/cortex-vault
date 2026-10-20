@@ -424,3 +424,58 @@ def test_files_are_reviewed_in_a_tray_before_anything_is_sent(served, tmp_path) 
             assert order[:8] == ["tray-cancel", "drop:0", "drop:1", "drop:2", "drop:3", "tray-add", "tray-clear",
                                  "tray-upload"] and order[8] == "tray-cancel" and s["trapped"]
             assert s["cancelled"]["focus"] == "add"  # back where it came from
+
+
+@needs_browser
+@pytest.mark.parametrize("served", ["demo"], indirect=True)
+def test_manage_uploads_deletes_the_chosen_files_in_a_browser(served, tmp_path) -> None:
+    """Owner (v1.1.0): Manage uploads (N) lists this session's files with checkboxes; Select all, then Delete
+    selected (k) asks "Delete k files? This can't be undone." (Cancel changes nothing). The deleted files leave the
+    results at once, the selection moves to the next row, the other rows keep their numbers; the counts, the button
+    and the list follow. Keyboard on a desktop (Space on Select all, Esc closes), touch on a phone. The files are gone
+    from the session's folder; the samples are untouched."""
+    files = []
+    for i in range(1, 5):
+        f = tmp_path / f"quokka-{i}.txt"
+        f.write_text(f"quokka field notes, survey {i}: " + "burrow " * i, encoding="utf-8")
+        files.append(str(f))
+    sessions = tmp_path / "sessions"
+
+    def run(**more) -> dict:
+        options = {"url": served, "browser": BROWSER, "files": files, "query": "quokka field notes", "pick": [1, 3],
+                   **more}
+        out = subprocess.run([NODE, str(DRIVER.parent / "manage_check.mjs"), json.dumps(options)], capture_output=True,
+                             text=True, encoding="utf-8", timeout=300)
+        state = json.loads(out.stdout)
+        assert "error" not in state, state.get("error")
+        return state
+
+    for phone in (False, True):
+        s = run(phone=phone)
+        what = "phone" if phone else "desktop"
+        before, opened, deleted = s["before"], s["opened"], s["deleted"]
+        picked = [before["rows"][1], before["rows"][3]]
+        assert all(r["title"].startswith("quokka-") for r in before["rows"][:4]), what
+        assert before["manageButton"] == "Manage uploads (4)" and before["myUploads"] == 4, what
+        assert opened["panel"] and len(opened["list"]) == 4 and opened["go"] == "Delete selected (0)", what
+        assert opened["goDisabled"] and opened["inPanel"], what
+        assert s["ticked"]["go"] == "Delete selected (2)" and s["ticked"]["all"]["indeterminate"], what
+        assert s["dialogs"] == ["Delete 2 files? This can't be undone."] * 2, what
+        assert len(s["cancelled"]["allIds"]) == len(before["allIds"]), what  # Cancel: nothing happened
+        assert not {r["id"] for r in picked} & set(deleted["allIds"]), what  # gone from the results at once
+        assert deleted["render"] == before["render"], what  # not drawn again: the rows were taken out
+        kept = [r for r in before["rows"] if r not in picked]
+        assert deleted["rows"][:2] == kept[:2], what  # the rest keep their place and numbers (01, 03)
+        assert deleted["myUploads"] == 2 and deleted["manageButton"] == "Manage uploads (2)", what
+        assert deleted["samples"] == before["samples"] and len(deleted["list"]) == 2, what
+        assert deleted["toast"] == "2 uploads deleted" and int(deleted["count"]) == int(before["count"]) - 2, what
+        assert deleted["inPanel"] and not s["closed"]["panel"] and s["closed"]["focus"] == "manage-uploads", what
+        again = [r["title"] for r in s["searchedAgain"]["rows"] if r["title"].startswith("quokka-")]
+        assert sorted(again) == sorted(r["title"] for r in kept if r["title"].startswith("quokka-")), what
+        left = sorted(p.name for p in sessions.glob("*/uploads/*"))
+        assert not {r["title"] for r in picked} & set(left) and len(left) >= 2, what  # off the disk
+        if not phone:  # the second row was selected: the selection moved to the next one
+            assert before["selected"] == picked[0]["title"] and deleted["selected"] == before["rows"][2]["title"]
+            assert deleted["pane"] == deleted["selected"]
+            assert s["allOn"]["go"] == "Delete selected (4)" and s["allOn"]["all"]["checked"]
+            assert s["allOff"]["go"] == "Delete selected (0)" and s["allOff"]["focus"] == "select-all"

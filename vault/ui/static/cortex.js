@@ -204,14 +204,22 @@
     return n > 0 ? `Upload ${n} file${n === 1 ? '' : 's'}` : 'Nothing to upload';
   }
 
-  /* Delete my uploads asks first (SPEC §8). */
+  /* Delete all uploads and Delete selected ask first (SPEC §8). */
   function confirmDelete(n) {
     return `Delete all ${n} file${n === 1 ? '' : 's'} you uploaded? This can't be undone.`;
   }
 
+  function confirmDeleteSome(k) {
+    return `Delete ${k} file${k === 1 ? '' : 's'}? This can't be undone.`;
+  }
+
+  function deleteLabel(k) {
+    return `Delete selected (${k})`;
+  }
+
   const api = { MIN_CHARS, DELAY_MS, PAGE, SAVE_MS, RECENT_MAX, PLURALS, normalize, searchFor, enterAction, escAction,
     visibility, countWords, remember, forget, parseRecent, barText, barValue, percent, stale, detailFits, scopeCounts,
-    confirmDelete, dropText, suffix, trayCheck, typeLabel, fileSize, uploadLabel };
+    confirmDelete, confirmDeleteSome, deleteLabel, dropText, suffix, trayCheck, typeLabel, fileSize, uploadLabel };
   if (!win) return api;
 
   /* ------------------------------------------------------------------ browser */
@@ -226,6 +234,7 @@
     uploadsFull: false, busyText: '', lastRender: null,
     transfer: null, notSent: 0, dismissed: '', reportOpen: false, said: '', homeFor: '', awaiting: null,
     claiming: null, claimed: '', forgotId: '', dropTimer: 0, tray: [], trayReturn: null,
+    manageFiles: null, manageSel: new Set(), manageReturn: null, manageBusy: false, removedSeen: '',
   };
 
   const $ = (sel, el) => (el || doc).querySelector(sel);
@@ -612,8 +621,11 @@
   function paintArchive() {
     const root = viewRoot();
     const mine = root && S.status && scopeCounts(S.status.counts, 'My uploads');
-    const del = root && $('[data-act="delete-uploads"]', root);
-    if (del && mine) del.hidden = !mine.total;  // Delete my uploads: only while this session has uploads
+    const manageBtn = root && $('[data-act="manage-uploads"]', root);
+    if (manageBtn && mine) {  // Manage uploads (N): only while this session has uploads
+      manageBtn.hidden = !mine.total;
+      $('[data-manage-n]', manageBtn).textContent = String(mine.total);
+    }
     const now = root && S.status && scopeCounts(S.status.counts, root.dataset.scope || effectiveScope());
     if (!now) return;
     const head = $('.cv-rail__count', root);
@@ -628,13 +640,14 @@
     if (S.filter !== 'all' && !now.types[S.filter]) setFilter('all');  // that type left this scope (an expiry)
   }
 
-  /* Delete my uploads: ask, then let the server wipe this page's own session (it knows which: nothing here names
-     one) and show the samples. The count is what My uploads holds now. */
+  /* Delete all uploads: ask, then let the server wipe this browser's session (it knows which, by the cookie: nothing
+     here names one) and show the samples. The count is what My uploads holds now. Whether it was sent. */
   function deleteUploads() {
     const mine = S.status && scopeCounts(S.status.counts, 'My uploads');
-    if (!mine || !mine.total || !S.mainTrigger) return;
-    if (!win.confirm(confirmDelete(mine.total))) return;
+    if (!mine || !mine.total || !S.mainTrigger) return false;
+    if (!win.confirm(confirmDelete(mine.total))) return false;
     emit(S.mainTrigger, 'click', { action: 'delete-uploads', q: S.shown || '' });
+    return true;
   }
 
   /* ------------------------------------------------------------------ the upload bar */
@@ -882,7 +895,8 @@
     const out = reasons.length - ok;
     const bytes = S.tray.reduce((a, x) => a + (x.folder ? 0 : x.file.size), 0);
     $('[data-tray-sum]', t).textContent = S.tray.length
-      ? `${S.tray.length} file${S.tray.length === 1 ? '' : 's'} · ${fileSize(bytes)}${out ? ` · ${out} won't be added` : ''}`
+      ? `${S.tray.length} file${S.tray.length === 1 ? '' : 's'} · ${fileSize(bytes)}`
+        + (out ? ` · ${out} won't be added` : '')
       : '';
     $('[data-tray-empty]', t).hidden = S.tray.length > 0;
     $('[data-act="tray-clear"]', t).disabled = !S.tray.length;
@@ -923,20 +937,168 @@
     }
   }
 
-  /* Esc cancels; Tab stays inside the tray while it's open. */
-  function trayKey(e) {
+  /* In a dialog (the tray, Manage uploads): Esc closes it; Tab stays inside it while it's open. */
+  function dialogKey(e, box, close) {
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      closeTray();
+      close();
     } else if (e.key === 'Tab') {
-      const items = $$('button:not([disabled]), [href], input:not([type="file"])', tray()).filter((x) => x.offsetParent);
+      const items = $$('button:not([disabled]), [href], input:not([type="file"]):not([disabled])', box)
+        .filter((x) => x.offsetParent);
       if (!items.length) return;
       const first = items[0];
       const last = items[items.length - 1];
       if (e.shiftKey && doc.activeElement === first) { e.preventDefault(); last.focus(); }
       else if (!e.shiftKey && doc.activeElement === last) { e.preventDefault(); first.focus(); }
     }
+  }
+
+  /* ------------------------------------------------------------------ Manage uploads (demo) */
+  const manage = () => S.top && $('[data-manage]', S.top);
+  const manageOpen = () => !!manage() && !manage().hidden;
+
+  function openManage() {
+    const m = manage();
+    if (!m) return;
+    S.manageReturn = doc.activeElement;
+    S.manageFiles = null;
+    S.manageSel = new Set();
+    m.hidden = false;
+    doc.body.classList.add('cv-tray-open');
+    renderManage();
+    $('[data-act="manage-close"]', m).focus();
+    loadManage().then(() => {
+      const first = $('[data-manage-all]', m);
+      if (manageOpen() && !first.disabled) first.focus();
+    });
+  }
+
+  function closeManage() {
+    const m = manage();
+    if (!m || m.hidden) return;
+    m.hidden = true;
+    doc.body.classList.remove('cv-tray-open');
+    $('[data-manage-list]', m).replaceChildren();
+    S.manageFiles = null;
+    S.manageSel = new Set();
+    const back = S.manageReturn;
+    S.manageReturn = null;
+    const ok = back && doc.contains(back) && !back.hidden && typeof back.focus === 'function';
+    (ok ? back : input()).focus();
+  }
+
+  /* This browser's uploads, from the server (by the session cookie). */
+  function loadManage() {
+    return win.fetch('session/uploads', { credentials: 'same-origin', cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { files: [] }))
+      .catch(() => ({ files: [] }))
+      .then((data) => {
+        S.manageFiles = Array.isArray(data.files) ? data.files : [];
+        const ids = new Set(S.manageFiles.map((f) => String(f.id)));
+        S.manageSel = new Set(Array.from(S.manageSel).filter((id) => ids.has(id)));
+        renderManage();
+      });
+  }
+
+  function renderManage() {
+    const m = manage();
+    if (!m) return;
+    const files = S.manageFiles || [];
+    const rows = files.map((f) => {
+      const li = doc.createElement('li');
+      li.className = 'cv-tray__item';
+      const label = doc.createElement('label');
+      label.className = 'cv-manage__row';
+      const box = doc.createElement('input');
+      box.type = 'checkbox';
+      box.dataset.manageId = String(f.id);
+      box.checked = S.manageSel.has(String(f.id));
+      const text = doc.createElement('span');
+      text.className = 'cv-tray__text';
+      const name = doc.createElement('span');
+      name.className = 'cv-tray__name';
+      name.textContent = String(f.name);
+      const meta = doc.createElement('span');
+      meta.className = 'cv-tray__meta';
+      meta.textContent = `${fileSize(f.size)} · ${typeLabel(f.name)}`;
+      text.append(name, meta);
+      label.append(box, text);
+      li.append(label);
+      return li;
+    });
+    $('[data-manage-list]', m).replaceChildren(...rows);
+    const n = files.length;
+    const k = S.manageSel.size;
+    const bytes = files.reduce((a, f) => a + (Number(f.size) || 0), 0);
+    $('[data-manage-sum]', m).textContent = S.manageFiles === null ? 'Loading…'
+      : `${n} file${n === 1 ? '' : 's'} · ${fileSize(bytes)}`;
+    $('[data-manage-empty]', m).hidden = S.manageFiles === null || n > 0;
+    const all = $('[data-manage-all]', m);
+    all.disabled = !n || S.manageBusy;
+    all.checked = n > 0 && k === n;
+    all.indeterminate = k > 0 && k < n;
+    const go = $('[data-act="delete-selected"]', m);
+    go.textContent = S.manageBusy ? 'Deleting…' : deleteLabel(k);
+    go.disabled = !k || S.manageBusy;
+    $('[data-act="delete-uploads"]', m).disabled = !n || S.manageBusy;
+    const at = doc.activeElement;
+    if (!m.hidden && (!at || !m.contains(at) || at.disabled)) {  // its button went (disabled, or the list was redrawn)
+      (all.disabled ? $('[data-act="manage-close"]', m) : all).focus();
+    }
+  }
+
+  function manageChange(e) {
+    const t = e.target;
+    if (t.matches('[data-manage-all]')) {
+      S.manageSel = t.checked ? new Set((S.manageFiles || []).map((f) => String(f.id))) : new Set();
+    } else if (t.dataset.manageId) {
+      if (t.checked) S.manageSel.add(t.dataset.manageId); else S.manageSel.delete(t.dataset.manageId);
+    }
+    renderManage();
+    if (t.dataset.manageId) {  // keep the keyboard on the same box after the list is drawn again
+      const again = $(`[data-manage-id="${t.dataset.manageId}"]`, manage());
+      if (again) again.focus();
+    } else t.focus();
+  }
+
+  function manageClick(e) {
+    const t = e.target;
+    const act = t.closest('[data-act]');
+    if (act && act.dataset.act === 'manage-close') closeManage();
+    else if (act && act.dataset.act === 'delete-selected') {
+      const ids = Array.from(S.manageSel).map(Number);
+      if (!ids.length || S.manageBusy || !win.confirm(confirmDeleteSome(ids.length))) return;
+      S.manageBusy = true;
+      renderManage();
+      emit(S.mainTrigger, 'click', { action: 'delete-files', ids, q: S.shown || '' });
+    } else if (act && act.dataset.act === 'delete-uploads') {
+      if (deleteUploads()) closeManage();
+    } else if (t === manage()) closeManage();  // a click on the backdrop
+  }
+
+  /* Files deleted under Manage uploads leave the results on screen at once: their rows and preview copies go, the
+     selection moves to the next row (or the one before, at the end), and the rest stays where it is, numbers and
+     all. Home lists Recently added, so it is drawn again. */
+  function dropRows(ids) {
+    const root = viewRoot();
+    if (!root || !ids.length) return;
+    if (root.dataset.view === 'home') { search(''); return; }
+    if (root.dataset.view !== 'results') return;
+    const gone = new Set(ids.map(String));
+    const shown = visibleOptions();
+    const cur = current();
+    let next = null;
+    if (cur && gone.has(cur.dataset.id)) {
+      const i = shown.indexOf(cur);
+      next = shown.slice(i + 1).find((o) => !gone.has(o.dataset.id))
+        || shown.slice(0, i).reverse().find((o) => !gone.has(o.dataset.id)) || null;
+    }
+    options().filter((o) => gone.has(o.dataset.id)).forEach((o) => o.remove());
+    $$('[data-previews] > [data-preview]', root).filter((p) => gone.has(p.dataset.preview)).forEach((p) => p.remove());
+    if (next) select(next, false);
+    applyView();
+    if (!options().length) clearPane($('[data-pv]', root));
   }
 
   /* ------------------------------------------------------------------ drag and drop anywhere (demo) */
@@ -1008,7 +1170,13 @@
   }
 
   function onGlobalKey(e) {
-    if (trayOpen()) return;  // the tray has the keyboard until it closes
+    if (trayOpen() || manageOpen()) {  // a dialog has the keyboard until it closes
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (manageOpen()) closeManage(); else closeTray();
+      }
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       input().focus();
@@ -1063,7 +1231,12 @@
     if ($('[data-dropover]', element)) wireDrop();  // demo: drop files anywhere on the page
     if (tray()) {
       tray().addEventListener('click', trayClick);
-      tray().addEventListener('keydown', trayKey);
+      tray().addEventListener('keydown', (e) => dialogKey(e, tray(), closeTray));
+    }
+    if (manage()) {
+      manage().addEventListener('click', manageClick);
+      manage().addEventListener('change', manageChange);
+      manage().addEventListener('keydown', (e) => dialogKey(e, manage(), closeManage));
     }
     if (/Mac|iPhone|iPad/.test(win.navigator.platform || '')) $$('[data-kbd]').forEach((k) => { k.textContent = '⌘ K'; });
     new win.MutationObserver(syncThemeButton).observe(doc.body, { attributes: true, attributeFilter: ['class'] });
@@ -1129,7 +1302,7 @@
       else if (act && act.dataset.act === 'link' && current()) {
         copy(win.location.origin + win.location.pathname + current().dataset.link, 'Link copied');
       } else if (act && act.dataset.act === 'add') pickFiles();
-      else if (act && act.dataset.act === 'delete-uploads') deleteUploads();
+      else if (act && act.dataset.act === 'manage-uploads') openManage();
       else if (act && act.dataset.act === 'folders') emit(S.topTrigger, 'click', { action: 'folders' });
       else if (q) setQuery(q.dataset.q);
     });
@@ -1163,6 +1336,16 @@
       paintArchive();
       afterUpload();
       if (trayOpen()) renderTray();  // the session's counts changed: so may what will be added
+      if (d.removed && d.removedId !== S.removedSeen) {  // files deleted under Manage uploads, once per message
+        S.removedSeen = d.removedId;
+        let ids = [];
+        try { ids = JSON.parse(d.removed); } catch (e) { /* none */ }
+        dropRows(Array.isArray(ids) ? ids : []);
+      }
+      if (S.manageBusy) {  // the server's answer to a delete: the list as it is now
+        S.manageBusy = false;
+        if (manageOpen()) loadManage();
+      }
     };
     new win.MutationObserver(sync).observe(element, { childList: true, subtree: true, attributes: true });
     sync();

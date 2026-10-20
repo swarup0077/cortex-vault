@@ -9,7 +9,7 @@
 // Upload); a phone taps instead. Counts every request to the upload endpoint. Prints one JSON object.
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch, openApp, sleep, waitFor } from "./cdp.mjs";
+import { deleteAll, launch, openApp, sleep, waitFor } from "./cdp.mjs";
 
 const opt = JSON.parse(process.argv[2]);
 const READ = `(() => {
@@ -121,6 +121,12 @@ try {
   await sleep(1500);
   out.done = await read();
   out.sent = sent;
+  if (opt.cleanup) {  // a live check: delete the upload again, answering OK to the confirmation
+    b.on((m) => { if (m.method === "Page.javascriptDialogOpening") b.send("Page.handleJavaScriptDialog", { accept: true }); });
+    await deleteAll(b);
+    await waitFor(async () => (await read()).myUploads === 0, 30000, "the delete");
+    out.cleaned = await read();
+  }
   process.stdout.write(JSON.stringify(out));
 } catch (e) {
   process.stdout.write(JSON.stringify({ error: String((e && e.stack) || e) }));
