@@ -80,13 +80,15 @@ class Mode:
     @property
     def private_note(self) -> str:
         if self.demo:
-            return f"Files are read on this server by three small models. Your uploads are {self.deleted}."
+            return (f"Files are read on this server by three small models. Delete your uploads any time with Delete "
+                    f"my uploads; otherwise they're {self.deleted}.")
         return "Indexing runs on this computer. Nothing leaves this device."
 
     @property
     def upload_notice(self) -> str:
-        return (f"Uploads are processed on this server, kept only for your session, and {self.deleted}. "
-                "For private use, run it on your own computer (see README).")
+        return (f"Uploads are processed on this server and kept only for your session. Delete them any time with "
+                f"Delete my uploads; otherwise they're {self.deleted}. For private use, run it on your own computer "
+                "(see README).")
 
 
 @dataclass(frozen=True)
@@ -96,6 +98,7 @@ class Archive:
     counts: dict[str, int] = field(default_factory=dict)
     scope: str = "Both"
     uploads_full: bool = False  # demo: no new upload session can open now
+    uploads: int = 0  # demo: files in this session's uploads (Delete my uploads shows when there are some)
 
     @property
     def total(self) -> int:
@@ -281,6 +284,7 @@ ICONS = {
     "download": '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
     "open": '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
     "keyboard": '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
+    "trash": '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
 }
 # The dial's face (SPEC §8): brass ring, gradient face, dashed ring of ticks and the notch. The hub is our logo,
 # an <img> over it, so it stays upright while the face turns.
@@ -409,23 +413,26 @@ def upload_bar() -> str:
 def status(text: str, *, index: str = "", dial_state: str = "Ready", stage: str = "idle", done: int = 0,
            total: int = 0, version: int = 0, uploads_full: bool = False, upload_id: str = "", report: str = "",
            summary: str = "", message: str = "", new_session: bool = False,
-           counts: dict[str, dict[str, int]] | None = None) -> str:
+           counts: dict[str, dict[str, int]] | None = None, toast: str = "") -> str:
     """What cortex.js copies into place: the header status, the dial's state, the footer's index line, and the
     upload bar's server stages. `stage`: "list" or "read" while an upload is indexed (`done` of `total`, real
     counts), "done" after it, else "idle". `version`: the index's `Library.version()`, so results older than the
     index offer "Update results". `upload_id` names one upload; `report` is its per-file outcome (server-rendered
     rows) and `summary` the line that opens it; `message` says why nothing was kept. `uploads_full`: no new upload
     session can open, so Add files and the drop zone say so instead of uploading. `counts`: files per type in each
-    scope (demo), so The Archive follows an upload without the results moving."""
+    scope (demo), so The Archive follows an upload without the results moving. `toast`: said once, as a toast
+    (Delete my uploads)."""
     busy = stage in ("list", "read")
     # A hidden copy keyed by the upload it belongs to, not a <template> (see `preview`)
     report_copy = f'<div hidden data-report data-upload="{_e(upload_id)}">{report}</div>' if report else ""
-    counts_attr = f' data-counts="{_e(json.dumps(counts))}"' if counts else ""
+    extra = f' data-counts="{_e(json.dumps(counts))}"' if counts else ""
+    if toast:  # a fresh id each time, so cortex.js says it once
+        extra += f' data-toast="{_e(toast)}" data-toast-id="{secrets.token_hex(6)}"'
     return (f'<div class="cv-app cv-part" data-status-src data-busy="{str(busy).lower()}" data-text="{_e(text)}" '
             f'data-index="{_e(index)}" data-dial="{_e(dial_state)}" data-stage="{_e(stage)}" data-done="{int(done)}" '
             f'data-total="{int(total)}" data-version="{int(version)}" data-upload="{_e(upload_id)}" '
             f'data-summary="{_e(summary)}" data-message="{_e(message)}" data-new-session="{str(new_session).lower()}" '
-            f'data-uploads="{"full" if uploads_full else "open"}" data-busy-text="{_e(DEMO_BUSY)}"{counts_attr}>'
+            f'data-uploads="{"full" if uploads_full else "open"}" data-busy-text="{_e(DEMO_BUSY)}"{extra}>'
             f"{report_copy}</div>")
 
 
@@ -452,6 +459,10 @@ def rail(mode: Mode, archive: Archive) -> str:
         action = f'<div class="cv-add cv-add--busy" role="status">{_e(DEMO_BUSY)}</div>'
     else:
         action = f'<button type="button" class="cv-add" data-act="add">{icon("upload")}Add files</button>'
+    if mode.demo:  # only while this session has uploads (cortex.js asks first, and shows or hides it after uploads)
+        hidden = "" if archive.uploads else " hidden"
+        action += (f'<button type="button" class="cv-delete" data-act="delete-uploads"{hidden}>{icon("trash")}'
+                   "Delete my uploads</button>")
     return (
         '<aside class="cv-rail" aria-label="The Archive">'
         '<div class="cv-rail__head"><h2>The Archive</h2>'
@@ -696,6 +707,13 @@ UPLOAD_ICONS = {"indexed": ("ok", "check", "added"), "duplicate": ("skip", "same
 
 UPLOAD_KEPT_NONE = "Your files weren't kept. Searching the sample files works as usual."
 UPLOAD_FAILED = "The upload couldn't be read. Please try again."
+DELETE_BUSY = "Your upload is still being read. Delete it once it's done."
+NOTHING_TO_DELETE = "You have no uploads to delete."
+
+
+def deleted_text(n: int) -> str:
+    """The toast after Delete my uploads."""
+    return f"Your {n} upload{'s were' if n != 1 else ' was'} deleted"
 
 
 def upload_summary(files: Sequence) -> str:

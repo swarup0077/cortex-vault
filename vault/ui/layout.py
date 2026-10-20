@@ -108,7 +108,7 @@ def uploads_full(ctx: UiContext, session: str | None) -> bool:
 
 def status_html(ctx: UiContext, session: str | None, *, busy: tuple[str, int, int] | None = None,
                 upload_id: str = "", files: Sequence | None = None, received: int = 0, message: str = "",
-                new_session: bool = False) -> str:
+                new_session: bool = False, toast: str = "") -> str:
     """The header status, the dial's state, the footer's index line, and the upload bar's server stages (SPEC §8):
     `busy` = (phase, done, total) while an upload is listed or read, with real counts (total 0: not known yet);
     `files` is its per-file outcome once listed; `message` says why nothing was kept."""
@@ -121,7 +121,7 @@ def status_html(ctx: UiContext, session: str | None, *, busy: tuple[str, int, in
         last = ctx.library.stats().last_indexed
         index = f"{n} files · " + (f"indexed {views.ago(last)}" if last else "not indexed yet")
     kw: dict = dict(index=index, version=lib.version(), uploads_full=full, upload_id=upload_id, message=message,
-                    new_session=new_session)
+                    new_session=new_session, toast=toast)
     if ctx.demo:  # The Archive's numbers for every scope: cortex.js repaints them as an upload is listed and read
         kw.update(counts={scope: scoped_counts(ctx, session, scope) for scope in SCOPES})
     if files is not None:
@@ -146,7 +146,22 @@ def scoped_counts(ctx: UiContext, session: str | None, scope: str) -> dict[str, 
 
 def archive(ctx: UiContext, session: str | None, scope: str = "Both") -> views.Archive:
     """The Archive's facts: files per type in the selected scope, as searches see it (SPEC §8)."""
-    return views.Archive(scoped_counts(ctx, session, scope), scope, uploads_full(ctx, session))
+    uploads = sum(scoped_counts(ctx, session, "My uploads").values()) if ctx.demo else 0
+    return views.Archive(scoped_counts(ctx, session, scope), scope, uploads_full(ctx, session), uploads)
+
+
+def delete_uploads(ctx: UiContext, session: str | None, query: object) -> tuple[str | None, str, str | None]:
+    """Demo, Delete my uploads → (the main part, or None to leave it; the status; the session id). Only ever the
+    caller's own session: its id is the page's server-side state (gr.State), which a request can't set or name. The
+    session is wiped at once the way expiry does it (SessionManager.delete) and its slot is free; the view goes back
+    to Samples, with the query on screen run again there."""
+    q = normalize(query)
+    n = sum(scoped_counts(ctx, session, "My uploads").values())
+    done = ctx.sessions.delete(session) if ctx.sessions else None
+    if done is False:  # one of its uploads is still being checked or read: nothing is touched
+        return None, status_html(ctx, session, toast=views.DELETE_BUSY), session
+    toast = views.deleted_text(n) if done else views.NOTHING_TO_DELETE
+    return run_search(ctx, None, q, "Samples"), status_html(ctx, None, toast=toast), None
 
 
 def home_html(ctx: UiContext, session: str | None, scope: str = "Both") -> str:
@@ -343,6 +358,16 @@ def build_blocks(ctx: UiContext) -> gr.Blocks:
 
             top.upload(on_upload, session, [status, session], concurrency_limit=1, concurrency_id="index",
                        show_progress="hidden", api_name=False)
+
+            def on_delete(sid, evt: gr.EventData):
+                """Delete my uploads: the session is this page's own state; nothing in the event names one."""
+                if _event(evt, "action") != "delete-uploads":
+                    return gr.skip(), gr.skip(), gr.skip()
+                page, state, new_sid = delete_uploads(ctx, sid, _event(evt, "q", ""))
+                return (gr.skip() if page is None else page), state, new_sid
+
+            main.click(on_delete, session, [main, status, session], concurrency_limit=4, show_progress="hidden",
+                       api_name=False)
         else:
             def on_main_click(evt: gr.EventData):
                 if _event(evt, "action") == "open":

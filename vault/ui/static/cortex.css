@@ -227,6 +227,11 @@ body.cv-query .cv-queries, body.cv-off-home .cv-queries { display: none; }
   border: 1px solid var(--cv-brass); border-radius: 5px; background: transparent; color: var(--cv-brass-ink); font-size: 13px; }
 .cv-app .cv-add:hover, .cv-add.is-over { background: var(--cv-active); }
 .cv-app .cv-add--busy { border-style: dashed; color: var(--cv-muted); text-align: center; font-size: 12px; cursor: default; }
+.cv-app .cv-delete { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px;
+  padding: 8px; border: 1px solid var(--cv-line); border-radius: 5px; background: transparent; color: var(--cv-muted);
+  font-size: 12.5px; }
+.cv-app .cv-delete:hover, .cv-app .cv-delete:focus-visible { color: var(--cv-ink); border-color: var(--cv-muted); }
+.cv-app .cv-delete[hidden] { display: none; }
 
 /* File-type glyph: tinted square with a file icon. */
 .cv-glyph { width: 34px; height: 34px; display: inline-grid; place-items: center; flex: none; border-radius: 6px;

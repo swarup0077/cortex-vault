@@ -142,8 +142,14 @@
     return { types, total: Object.values(types).reduce((a, n) => a + n, 0) };
   }
 
+  /* Delete my uploads asks first (SPEC §8). */
+  function confirmDelete(n) {
+    return `Delete all ${n} file${n === 1 ? '' : 's'} you uploaded? This can't be undone.`;
+  }
+
   const api = { MIN_CHARS, DELAY_MS, PAGE, SAVE_MS, RECENT_MAX, PLURALS, normalize, searchFor, enterAction, escAction,
-    visibility, countWords, remember, forget, parseRecent, barText, barValue, percent, stale, detailFits, scopeCounts };
+    visibility, countWords, remember, forget, parseRecent, barText, barValue, percent, stale, detailFits, scopeCounts,
+    confirmDelete };
   if (!win) return api;
 
   /* ------------------------------------------------------------------ browser */
@@ -153,7 +159,7 @@
   const S = {
     top: null, main: null, topTrigger: null, mainTrigger: null, upload: null,
     scope: 'Both', last: '', shown: null, timer: 0, filter: 'all', expanded: false,
-    selected: null, ticket: 0, detailAbort: null,
+    selected: null, ticket: 0, detailAbort: null, toastSeen: '',
     text: '', toast: null, toastTimer: 0, saveTimer: 0, turn: 0, recent: [], status: null,
     uploadsFull: false, busyText: '', lastRender: null,
     transfer: null, notSent: 0, dismissed: '', reportOpen: false, said: '', homeFor: '', awaiting: null,
@@ -517,6 +523,9 @@
      the status changes: a new render brings its own numbers, as fresh as the search. */
   function paintArchive() {
     const root = viewRoot();
+    const mine = root && S.status && scopeCounts(S.status.counts, 'My uploads');
+    const del = root && $('[data-act="delete-uploads"]', root);
+    if (del && mine) del.hidden = !mine.total;  // Delete my uploads: only while this session has uploads
     const now = root && S.status && scopeCounts(S.status.counts, root.dataset.scope || effectiveScope());
     if (!now) return;
     const head = $('.cv-rail__count', root);
@@ -529,6 +538,15 @@
       if (!all) b.disabled = !n;
     });
     if (S.filter !== 'all' && !now.types[S.filter]) setFilter('all');  // that type left this scope (an expiry)
+  }
+
+  /* Delete my uploads: ask, then let the server wipe this page's own session (it knows which: nothing here names
+     one) and show the samples. The count is what My uploads holds now. */
+  function deleteUploads() {
+    const mine = S.status && scopeCounts(S.status.counts, 'My uploads');
+    if (!mine || !mine.total || !S.mainTrigger) return;
+    if (!win.confirm(confirmDelete(mine.total))) return;
+    S.mainTrigger('click', { action: 'delete-uploads', q: S.shown || '' });
   }
 
   /* ------------------------------------------------------------------ the upload bar */
@@ -823,6 +841,7 @@
       else if (act && act.dataset.act === 'link' && current()) {
         copy(win.location.origin + win.location.pathname + current().dataset.link, 'Link copied');
       } else if (act && act.dataset.act === 'add') pickFiles();
+      else if (act && act.dataset.act === 'delete-uploads') deleteUploads();
       else if (act && act.dataset.act === 'folders' && S.topTrigger) S.topTrigger('click', { action: 'folders' });
       else if (q) setQuery(q.dataset.q);
     });
@@ -862,6 +881,7 @@
       S.uploadsFull = d.uploads === 'full';
       S.busyText = d.busyText || '';
       if (S.awaiting !== null && S.status.upload && S.status.upload !== S.awaiting) S.awaiting = null;
+      if (d.toast && d.toastId !== S.toastSeen) { S.toastSeen = d.toastId; say(d.toast); }  // once per message
       paintStatus();
       paintArchive();
       afterUpload();

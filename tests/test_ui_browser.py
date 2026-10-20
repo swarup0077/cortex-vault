@@ -218,3 +218,38 @@ def test_the_archive_follows_the_scope_in_a_browser(served, tmp_path) -> None:
     assert phone["afterFirst"]["scope"] == "Both" and not phone["afterFirst"]["scopeShown"]
     assert phone["afterFirst"]["chips"] == "flex" and phone["afterFirst"]["total"] == n + 3
     assert phone["afterFirst"]["types"] == expect(3)
+
+
+@needs_browser
+@pytest.mark.parametrize("served", ["demo"], indirect=True)
+def test_delete_my_uploads_in_a_browser(served, tmp_path) -> None:
+    """Owner, 20 Oct (v1.0.4): the button shows once there are uploads, asks first ("Cancel" changes nothing),
+    then wipes the session: the toast, back to Samples with My uploads 0, the button gone, the files off the disk,
+    and the uploads no longer found. On a phone too, where the button follows the results."""
+    from vault.library import Library
+
+    n = sum(Library(Config(data_dir=REPO_ROOT / "demo_index"), read_only=True, base_dir=REPO_ROOT).type_counts().values())
+    (tmp_path / "up").mkdir()
+    files = []
+    for i in (1, 2, 3):
+        f = tmp_path / "up" / f"quokka-{i}.txt"
+        f.write_text(f"quokka field notes from survey {i}", encoding="utf-8")
+        files.append(str(f))
+    sessions = tmp_path / "sessions"  # the served app's session folder
+    for phone in (False, True):
+        options = {"url": served, "browser": BROWSER, "files": files, "query": "quokka field notes", "phone": phone}
+        out = subprocess.run([NODE, str(DRIVER.parent / "delete_check.mjs"), json.dumps(options)], capture_output=True,
+                             text=True, encoding="utf-8", timeout=300)
+        s = json.loads(out.stdout)
+        assert "error" not in s, s.get("error")
+        what = "phone" if phone else "desktop"
+        assert not s["start"]["deleteShown"] and s["uploaded"]["deleteShown"] and s["uploaded"]["myUploads"] == 3, what
+        assert sum(c.startswith("quokka-") for c in s["searched"]["cards"]) == 3, what
+        assert s["dialogs"][0] == {"type": "confirm", "message": "Delete all 3 files you uploaded? This can't be undone."}
+        assert s["cancelled"]["deleteShown"] and s["cancelled"]["myUploads"] == 3, what  # Cancel: nothing happened
+        d = s["deleted"]
+        assert len(s["dialogs"]) == 2 and d["toast"] == "Your 3 uploads were deleted", what
+        assert d["scope"] == "Samples" and d["total"] == n and d["myUploads"] == 0 and not d["deleteShown"], what
+        assert not any(c.startswith("quokka-") for c in d["cards"]), what  # the query, run again in Samples
+        assert not any(c.startswith("quokka-") for c in s["searchedAgain"]["cards"]), what
+        assert not [p for p in sessions.iterdir() if p.is_dir()], what  # the session's folder is gone

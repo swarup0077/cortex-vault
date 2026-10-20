@@ -636,3 +636,107 @@ def test_with_all_sessions_open_uploads_say_busy_and_search_still_works(demo_ctx
     status, again = upload(demo_ctx, {"second.txt": "More robotics notes."}, sid=first)
     assert again == first and 'data-summary="1 added"' in status
     assert "second.txt" in layout.run_search(demo_ctx, first, "robotics notes", "My uploads")
+
+
+# ---------------------------------------------------------------- Delete my uploads (owner, 20 Oct: v1.0.4)
+
+
+def test_delete_my_uploads_goes_back_to_samples(demo_ctx) -> None:
+    """The session is wiped at once (the expiry's path), the view shows the samples with the query on screen run
+    again there, My uploads counts 0, the slot is free, the status says it once, and the page's session is gone."""
+    from dataclasses import replace as dc_replace
+
+    demo_ctx.sessions.cfg = dc_replace(demo_ctx.sessions.cfg, max_sessions=1)
+    _, sid = upload(demo_ctx, {"one.txt": "quokka notes one", "two.txt": "quokka notes two", "three.md": "quokka"})
+    assert demo_ctx.sessions.full and 'data-act="delete-uploads">' in layout.home_html(demo_ctx, sid, "My uploads")
+    folder = demo_ctx.session(sid).dir
+    page, status, new_sid = layout.delete_uploads(demo_ctx, sid, "quokka")
+    assert new_sid is None and demo_ctx.session(sid) is None and not folder.exists() and not demo_ctx.sessions.full
+    assert 'data-scope="Samples"' in page and 'data-query="quokka"' in page and "one.txt" not in page
+    assert rail_counts(page)[0] == 2 and 'data-act="delete-uploads" hidden' in page
+    assert 'data-toast="Your 3 uploads were deleted"' in status and 'data-toast-id="' in status
+    assert {s: sum(c.values()) for s, c in status_counts(status).items()} == {"Samples": 2, "My uploads": 0, "Both": 2}
+    assert rail_counts(layout.home_html(demo_ctx, None, "My uploads"))[0] == 0
+    _, again = upload(demo_ctx, {"four.txt": "fresh start"})  # a new upload starts a fresh session
+    assert again and again != sid and demo_ctx.session(again).files == 1
+
+
+def test_delete_my_uploads_when_there_is_nothing_or_an_upload_is_being_read(demo_ctx) -> None:
+    page, status, sid = layout.delete_uploads(demo_ctx, None, "")
+    assert sid is None and f'data-toast="{views.NOTHING_TO_DELETE}"' in status and 'data-view="home"' in page
+    _, sid = upload(demo_ctx, {"one.txt": "first"})
+    demo_ctx.session(sid).busy = True
+    page, status, same = layout.delete_uploads(demo_ctx, sid, "")
+    assert page is None and same == sid and demo_ctx.session(sid) is not None  # the view stays as it is
+    assert "still being read" in html.unescape(status)
+    demo_ctx.session(sid).busy = False
+
+
+def test_delete_my_uploads_shows_only_in_demo_mode_with_uploads(demo_ctx, tmp_path, fake_embedder) -> None:
+    assert 'data-act="delete-uploads" hidden' in layout.home_html(demo_ctx, None)
+    _, sid = upload(demo_ctx, {"one.txt": "first"})
+    page = layout.home_html(demo_ctx, sid, "Both")
+    assert 'data-act="delete-uploads">' in page and page.index('data-act="add"') < page.index("delete-uploads")
+    lib = Library(Config(data_dir=tmp_path / "local"))
+    assert "delete-uploads" not in layout.home_html(UiContext("local", lib), None)
+    notice = views.Mode(demo=True).upload_notice
+    assert "Delete them any time with Delete my uploads; otherwise they're deleted 60 minutes after your last " \
+           "search or upload." in notice
+    assert "Delete my uploads" in views.Mode(demo=True).private_note
+    assert "Delete my uploads" not in views.Mode(demo=False).private_note
+
+
+@pytest.mark.filterwarnings("ignore:'future.no_silent_downcasting' is deprecated")  # Gradio's queue, in-process
+@pytest.mark.filterwarnings("ignore:The copy keyword is deprecated")
+def test_a_request_cannot_name_another_session(demo_ctx) -> None:
+    """The session to delete is the page's server-side state: a second visitor's delete event, whatever its data
+    says, can't reach the first visitor's session, and no route takes a session id for deleting."""
+    import socket
+    import threading
+    import time as time_mod
+
+    import httpx
+    import uvicorn
+
+    import app
+
+    _, victim = upload(demo_ctx, {"one.txt": "first visitor's notes"})
+    folder = demo_ctx.session(victim).dir
+    application = make_app(build_blocks(demo_ctx), demo_ctx.resolve, demo=True)
+    client = TestClient(application)
+    for method, route in (("post", f"/delete-uploads?s={victim}"), ("post", f"/session/{victim}"),
+                          ("delete", f"/session/{victim}"), ("get", f"/delete?s={victim}")):
+        assert getattr(client, method)(route).status_code in (404, 405)
+    with socket.socket() as s:
+        s.bind((app.HOST, 0))
+        port = s.getsockname()[1]
+    server = uvicorn.Server(app.server_config(application, port))
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    while not server.started:
+        time_mod.sleep(0.05)
+    base = f"http://{app.HOST}:{port}"
+    try:
+        config = httpx.get(f"{base}/config").json()
+        main_id = next(c["id"] for c in config["components"] if c.get("props", {}).get("elem_id") == "cv-main")
+        dep = next(d for d in config["dependencies"] if [main_id, "click"] in d["targets"])
+        # the state value sent ([victim]) and every id in the event data are ignored: Gradio keeps the state per
+        # browser session server-side, and the handler reads only `action` and `q`
+        data = {"action": "delete-uploads", "q": "", "session": victim, "sid": victim, "s": victim}
+        httpx.post(f"{base}/gradio_api/queue/join", json={"data": [victim], "event_data": data, "fn_index": dep["id"],
+                                                         "trigger_id": main_id, "session_hash": "attacker01"}
+                   ).raise_for_status()
+        done = None
+        with httpx.stream("GET", f"{base}/gradio_api/queue/data", params={"session_hash": "attacker01"},
+                          timeout=30) as stream:
+            for line in stream.iter_lines():
+                msg = json.loads(line[5:]) if line.startswith("data:") else {}
+                if msg.get("msg") == "process_completed":
+                    done = msg
+                    break
+    finally:
+        server.should_exit = True
+        thread.join(15)
+    assert done and done["success"]  # the handler ran, for the attacker's own (empty) session
+    assert views.NOTHING_TO_DELETE in json.dumps(done["output"])
+    assert demo_ctx.session(victim) is not None and folder.exists()  # the first visitor's uploads are still there

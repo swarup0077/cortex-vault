@@ -228,3 +228,98 @@ def test_safe_name() -> None:
     assert safe_name('a<b>c:"d|e?.png') == "a_b_c__d_e_.png"
     assert safe_name("...") == "upload"
     assert len(safe_name("x" * 300 + ".pdf")) == 124
+
+
+# ---------------------------------------------------------------- Delete my uploads (owner, 20 Oct: v1.0.4)
+
+
+def test_delete_wipes_the_session_from_disk_and_the_index(demo, inbox, tmp_path) -> None:
+    """The uploads, the session's copy of the index, its thumbnails and Gradio's copies (refused files stay in
+    Gradio's folder until then) are gone at once, the slot is free, and the id no longer resolves."""
+    sm = manager(demo, tmp_path)
+    files = make_files(inbox, 3)
+    refused = inbox / "r1" / "notes.zip"  # refused (type), so Gradio's copy stays
+    refused.parent.mkdir()
+    refused.write_bytes(b"PK not really")
+    s, res = sm.add_files(None, [*files, refused], inbox)
+    assert [f.status for f in res.files] == ["indexed"] * 3 + ["rejected"] and refused.exists()
+    assert s.library.search("quarterly report").results and (s.dir / "vault.db").exists() and any(s.uploads.iterdir())
+    assert sm.delete(s.id) is True
+    assert not s.dir.exists() and sm.get(s.id) is None and sm.library(s.id) is None
+    assert not refused.exists() and not refused.parent.exists()  # Gradio's copy and its now-empty folder
+    assert all(not f.exists() for f in files) and not sm.sessions
+    assert sm.delete(s.id) is None  # already gone
+
+
+def test_delete_leaves_other_sessions_and_the_samples_alone(demo, inbox, tmp_path) -> None:
+    sm = manager(demo, tmp_path)
+    before = demo_digest(demo)
+    a, _ = sm.add_files(None, make_files(inbox, 2), inbox)
+    b, _ = sm.add_files(None, make_files(inbox, 2, start=10), inbox)
+    assert sm.delete(a.id) is True
+    assert sm.get(b.id) is b and b.dir.exists() and len(list(b.uploads.iterdir())) == 2
+    assert {Path(p).name for r in b.library.search("quarterly report project 10").results for p in r.paths} >= \
+        {"note 010.txt"}
+    assert demo_digest(demo) == before and demo.search("diffusion").results
+
+
+def test_delete_frees_the_slot_and_a_new_upload_starts_a_fresh_session(demo, inbox, tmp_path) -> None:
+    sm = manager(demo, tmp_path, max_sessions=2)
+    a, _ = sm.add_files(None, make_files(inbox, 1), inbox)
+    sm.add_files(None, make_files(inbox, 1, start=5), inbox)
+    assert sm.full
+    assert sm.delete(a.id) is True and not sm.full
+    c, res = sm.add_files(None, make_files(inbox, 1, start=9), inbox)
+    assert c is not None and c.id != a.id and res.report.added == 1 and c.files == 1
+
+
+def test_delete_refuses_ids_that_arent_a_live_session(demo, inbox, tmp_path) -> None:
+    sm = manager(demo, tmp_path)
+    s, _ = sm.add_files(None, make_files(inbox, 1), inbox)
+    for bad in (None, "", "../" + s.id, s.id.upper(), "00000000-0000-4000-8000-000000000000", str(s.dir)):
+        assert sm.delete(bad) is None
+    assert sm.get(s.id) is s and s.dir.exists()
+
+
+def test_delete_waits_for_an_upload_being_read(demo, inbox, tmp_path) -> None:
+    """While one of its uploads is checked or read, nothing is touched (the caller is told to try later)."""
+    sm = manager(demo, tmp_path)
+    s, _ = sm.add_files(None, make_files(inbox, 1), inbox)
+    s.busy = True
+    assert sm.delete(s.id) is False and s.dir.exists() and sm.get(s.id) is s
+    s.busy = False
+    assert sm.delete(s.id) is True
+
+
+def test_a_session_is_busy_from_the_start_of_an_upload(demo, inbox, tmp_path, monkeypatch) -> None:
+    """A delete can't slip in while an upload is still being checked (hashing a large file takes a while)."""
+    import vault.session as session_mod
+
+    sm = manager(demo, tmp_path)
+    s, _ = sm.add_files(None, make_files(inbox, 1), inbox)
+    seen = []
+    real_sha = session_mod.sha256_file
+    monkeypatch.setattr(session_mod, "sha256_file", lambda p: (seen.append(sm.delete(s.id)), real_sha(p))[1])
+    sm.add_files(s.id, make_files(inbox, 1, start=3), inbox)
+    assert seen == [False] and not s.busy and sm.get(s.id) is s
+
+
+def test_the_wipe_overwrites_files_before_removing_them(tmp_path) -> None:
+    from vault.session import _shred
+
+    f = tmp_path / "s" / "uploads" / "a.txt"
+    f.parent.mkdir(parents=True)
+    f.write_bytes(b"secret" * 1000)
+    _shred(tmp_path / "s")
+    assert f.read_bytes() == b"\0" * 6000  # same size, zeros
+
+
+def test_expiry_wipes_the_same_way(demo, inbox, tmp_path) -> None:
+    clock = Clock()
+    sm = manager(demo, tmp_path, clock=clock)
+    refused = inbox / "r2" / "photo.heic.exe"
+    refused.parent.mkdir()
+    refused.write_bytes(b"x")
+    s, _ = sm.add_files(None, [*make_files(inbox, 1), refused], inbox)
+    clock.t += sm.cfg.session_ttl_s + 1
+    assert sm.expire() == [s.id] and not s.dir.exists() and not refused.exists()

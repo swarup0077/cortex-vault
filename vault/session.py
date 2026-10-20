@@ -12,6 +12,7 @@ preview doesn't count), and every session is wiped when the app starts.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import shutil
 import sqlite3
@@ -60,7 +61,9 @@ class Session:
     shas: set[str] = field(default_factory=set)  # every file uploaded so far
     files: int = 0
     bytes: int = 0
-    busy: bool = False  # indexing: never expired mid-run
+    busy: bool = False  # an upload is being checked or read: never wiped mid-run
+    received: set[Path] = field(default_factory=set)  # Gradio's copies of its uploads (refused ones stay there)
+    upload_dir: Path | None = None  # Gradio's upload folder they came from
 
     @property
     def uploads(self) -> Path:
@@ -85,6 +88,25 @@ def safe_name(name: str) -> str:
     name = _UNSAFE.sub("_", Path(name.replace("\\", "/")).name).strip(" .") or "upload"
     stem, suffix = Path(name).stem, Path(name).suffix
     return stem[:120] + suffix[:10]
+
+
+def _shred(path: Path) -> None:
+    """Overwrite a file with zeros, in place, before it's removed (best effort: flash storage and copy-on-write or
+    journaling filesystems may still keep old blocks). A folder: every file in it."""
+    files = [path] if path.is_file() else [p for p in path.rglob("*") if p.is_file()] if path.is_dir() else []
+    zeros = b"\0" * (1 << 20)
+    for f in files:
+        if f.is_symlink():
+            continue
+        try:
+            left = f.stat().st_size
+            with f.open("r+b") as out:
+                while left > 0:
+                    left -= out.write(zeros[:min(left, len(zeros))])
+                out.flush()
+                os.fsync(out.fileno())
+        except OSError as e:  # removed anyway
+            log.warning("could not overwrite %s: %s", f.name, e)
 
 
 def _unique(folder: Path, name: str) -> Path:
@@ -144,9 +166,41 @@ class SessionManager:
             for s in old:
                 del self.sessions[s.id]
         for s in old:
-            shutil.rmtree(s.dir, ignore_errors=True)
+            self._wipe(s)
             log.info("session %s expired", s.id[:8])
         return [s.id for s in old]
+
+    def delete(self, session_id: str | None) -> bool | None:
+        """Delete my uploads: wipe this session now, the way expiry does, and free its slot. None when there's no
+        such live session; False while one of its uploads is being checked or read (nothing is touched then)."""
+        if not session_id or not _UUID4.match(session_id):
+            return None
+        with self._lock:
+            s = self.sessions.get(session_id)
+            if s is None:
+                return None
+            if s.busy:
+                return False
+            del self.sessions[session_id]
+        self._wipe(s)
+        log.info("session %s deleted by its visitor", s.id[:8])
+        return True
+
+    def _wipe(self, s: Session) -> None:
+        """A session off the disk: every file overwritten with zeros, then its folder removed (the uploads, its copy
+        of the index, its thumbnails), then any of Gradio's copies of its uploads still in Gradio's folder (refused
+        files: accepted ones were removed when they were copied) and their now-empty upload folders."""
+        _shred(s.dir)
+        shutil.rmtree(s.dir, ignore_errors=True)
+        for p in s.received:
+            if p.is_file():
+                _shred(p)
+                p.unlink(missing_ok=True)
+            if s.upload_dir and p.parent != s.upload_dir and p.parent.is_relative_to(s.upload_dir):
+                try:
+                    p.parent.rmdir()  # Gradio's per-upload folder, once empty
+                except OSError:
+                    pass
 
     def start_reaper(self, interval_s: float = 60.0) -> threading.Thread:
         def loop() -> None:
@@ -177,7 +231,7 @@ class SessionManager:
                 dst.close()
             cfg = replace(self.cfg, data_dir=folder, zip_max_total=self.cfg.upload_zip_max_total)
             lib = Library(cfg, thumb_dirs=self.demo.thumb_dirs, base_dir=self.demo.base_dir, display_root=folder)
-            s = Session(sid, folder, lib, self.clock())
+            s = Session(sid, folder, lib, self.clock(), busy=True)  # its first upload is being read
             self.sessions[sid] = s
         log.info("session %s created", sid[:8])
         return s
@@ -190,10 +244,32 @@ class SessionManager:
         """Check, copy and index uploaded files. `upload_dir` is Gradio's upload folder: nothing outside it is
         read. Creates the session on the first accepted file. `on_listed` gets the per-file outcome as soon as
         phase 1 has listed the files (SPEC §6.1); the returned result is the final one."""
-        session = self.get(session_id)
-        upload_dir = upload_dir.resolve()
+        session = self._claim(session_id)  # busy from the start: Delete my uploads and the expiry wait for it
+        held = [session] if session else []  # the busy session(s): this one, or the one created on the way
+        try:
+            return self._add(session, files, upload_dir.resolve(), progress, on_listed, held)
+        finally:
+            for s in held:
+                s.busy = False
+                s.last_used = self.clock()
+
+    def _claim(self, session_id: str | None) -> Session | None:
+        """The live session, marked busy at once (under the lock, so a delete can't slip in between)."""
+        if not session_id or not _UUID4.match(session_id):
+            return None
+        with self._lock:
+            s = self.sessions.get(session_id)
+            if s is not None:
+                s.busy = True
+                s.last_used = self.clock()
+            return s
+
+    def _add(self, session: Session | None, files: Sequence[Path | str], upload_dir: Path,
+             progress: ProgressFn | None, on_listed: Callable[[UploadResult], None] | None, held: list[Session]
+             ) -> tuple[Session | None, UploadResult]:
         statuses: list[FileStatus] = []
         accepted: list[tuple[Path, str, int, FileStatus]] = []
+        received: list[Path] = []  # Gradio's copies this upload was given: a wipe removes any still there
         count = session.files if session else 0
         total = session.bytes if session else 0
         seen = set(session.shas) if session else set()
@@ -209,6 +285,7 @@ class SessionManager:
             if not real.is_relative_to(upload_dir) or not real.is_file():
                 st.reason = "not an uploaded file"
                 continue
+            received.append(real)
             if real.suffix.lower() not in INDEX_EXTS:
                 st.reason = f"file type not supported ({real.suffix or 'no extension'})"
                 continue
@@ -231,6 +308,9 @@ class SessionManager:
             total += size
             accepted.append((real, sha, size, st))
 
+        if session is not None:
+            session.received.update(received)
+            session.upload_dir = upload_dir
         if not accepted:
             return session, UploadResult(session.id if session else None, statuses)
         if session is None:
@@ -240,39 +320,38 @@ class SessionManager:
                     st.reason = BUSY
                     real.unlink(missing_ok=True)
                 return None, UploadResult(None, statuses, busy=True)
+            held.append(session)  # created busy; add_files releases it
+            session.received.update(received)
+            session.upload_dir = upload_dir
 
-        session.busy = True
-        try:
-            copied: list[tuple[Path, FileStatus]] = []
-            for real, sha, size, st in accepted:
-                dest = _unique(session.uploads, st.name)
-                shutil.copy2(real, dest)
-                real.unlink(missing_ok=True)  # Gradio's copy: the session's is the only one now
-                st.name = dest.name
-                session.shas.add(sha)
-                session.files += 1
-                session.bytes += size
-                copied.append((dest, st))
-            def outcome() -> None:
-                with session.library.connect() as conn:
-                    for dest, st in copied:
-                        row = conn.execute("SELECT f.status, f.error FROM paths p JOIN files f ON f.id = p.file_id "
-                                           "WHERE p.path = ?", (str(dest.resolve()),)).fetchone()
-                        if row is None:
-                            st.status, st.reason = "error", "not indexed"
-                        elif row["status"] == "ok":
-                            st.status, st.reason = "indexed", ""
-                        else:
-                            st.status, st.reason = "error", row["error"] or row["status"]
+        copied: list[tuple[Path, FileStatus]] = []
+        for real, sha, size, st in accepted:
+            dest = _unique(session.uploads, st.name)
+            shutil.copy2(real, dest)
+            real.unlink(missing_ok=True)  # Gradio's copy: the session's is the only one now
+            st.name = dest.name
+            session.shas.add(sha)
+            session.files += 1
+            session.bytes += size
+            copied.append((dest, st))
 
-            def listed() -> None:
-                outcome()
-                if on_listed:
-                    on_listed(UploadResult(session.id, list(statuses)))
+        def outcome() -> None:
+            with session.library.connect() as conn:
+                for dest, st in copied:
+                    row = conn.execute("SELECT f.status, f.error FROM paths p JOIN files f ON f.id = p.file_id "
+                                       "WHERE p.path = ?", (str(dest.resolve()),)).fetchone()
+                    if row is None:
+                        st.status, st.reason = "error", "not indexed"
+                    elif row["status"] == "ok":
+                        st.status, st.reason = "indexed", ""
+                    else:
+                        st.status, st.reason = "error", row["error"] or row["status"]
 
-            report = session.library.index([session.uploads], progress=progress, listed=listed)
+        def listed() -> None:
             outcome()
-        finally:
-            session.busy = False
-            session.last_used = self.clock()
+            if on_listed:
+                on_listed(UploadResult(session.id, list(statuses)))
+
+        report = session.library.index([session.uploads], progress=progress, listed=listed)
+        outcome()
         return session, UploadResult(session.id, statuses, report)

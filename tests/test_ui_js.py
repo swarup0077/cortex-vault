@@ -145,3 +145,8 @@ def test_the_archive_numbers_come_from_the_selected_scope() -> None:
         "types": {"screenshot": 0, "pdf": 0, "text": 0, "photo": 0, "doc": 4, "slides": 0}, "total": 4}
     assert run("[C.scopeCounts('', 'Both'), C.scopeCounts('not json', 'Both'), C.scopeCounts('{}', 'Both')]") == \
         [None, None, None]
+
+
+def test_delete_my_uploads_asks_first_with_the_count() -> None:
+    assert run("[C.confirmDelete(3), C.confirmDelete(1)]") == [
+        "Delete all 3 files you uploaded? This can't be undone.", "Delete all 1 file you uploaded? This can't be undone."]
