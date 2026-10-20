@@ -281,6 +281,6 @@ Cortex Vault was built between 16 and 19 October 2026 from [SPEC.md](SPEC.md), t
 milestone per session,
 with [Claude Code](https://claude.com/claude-code): M0 scaffold and deploy probe, M1 text pipeline, M2 OCR, M3
 photos, CLIP and metadata, M4 UI and first deploy, M5 speed and visual polish, M6 real files and the evaluation.
-Each change came with a test on generated files (524 tests today), and every threshold was first calibrated on
+Each change came with a test on generated files (527 tests today), and every threshold was first calibrated on
 generated data with a script in [`bench/`](bench/README.md), marked provisional, and tuned only on the tuning half
 of the evaluation queries. The decisions, with what was measured and why, are logged in SPEC §19.
