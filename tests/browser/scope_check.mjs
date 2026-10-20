@@ -6,7 +6,7 @@
 // Desktop: upload the first list, then for each scope click Search in and read The Archive, then search the query
 // in each scope, then switch to Both, upload the second list and read The Archive again without a new render.
 // Phone (no Search in: the scope is Both): upload the first list and read the filter chips. Prints one JSON object.
-import { launch, openApp, sleep, waitFor } from "./cdp.mjs";
+import { launch, openApp, sleep, upload as uploadFiles, waitFor } from "./cdp.mjs";
 
 const opt = JSON.parse(process.argv[2]);
 let b;
@@ -32,9 +32,7 @@ try {
   await b.send("DOM.enable");
   const read = () => b.js(READ);
   const upload = async (files, last) => {
-    const { root } = await b.send("DOM.getDocument", { depth: -1 });
-    const { nodeId } = await b.send("DOM.querySelector", { nodeId: root.nodeId, selector: "[data-files]" });
-    await b.send("DOM.setFileInputFiles", { nodeId, files });
+    await uploadFiles(b, files);
     return waitFor(() => b.js(`(() => { const d = document.querySelector('[data-status-src]').dataset;
       return d.stage === 'done' && d.upload && d.upload !== ${JSON.stringify(last)} ? d.upload : ''; })()`),
     120000, "the upload to finish");

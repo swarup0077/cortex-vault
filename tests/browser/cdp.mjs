@@ -91,3 +91,13 @@ export async function openApp(b, url) {
   await waitFor(() => b.js("!!document.querySelector('#cv-q') && !!document.querySelector('[data-view]')"), 30000,
     "the page");
 }
+
+/* Add files the way a visitor does: choose them in the page's file picker, then Upload in the review tray. */
+export async function upload(b, files) {
+  await b.send("DOM.enable");
+  const { root } = await b.send("DOM.getDocument", { depth: -1 });
+  const { nodeId } = await b.send("DOM.querySelector", { nodeId: root.nodeId, selector: "[data-files]" });
+  await b.send("DOM.setFileInputFiles", { nodeId, files });
+  await waitFor(() => b.js("!document.querySelector('[data-tray]').hidden"), 10000, "the upload tray");
+  await b.js("document.querySelector('[data-act=tray-upload]').click()");
+}

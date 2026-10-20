@@ -149,6 +149,8 @@ def status_html(ctx: UiContext, session: str | None, *, busy: tuple[str, int, in
                     claim=(ctx.sessions.ticket(session) if ctx.sessions else None) or "")
     if ctx.demo:  # The Archive's numbers for every scope: cortex.js repaints them as an upload is listed and read
         kw.update(counts={scope: scoped_counts(ctx, session, scope) for scope in SCOPES})
+    if ctx.sessions:  # what the upload tray checks before anything is sent
+        kw.update(limits=ctx.sessions.limits(session))
     if files is not None:
         kw.update(report=views.upload_report(files, ctx.view_mode, received=received),
                   summary=views.upload_summary(files))

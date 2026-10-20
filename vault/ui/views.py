@@ -345,7 +345,7 @@ def top(mode: Mode, suggestions: Sequence[Suggestion] = ()) -> str:
     """Header, hero, search box and the recent / example searches: rendered once; cortex.js keeps them in step
     with the other parts (the status, the query, the recent searches it keeps in this browser)."""
     upload = ('<input type="file" class="cv-sr" data-files multiple tabindex="-1" aria-hidden="true">'
-              + drop_overlay() if mode.demo else "")
+              + drop_overlay() + tray(mode) if mode.demo else "")
     examples = "".join(
         f'<button type="button" class="cv-chip" data-q="{_e(s.query)}" title="Found by {_e(s.how)}">{_e(s.query)}'
         "</button>" for s in suggestions)
@@ -406,6 +406,25 @@ def drop_overlay() -> str:
             f'{icon("upload")}<span data-dropover-text>Drop to add files</span></div></div>')
 
 
+def tray(mode: Mode) -> str:
+    """Demo: the files picked or dropped, reviewed before anything is sent (owner, v1.1.0). cortex.js fills the list
+    (name, size, type, and "won't be added" with the reason, from checks that mirror the server's) and sends the
+    files only on Upload; then the upload bar takes over. A dialog: keyboard focus stays in it until it closes."""
+    return ('<div class="cv-tray" data-tray hidden><div class="cv-tray__panel" role="dialog" aria-modal="true" '
+            'aria-labelledby="cv-tray-h" aria-describedby="cv-tray-d">'
+            '<div class="cv-tray__head"><div><h2 id="cv-tray-h">Review your files</h2>'
+            '<p class="cv-tray__sum" data-tray-sum></p></div>'
+            f'<button type="button" class="cv-iconbtn" data-act="tray-cancel" aria-label="Cancel, upload nothing">'
+            f'{icon("x")}</button></div>'
+            f'<p class="cv-note cv-tray__note" id="cv-tray-d">Nothing is sent until you choose Upload. '
+            f'{_e(mode.upload_notice)}</p>'
+            '<ul class="cv-tray__list" data-tray-list aria-label="Files to upload"></ul>'
+            '<p class="cv-tray__empty" data-tray-empty hidden>No files left. Add more, or cancel.</p>'
+            '<div class="cv-tray__foot"><button type="button" class="cv-tray__btn" data-act="tray-add">Add more</button>'
+            '<button type="button" class="cv-tray__btn" data-act="tray-clear">Clear</button>'
+            '<button type="button" class="cv-tray__go" data-act="tray-upload">Upload</button></div></div></div>')
+
+
 def upload_bar() -> str:
     """The upload progress bar (SPEC §8): a slim strip under the header, in the page flow, so search, the type
     filter and the detail view stay usable. cortex.js fills it from its own transfer counts (stage 1) and from the
@@ -426,7 +445,7 @@ def status(text: str, *, index: str = "", dial_state: str = "Ready", stage: str 
            total: int = 0, version: int = 0, uploads_full: bool = False, upload_id: str = "", report: str = "",
            summary: str = "", message: str = "", new_session: bool = False,
            counts: dict[str, dict[str, int]] | None = None, toast: str = "", claim: str = "", forget: bool = False,
-           reattach: bool = False) -> str:
+           reattach: bool = False, limits: dict | None = None) -> str:
     """What cortex.js copies into place: the header status, the dial's state, the footer's index line, and the
     upload bar's server stages. `stage`: "list" or "read" while an upload is indexed (`done` of `total`, real
     counts), "done" after it, else "idle". `version`: the index's `Library.version()`, so results older than the
@@ -436,7 +455,8 @@ def status(text: str, *, index: str = "", dial_state: str = "Ready", stage: str 
     scope (demo), so The Archive follows an upload without the results moving. `toast`: said once, as a toast
     (Delete my uploads). `claim`: a new session's one-time ticket, which the page trades for its cookie at
     `/session/claim`; `forget`: the page's cookie names no live session, so the page clears it (`/session/forget`);
-    `reattach`: the page was opened on a session with uploads."""
+    `reattach`: the page was opened on a session with uploads. `limits`: what the upload tray checks before anything is
+    sent (`SessionManager.limits`)."""
     busy = stage in ("list", "read")
     # A hidden copy keyed by the upload it belongs to, not a <template> (see `preview`)
     report_copy = f'<div hidden data-report data-upload="{_e(upload_id)}">{report}</div>' if report else ""
@@ -449,6 +469,8 @@ def status(text: str, *, index: str = "", dial_state: str = "Ready", stage: str 
         extra += f' data-forget="{secrets.token_hex(6)}"'
     if reattach:
         extra += ' data-reattach="true"'
+    if limits:
+        extra += f' data-limits="{_e(json.dumps(limits))}"'
     return (f'<div class="cv-app cv-part" data-status-src data-busy="{str(busy).lower()}" data-text="{_e(text)}" '
             f'data-index="{_e(index)}" data-dial="{_e(dial_state)}" data-stage="{_e(stage)}" data-done="{int(done)}" '
             f'data-total="{int(total)}" data-version="{int(version)}" data-upload="{_e(upload_id)}" '

@@ -155,3 +155,16 @@ def test_delete_my_uploads_asks_first_with_the_count() -> None:
 def test_the_drop_overlay_says_how_many_files() -> None:
     assert run("[C.dropText(1), C.dropText(3), C.dropText(0)]") == ["Drop to add 1 file", "Drop to add 3 files",
                                                                    "Drop to add files"]
+
+
+def test_the_tray_reads_extensions_sizes_and_types_as_the_server_does() -> None:
+    """Python's Path.suffix, lowercased: no extension for a name that starts or ends with its only dot."""
+    assert run("['a.PDF', 'b.tar.gz', '.bashrc', 'c.', 'README', 'x/y.md', 'x\\z.TXT'].map(C.suffix)") ==         [".pdf", ".gz", "", "", "", ".md", ".txt"]
+    assert run("[C.fileSize(512), C.fileSize(2048), C.fileSize(5 * 1048576), C.fileSize(0)]") ==         ["512 bytes", "2 KB", "5.0 MB", "0 bytes"]
+    assert run("[C.typeLabel('a.docx'), C.typeLabel('b.JPG'), C.typeLabel('c.zip'), C.typeLabel('d')]") ==         ["Word document", "JPEG image", "ZIP file", "No extension"]
+    assert run("[C.uploadLabel(1), C.uploadLabel(3), C.uploadLabel(0)]") == ["Upload 1 file", "Upload 3 files",
+                                                                           "Nothing to upload"]
+    limits = {"exts": [".txt"], "maxBytes": 100, "maxBytesText": "100 bytes", "maxFiles": 5, "maxTotal": 1000,
+              "maxTotalText": "1000 bytes", "files": 0, "bytes": 0}
+    assert run(f"C.trayCheck([{{name: 'photos', size: 0, folder: true}}, {{name: 'a.txt', size: 10}}], "
+               f"{json.dumps(limits)})") == ["a folder: add the files in it instead", ""]

@@ -2,6 +2,9 @@
 the expiry after the last search or upload, and a demo index that never changes."""
 
 import hashlib
+import json
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -376,3 +379,32 @@ def test_forged_ended_and_deleted_tokens_name_no_session(demo, inbox, tmp_path) 
     assert sm.expire() == [a.id] and sm.by_token(ta) is None and sm.ended(ta)
     sm.wipe_all()
     assert not sm.ended(ta)
+
+
+# ---------------------------------------------------------------- the upload tray (owner, 20 Oct: v1.1.0)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is not installed")
+def test_the_upload_trays_checks_mirror_the_server(demo, inbox, tmp_path) -> None:
+    """The page's tray marks the files the server will refuse, before anything is sent, in the server's own words
+    and order: the type (as Path.suffix reads it), the size, then the session's file count and total, counted over
+    the files that will be added, after what the session already holds."""
+    sm = manager(demo, tmp_path, upload_max_bytes=1000, upload_max_files=4, upload_max_total=2500)
+    s, _ = sm.add_files(None, [blob(inbox, "first.txt", 400, 1)], inbox)
+    plan = [("a.txt", 900), ("b.zip", 40), ("c.pdf", 1001), ("noext", 40), (".hidden", 40), ("d.MD", 700),
+            ("e.png", 600), ("f.txt", 100), ("g.txt", 50), ("h.", 40)]
+    files = [blob(inbox, name, size, 10 + i) for i, (name, size) in enumerate(plan)]
+    limits = sm.limits(s.id)
+    assert (limits["files"], limits["bytes"], limits["maxBytesText"], limits["maxTotalText"]) == (1, 400, "1000 bytes",
+                                                                                                   "2 KB")
+    shown = [{"name": f.name, "size": f.stat().st_size} for f in files]
+    js = Path(__file__).resolve().parents[1] / "vault" / "ui" / "static" / "cortex.js"
+    code = (f"const C = require({json.dumps(str(js))}); "
+            f"process.stdout.write(JSON.stringify(C.trayCheck({json.dumps(shown)}, {json.dumps(limits)})));")
+    tray = json.loads(subprocess.run([shutil.which("node"), "-e", code], capture_output=True, text=True,
+                                     encoding="utf-8", check=True).stdout)
+    _, result = sm.add_files(s.id, files, inbox)
+    server = [f.reason if f.status == "rejected" else "" for f in result.files]
+    assert tray == server
+    assert [bool(r) for r in tray] == [False, True, True, True, True, False, True, False, True, True]
+    assert tray[6] == "over the 2 KB per-session total" and tray[8] == "over the 4-file limit"

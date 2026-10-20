@@ -5,7 +5,8 @@
 // Options: url, browser, files (two lists of file paths), query (one the first list matches), phone, shot (a folder:
 // save a screenshot of the overlay there). Desktop: reads the home drop zone, drags the first list over the middle of
 // the page and drops it there, then searches, drags the second list over the results, cancels one drag, and drops
-// it on the results page. Phone: reads the drop zone's text only. Prints one JSON object.
+// it on the results page. Dropped files go into the upload tray, and Upload there sends them. Phone: reads the
+// drop zone's text only. Prints one JSON object.
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { launch, openApp, sleep, waitFor } from "./cdp.mjs";
@@ -23,6 +24,7 @@ const READ = `(() => {
   const note = zone && zone.nextElementSibling;
   return { view: root.dataset.view, query: root.dataset.query || '', render: root.dataset.render, stage: st.stage,
     upload: st.upload, myUploads: mine, overlay: !!over && !over.hidden && visible(over) ? over.textContent : null,
+    tray: Array.from(document.querySelectorAll('[data-tray]:not([hidden]) .cv-tray__name')).map((n) => n.textContent),
     zone: zone ? { height: Math.round(box.height), width: Math.round(box.width),
       text: Array.from(zone.querySelectorAll('span')).filter((s) => visible(s) && !s.querySelector('span'))
         .map((s) => s.textContent).join(' | '),
@@ -51,8 +53,9 @@ try {
         writeFileSync(join(opt.shot, `drop-${name}.png`), Buffer.from(data, "base64"));
       }
       await drag("drop", files, x, y);
-      await sleep(200);
+      await sleep(300);
       const dropped = await read();
+      await b.js("document.querySelector('[data-act=tray-upload]').click()");
       await waitFor(async () => { const s = await read(); return s.stage === "done" && s.upload !== before; }, 120000,
         "the upload");
       await sleep(1500);

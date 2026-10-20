@@ -149,6 +149,61 @@
     return n > 0 ? `Drop to add ${n} file${n === 1 ? '' : 's'}` : 'Drop to add files';
   }
 
+  /* ------------------------------------------------------------------ the upload tray (demo) */
+  /* A file name's extension as the server reads it (Python's PurePath.suffix, lowercased): '' for none, and for a
+     name that starts or ends with its only dot. */
+  function suffix(name) {
+    const base = String(name || '').split(/[\\/]/).pop();
+    const i = base.lastIndexOf('.');
+    return i > 0 && i < base.length - 1 ? base.slice(i).toLowerCase() : '';
+  }
+
+  /* The tray's checks before anything is sent, mirroring the server's (vault/session.py `_add`, in its order): a
+     folder, the type, the size, then the session's file count and total over the files that will be added. One
+     reason per file, '' for a file that will be added; `limits` is the status part's (SessionManager.limits). The
+     server checks everything again, and also catches what the browser can't (a file already uploaded, an Office
+     file too large unpacked). */
+  function trayCheck(files, limits) {
+    const exts = new Set(limits.exts || []);
+    let count = Number(limits.files) || 0;
+    let total = Number(limits.bytes) || 0;
+    return files.map((f) => {
+      const ext = suffix(f.name);
+      if (f.folder) return 'a folder: add the files in it instead';
+      if (!exts.has(ext)) return `file type not supported (${ext || 'no extension'})`;
+      if (f.size > limits.maxBytes) return `larger than ${limits.maxBytesText}`;
+      if (count >= limits.maxFiles) return `over the ${limits.maxFiles}-file limit`;
+      if (total + f.size > limits.maxTotal) return `over the ${limits.maxTotalText} per-session total`;
+      count += 1;
+      total += f.size;
+      return '';
+    });
+  }
+
+  const TYPE_LABELS = { '.pdf': 'PDF', '.docx': 'Word document', '.pptx': 'PowerPoint', '.txt': 'Text',
+    '.md': 'Markdown', '.png': 'PNG image', '.jpg': 'JPEG image', '.jpeg': 'JPEG image', '.webp': 'WebP image',
+    '.heic': 'HEIC photo' };
+  function typeLabel(name) {
+    const ext = suffix(name);
+    return TYPE_LABELS[ext] || (ext ? `${ext.slice(1).toUpperCase()} file` : 'No extension');
+  }
+
+  /* A size as the rest of the page writes it (views.human_bytes). */
+  function fileSize(n) {
+    let size = Number(n) || 0;
+    for (const unit of ['bytes', 'KB', 'MB', 'GB']) {
+      if (size < 1024 || unit === 'GB') {
+        return unit === 'bytes' || unit === 'KB' ? `${Math.round(size)} ${unit}` : `${size.toFixed(1)} ${unit}`;
+      }
+      size /= 1024;
+    }
+    return '';
+  }
+
+  function uploadLabel(n) {
+    return n > 0 ? `Upload ${n} file${n === 1 ? '' : 's'}` : 'Nothing to upload';
+  }
+
   /* Delete my uploads asks first (SPEC §8). */
   function confirmDelete(n) {
     return `Delete all ${n} file${n === 1 ? '' : 's'} you uploaded? This can't be undone.`;
@@ -156,7 +211,7 @@
 
   const api = { MIN_CHARS, DELAY_MS, PAGE, SAVE_MS, RECENT_MAX, PLURALS, normalize, searchFor, enterAction, escAction,
     visibility, countWords, remember, forget, parseRecent, barText, barValue, percent, stale, detailFits, scopeCounts,
-    confirmDelete, dropText };
+    confirmDelete, dropText, suffix, trayCheck, typeLabel, fileSize, uploadLabel };
   if (!win) return api;
 
   /* ------------------------------------------------------------------ browser */
@@ -170,7 +225,7 @@
     text: '', toast: null, toastTimer: 0, saveTimer: 0, turn: 0, recent: [], status: null,
     uploadsFull: false, busyText: '', lastRender: null,
     transfer: null, notSent: 0, dismissed: '', reportOpen: false, said: '', homeFor: '', awaiting: null,
-    claiming: null, claimed: '', forgotId: '', dropTimer: 0,
+    claiming: null, claimed: '', forgotId: '', dropTimer: 0, tray: [], trayReturn: null,
   };
 
   const $ = (sel, el) => (el || doc).querySelector(sel);
@@ -692,7 +747,8 @@
     });
   }
 
-  async function uploadFiles(files) {
+  /* Send the files the tray kept (`left`: the ones it marked "won't be added", counted as not sent). */
+  async function uploadFiles(files, left = 0) {
     const list = Array.from(files || []);
     if (!list.length || !S.topTrigger) return;
     if (S.transfer) { say('Your files are still being sent. Add more once they are.'); return; }
@@ -700,7 +756,7 @@
     const limit = Number((win.gradio_config || {}).max_file_size) || 0;  // the server refuses larger files anyway
     const send = list.filter((f) => !limit || f.size <= limit);
     const t = { done: 0, total: send.length, sent: 0, bytes: send.reduce((a, f) => a + f.size, 0), pct: 0, exact: true,
-      failed: list.length - send.length };
+      failed: list.length - send.length + left };
     S.transfer = t;
     S.reportOpen = false;
     S.dismissed = '';
@@ -733,11 +789,154 @@
     }
     S.transfer = null;
     S.notSent = t.failed;
+    if (trayOpen()) renderTray();  // Upload can be used again
     if (paths.length) {
       S.awaiting = (S.status && S.status.upload) || '';
       emit(S.topTrigger, 'upload', { paths, scope: effectiveScope() });
     } else say(`No file could be sent${limit ? ` (each must be under ${Math.round(limit / 1048576)} MB)` : ''}`);
     paintBar();
+  }
+
+  /* ------------------------------------------------------------------ the upload tray (demo) */
+  const tray = () => S.top && $('[data-tray]', S.top);
+  const trayOpen = () => !!tray() && !tray().hidden;
+
+  function trayLimits() {
+    try {
+      const raw = JSON.parse((S.status && S.status.limits) || 'null');
+      if (raw && typeof raw === 'object') return raw;
+    } catch (e) { /* the server checks anyway */ }
+    return { exts: [], maxBytes: Infinity, maxFiles: Infinity, maxTotal: Infinity, files: 0, bytes: 0 };
+  }
+
+  /* Picked or dropped files go into the tray, never straight to the server. The same file twice is listed once.
+     `folders`: the dropped items that are folders. */
+  function addToTray(files, folders) {
+    if (S.uploadsFull) { say(S.busyText); return; }
+    const have = new Set(S.tray.map((t) => t.key));
+    Array.from(files || []).forEach((file, i) => {
+      const key = `${file.name}\u0000${file.size}\u0000${file.lastModified}`;
+      if (have.has(key)) return;
+      have.add(key);
+      S.tray.push({ file, key, folder: !!(folders && folders.has(i)) });
+    });
+    if (!S.tray.length) return;
+    if (!trayOpen()) {
+      S.trayReturn = doc.activeElement;
+      tray().hidden = false;
+      doc.body.classList.add('cv-tray-open');
+    }
+    renderTray();
+    const go = $('[data-act="tray-upload"]', tray());
+    (go.disabled ? $('[data-act="tray-add"]', tray()) : go).focus();
+  }
+
+  function closeTray() {
+    S.tray = [];
+    const t = tray();
+    if (!t) return;
+    t.hidden = true;
+    doc.body.classList.remove('cv-tray-open');
+    $('[data-tray-list]', t).replaceChildren();
+    $('[data-tray-sum]', t).textContent = '';
+    const back = S.trayReturn;
+    S.trayReturn = null;
+    if (back && doc.contains(back) && typeof back.focus === 'function') back.focus(); else input().focus();
+  }
+
+  /* Each file with its size, type, and why it won't be added; the count and the Upload button. */
+  function renderTray() {
+    const t = tray();
+    if (!t) return;
+    const reasons = trayCheck(S.tray.map((x) => ({ name: x.file.name, size: x.file.size, folder: x.folder })),
+      trayLimits());
+    const rows = S.tray.map((x, i) => {
+      const li = doc.createElement('li');
+      li.className = reasons[i] ? 'cv-tray__item is-out' : 'cv-tray__item';
+      const text = doc.createElement('span');
+      text.className = 'cv-tray__text';
+      const name = doc.createElement('span');
+      name.className = 'cv-tray__name';
+      name.textContent = x.file.name;
+      const meta = doc.createElement('span');
+      meta.className = 'cv-tray__meta';
+      meta.textContent = x.folder ? 'Folder' : `${fileSize(x.file.size)} · ${typeLabel(x.file.name)}`;
+      text.append(name, meta);
+      if (reasons[i]) {
+        const why = doc.createElement('span');
+        why.className = 'cv-tray__why';
+        why.textContent = `won't be added: ${reasons[i]}`;
+        text.append(why);
+      }
+      const drop = doc.createElement('button');
+      drop.type = 'button';
+      drop.className = 'cv-iconbtn cv-tray__drop';
+      drop.dataset.trayDrop = String(i);
+      drop.setAttribute('aria-label', `Remove ${x.file.name}`);
+      drop.textContent = '×';
+      li.append(text, drop);
+      return li;
+    });
+    $('[data-tray-list]', t).replaceChildren(...rows);
+    const ok = reasons.filter((r) => !r).length;
+    const out = reasons.length - ok;
+    const bytes = S.tray.reduce((a, x) => a + (x.folder ? 0 : x.file.size), 0);
+    $('[data-tray-sum]', t).textContent = S.tray.length
+      ? `${S.tray.length} file${S.tray.length === 1 ? '' : 's'} · ${fileSize(bytes)}${out ? ` · ${out} won't be added` : ''}`
+      : '';
+    $('[data-tray-empty]', t).hidden = S.tray.length > 0;
+    $('[data-act="tray-clear"]', t).disabled = !S.tray.length;
+    const go = $('[data-act="tray-upload"]', t);
+    go.textContent = S.transfer ? 'Sending the last files…' : uploadLabel(ok);
+    go.disabled = !ok || !!S.transfer;
+  }
+
+  function trayClick(e) {
+    const t = e.target;
+    const drop = t.closest('[data-tray-drop]');
+    const act = t.closest('[data-act]');
+    if (drop) {
+      const i = Number(drop.dataset.trayDrop);
+      S.tray.splice(i, 1);
+      renderTray();
+      const next = $$('[data-tray-drop]', tray());
+      (next[Math.min(i, next.length - 1)] || $('[data-act="tray-add"]', tray())).focus();
+    } else if (act && act.dataset.act === 'tray-add') {
+      const picker = $('[data-files]', S.top);
+      if (picker) picker.click();
+    } else if (act && act.dataset.act === 'tray-clear') {
+      S.tray = [];
+      renderTray();
+      $('[data-act="tray-add"]', tray()).focus();
+    } else if (act && act.dataset.act === 'tray-cancel') {
+      closeTray();
+    } else if (act && act.dataset.act === 'tray-upload') {
+      const reasons = trayCheck(S.tray.map((x) => ({ name: x.file.name, size: x.file.size, folder: x.folder })),
+        trayLimits());
+      const send = S.tray.filter((x, i) => !reasons[i]).map((x) => x.file);
+      const left = reasons.length - send.length;
+      if (!send.length || S.transfer) return;
+      closeTray();
+      uploadFiles(send, left);
+    } else if (t === tray()) {
+      closeTray();  // a click on the backdrop
+    }
+  }
+
+  /* Esc cancels; Tab stays inside the tray while it's open. */
+  function trayKey(e) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      closeTray();
+    } else if (e.key === 'Tab') {
+      const items = $$('button:not([disabled]), [href], input:not([type="file"])', tray()).filter((x) => x.offsetParent);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && doc.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && doc.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
   }
 
   /* ------------------------------------------------------------------ drag and drop anywhere (demo) */
@@ -777,7 +976,12 @@
       if (!dragsFiles(e)) return;
       e.preventDefault();
       showDrop(false);
-      if (S.uploadsFull) say(S.busyText); else uploadFiles(e.dataTransfer.files);
+      const folders = new Set();
+      Array.from(e.dataTransfer.items || []).filter((it) => it.kind === 'file').forEach((it, i) => {
+        const entry = typeof it.webkitGetAsEntry === 'function' ? it.webkitGetAsEntry() : null;
+        if (entry && entry.isDirectory) folders.add(i);
+      });
+      addToTray(e.dataTransfer.files, folders);
     });
   }
 
@@ -804,6 +1008,7 @@
   }
 
   function onGlobalKey(e) {
+    if (trayOpen()) return;  // the tray has the keyboard until it closes
     if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       input().focus();
@@ -854,8 +1059,12 @@
       else if (t.closest('[data-home]')) { e.preventDefault(); clearBox(); }
     });
     const picker = $('[data-files]', element);
-    if (picker) picker.addEventListener('change', () => { uploadFiles(picker.files); picker.value = ''; });
+    if (picker) picker.addEventListener('change', () => { addToTray(picker.files); picker.value = ''; });
     if ($('[data-dropover]', element)) wireDrop();  // demo: drop files anywhere on the page
+    if (tray()) {
+      tray().addEventListener('click', trayClick);
+      tray().addEventListener('keydown', trayKey);
+    }
     if (/Mac|iPhone|iPad/.test(win.navigator.platform || '')) $$('[data-kbd]').forEach((k) => { k.textContent = '⌘ K'; });
     new win.MutationObserver(syncThemeButton).observe(doc.body, { attributes: true, attributeFilter: ['class'] });
     syncThemeButton();
@@ -939,7 +1148,8 @@
       S.status = { text: d.text || '', index: d.index || '', dial: d.dial || '', busy: d.busy === 'true',
         stage: d.stage || 'idle', done: Number(d.done) || 0, total: Number(d.total) || 0,
         version: Number(d.version) || 0, upload: d.upload || '', summary: d.summary || '', message: d.message || '',
-        newSession: d.newSession === 'true', reattach: d.reattach === 'true', counts: d.counts || '' };
+        newSession: d.newSession === 'true', reattach: d.reattach === 'true', counts: d.counts || '',
+        limits: d.limits || '' };
       S.uploadsFull = d.uploads === 'full';
       S.busyText = d.busyText || '';
       if (d.claim) claim(d.claim);
@@ -952,6 +1162,7 @@
       paintStatus();
       paintArchive();
       afterUpload();
+      if (trayOpen()) renderTray();  // the session's counts changed: so may what will be added
     };
     new win.MutationObserver(sync).observe(element, { childList: true, subtree: true, attributes: true });
     sync();

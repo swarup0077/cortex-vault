@@ -331,7 +331,8 @@ def test_an_expired_session_is_gone_after_a_reload(served, tmp_path) -> None:
 @pytest.mark.parametrize("served", ["demo"], indirect=True)
 def test_files_dropped_anywhere_are_added(served, tmp_path) -> None:
     """Owner (v1.1.0): dragging files anywhere over the page shows a full-page overlay with their number, and
-    dropping them anywhere adds them, on the home page and on the results page; a cancelled drag adds nothing. The
+    dropping them anywhere adds them (to the upload tray, then Upload), on the home page and on the results page; a
+    cancelled drag adds nothing. The
     home drop zone is bigger, with only the privacy notice under it. A phone has no dragging: the zone says Add your
     own files and opens the picker."""
     from vault.ui import views
@@ -359,12 +360,67 @@ def test_files_dropped_anywhere_are_added(served, tmp_path) -> None:
     assert s["home"]["overlay"] is None
     first = s["first"]
     assert first["during"]["overlay"] == "Drop to add 2 files" and first["dropped"]["overlay"] is None
+    assert first["dropped"]["tray"] == ["quokka-a1.txt", "quokka-a2.txt"] and first["dropped"]["stage"] == "idle"
     assert first["after"]["myUploads"] == 2 and first["after"]["stage"] == "done"
     assert sorted(s["results"]["cards"]) == ["quokka-a1.txt", "quokka-a2.txt"]  # home switched to My uploads
     assert s["cancelDuring"]["overlay"] == "Drop to add 1 file" and s["cancelled"]["overlay"] is None
     assert s["cancelled"]["myUploads"] == 2 and s["cancelled"]["upload"] == first["after"]["upload"]  # nothing sent
     second = s["second"]
     assert second["during"]["overlay"] == "Drop to add 1 file" and second["during"]["view"] == "results"
+    assert second["dropped"]["tray"] == ["quokka-b1.txt"]
     assert second["after"]["myUploads"] == 3 and second["after"]["render"] == s["results"]["render"]  # results stay
     phone = run(phone=True)["home"]["zone"]
     assert phone["text"].startswith("Add your own files |") and "Drop files anywhere" not in phone["text"]
+
+
+@needs_browser
+@pytest.mark.parametrize("served", ["demo"], indirect=True)
+def test_files_are_reviewed_in_a_tray_before_anything_is_sent(served, tmp_path) -> None:
+    """Owner (v1.1.0): picked files go into a tray first: each with its name, size and type, and "won't be added"
+    with the server's reason for the ones it would refuse; × drops one, Add more opens the picker, Clear empties
+    it, Esc or Cancel closes it. Nothing reaches the server until Upload, which sends only the files that will be
+    added; then the usual bar and report. By keyboard on a desktop (focus stays in the tray), by touch on a phone,
+    where the tray fills the screen."""
+    d = tmp_path / "files"
+    d.mkdir()
+    for name in ("notes-1.txt", "notes-2.md", "archive.zip", "README", "more-1.txt", "later-1.txt"):
+        (d / name).write_text(f"quokka field notes in {name}", encoding="utf-8")
+    p = lambda *names: [str(d / n) for n in names]  # noqa: E731
+
+    def run(**more) -> dict:
+        options = {"url": served, "browser": BROWSER, "first": p("notes-1.txt", "archive.zip", "notes-2.md", "README"),
+                   "more": p("more-1.txt", "notes-1.txt"), "again": p("later-1.txt", "README"), **more}
+        out = subprocess.run([NODE, str(DRIVER.parent / "tray_check.mjs"), json.dumps(options)], capture_output=True,
+                             text=True, encoding="utf-8", timeout=300)
+        state = json.loads(out.stdout)
+        assert "error" not in state, state.get("error")
+        return state
+
+    for phone in (False, True):
+        s = run(phone=phone)
+        what = "phone" if phone else "desktop"
+        assert s["addOpensPicker"] and s["moreOpensPicker"], what
+        picked = s["picked"]
+        assert picked["open"] and picked["stage"] == "idle" and s["sentAfterPick"] == 0, what  # nothing sent
+        assert [(r["name"], r["out"]) for r in picked["rows"]] == [("notes-1.txt", False), ("archive.zip", True),
+                                                                  ("notes-2.md", False), ("README", True)], what
+        assert picked["rows"][0]["meta"].endswith(" bytes · Text") and picked["rows"][2]["meta"].endswith("Markdown")
+        assert picked["rows"][1]["why"] == "won't be added: file type not supported (.zip)", what
+        assert picked["rows"][3]["why"] == "won't be added: file type not supported (no extension)", what
+        assert picked["go"] == "Upload 2 files" and picked["sum"].endswith(" · 2 won't be added"), what
+        assert picked["focus"] == "tray-upload" and picked["inTray"], what
+        assert [r["name"] for r in s["removed"]["rows"]] == ["notes-1.txt", "notes-2.md", "README"], what
+        assert [r["name"] for r in s["more"]["rows"]][-1] == "more-1.txt" and len(s["more"]["rows"]) == 4, what  # once
+        assert s["more"]["go"] == "Upload 3 files", what
+        assert not s["cancelled"]["open"] and s["sentAfterCancel"] == 0 and s["cancelled"]["myUploads"] == 0, what
+        assert s["cleared"]["empty"] and s["cleared"]["goDisabled"] and s["cleared"]["go"] == "Nothing to upload", what
+        assert s["readd"]["go"] == "Upload 1 file" and s["sentBeforeUpload"] == 0, what
+        assert not s["uploading"]["open"] and s["sent"] == 1, what  # only the file that will be added
+        assert s["done"]["myUploads"] == 1 and s["done"]["bar"] == "Upload done: 1 added · 1 not sent", what
+        if phone:
+            assert picked["panel"]["width"] == picked["viewport"]["width"]  # full screen
+        else:
+            order = s["tabOrder"]  # round the tray and back, never out of it
+            assert order[:8] == ["tray-cancel", "drop:0", "drop:1", "drop:2", "drop:3", "tray-add", "tray-clear",
+                                 "tray-upload"] and order[8] == "tray-cancel" and s["trapped"]
+            assert s["cancelled"]["focus"] == "add"  # back where it came from

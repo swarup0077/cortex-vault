@@ -5,7 +5,7 @@
 //
 // Options: url, browser, uploads (lists of file paths: each list is one upload, through the Add files picker).
 // After each upload is done, opens "Upload report" and reads the file names in it. Prints one JSON object.
-import { launch, openApp, sleep, waitFor } from "./cdp.mjs";
+import { launch, openApp, sleep, upload as uploadFiles, waitFor } from "./cdp.mjs";
 
 const opt = JSON.parse(process.argv[2]);
 let b;
@@ -16,9 +16,7 @@ try {
   const reports = [];
   let last = "";
   for (const files of opt.uploads) {
-    const { root } = await b.send("DOM.getDocument", { depth: -1 });
-    const { nodeId } = await b.send("DOM.querySelector", { nodeId: root.nodeId, selector: "[data-files]" });
-    await b.send("DOM.setFileInputFiles", { nodeId, files });
+    await uploadFiles(b, files);
     const upload = await waitFor(() => b.js(`(() => { const d = document.querySelector('[data-status-src]').dataset;
       return d.stage === 'done' && d.upload && d.upload !== ${JSON.stringify(last)} ? d.upload : ''; })()`),
     60000, "the upload to finish");

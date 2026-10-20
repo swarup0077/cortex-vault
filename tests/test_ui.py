@@ -1001,3 +1001,25 @@ def test_the_drop_zone_is_big_with_only_the_privacy_notice_under_it(demo_ctx, tm
     demo_ctx.sessions.cfg = __import__("dataclasses").replace(demo_ctx.sessions.cfg, max_sessions=0)
     busy = layout.home_html(demo_ctx, None)
     assert views._e(views.DEMO_BUSY) in busy and 'data-act="add"' not in busy and notice in busy
+
+
+# ---------------------------------------------------------------- the upload tray (owner, 20 Oct: v1.1.0)
+
+
+def test_the_status_carries_what_the_tray_checks(demo_ctx, tmp_path, fake_embedder) -> None:
+    """The tray's limits: the server's extensions, caps and their words, and what this session holds so far."""
+    def limits(status: str) -> dict:
+        return json.loads(html.unescape(re.search(r'data-limits="([^"]+)"', status).group(1)))
+
+    before = limits(layout.status_html(demo_ctx, None))
+    assert before["files"] == 0 and before["bytes"] == 0 and ".pdf" in before["exts"] and ".zip" not in before["exts"]
+    assert (before["maxFiles"], before["maxBytesText"], before["maxTotalText"]) == (200, "50 MB", "500 MB")
+    status, sid = upload(demo_ctx, {"one.txt": "quokka notes"})
+    after = limits(status)
+    assert after["files"] == 1 and after["bytes"] == len("quokka notes")
+    top = views.top(DEMO)
+    assert top.count("data-tray hidden") == 1 and 'role="dialog" aria-modal="true"' in top
+    assert "Nothing is sent until you choose Upload." in top and views._e(DEMO.upload_notice) in top
+    lib = Library(Config(data_dir=tmp_path / "local"))
+    local = UiContext("local", lib)
+    assert "data-limits" not in layout.status_html(local, None) and "data-tray" not in views.top(LOCAL)

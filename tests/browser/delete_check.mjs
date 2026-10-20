@@ -5,7 +5,7 @@
 // Options: url, browser, files (paths to upload), query (one those files match), phone. Uploads the files,
 // searches, clicks Delete my uploads and answers Cancel to the confirmation, then clicks again and answers OK,
 // then searches again. Prints one JSON object: the state after each step and the confirmation's text.
-import { launch, openApp, sleep, waitFor } from "./cdp.mjs";
+import { launch, openApp, sleep, upload, waitFor } from "./cdp.mjs";
 
 const opt = JSON.parse(process.argv[2]);
 const READ = `(() => {
@@ -36,9 +36,7 @@ try {
   await b.send("DOM.enable");
   const read = () => b.js(READ);
   const out = { start: await read() };
-  const { root } = await b.send("DOM.getDocument", { depth: -1 });
-  const { nodeId } = await b.send("DOM.querySelector", { nodeId: root.nodeId, selector: "[data-files]" });
-  await b.send("DOM.setFileInputFiles", { nodeId, files: opt.files });
+  await upload(b, opt.files);
   await waitFor(() => b.js("document.querySelector('[data-status-src]').dataset.stage === 'done'"), 120000, "the upload");
   await waitFor(async () => (await read()).deleteShown, 10000, "the delete button");
   await sleep(1200);  // home switches to My uploads after the first upload (desktop)

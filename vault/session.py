@@ -249,6 +249,17 @@ class SessionManager:
                     return token
         return None
 
+    def limits(self, session_id: str | None) -> dict:
+        """What the page's tray checks before anything is sent, mirroring `_add` (SPEC §8): the extensions taken, the
+        per-file and per-session caps with the words the server uses for them, and what this session holds so far.
+        The server still checks every file it's sent."""
+        s = self.get(session_id, touch=False)
+        cfg = self.cfg
+        return {"exts": sorted(INDEX_EXTS), "maxBytes": cfg.upload_max_bytes,
+                "maxBytesText": human_bytes(cfg.upload_max_bytes), "maxFiles": cfg.upload_max_files,
+                "maxTotal": cfg.upload_max_total, "maxTotalText": human_bytes(cfg.upload_max_total),
+                "files": s.files if s else 0, "bytes": s.bytes if s else 0}
+
     def ticket(self, session_id: str | None) -> str | None:
         """The session's unused, unexpired ticket, for its own page only (the upload that created it)."""
         s = self.get(session_id, touch=False)
