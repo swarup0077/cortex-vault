@@ -92,6 +92,11 @@ the picture list adds more noise than it finds: 30 / 34, and 19 at R@1 against t
 queries about the generated files, used only as a guardrail while tuning: 28 (88%) / 32 (100%) / 32 (100%), MRR
 0.924.
 
+A third set, the coverage set, adds 21 queries written from the generated files' contents for the coverage
+[SPEC §9](SPEC.md) asks for that the author's 44 don't aim at: Word and PowerPoint files, kind words ("pdf about …",
+"slides on …") and mixed queries. It is reported apart from the author's queries ([`eval/results.md`](eval/results.md)),
+ran once, and nothing was tuned on it: 18 (86%) / 21 (100%) / 21 (100%), MRR 0.929.
+
 The held-out half is the honest number, and it is lower: 4 of its 6 queries without a correct file in the top 10
 describe abstract plots (fractals, complex-function plots) whose only text is axis numbers (see Known limitations).
 
@@ -276,6 +281,6 @@ Cortex Vault was built between 16 and 19 October 2026 from [SPEC.md](SPEC.md), t
 milestone per session,
 with [Claude Code](https://claude.com/claude-code): M0 scaffold and deploy probe, M1 text pipeline, M2 OCR, M3
 photos, CLIP and metadata, M4 UI and first deploy, M5 speed and visual polish, M6 real files and the evaluation.
-Each change came with a test on generated files (519 tests today), and every threshold was first calibrated on
+Each change came with a test on generated files (524 tests today), and every threshold was first calibrated on
 generated data with a script in [`bench/`](bench/README.md), marked provisional, and tuned only on the tuning half
 of the evaluation queries. The decisions, with what was measured and why, are logged in SPEC §19.
