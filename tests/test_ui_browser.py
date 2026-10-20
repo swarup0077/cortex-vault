@@ -460,6 +460,11 @@ def test_manage_uploads_deletes_the_chosen_files_in_a_browser(served, tmp_path) 
         assert opened["panel"] and len(opened["list"]) == 4 and opened["go"] == "Delete selected (0)", what
         assert opened["goDisabled"] and opened["inPanel"], what
         assert s["ticked"]["go"] == "Delete selected (2)" and s["ticked"]["all"]["indeterminate"], what
+        # a ticked box looks ticked: Gradio draws every checkbox as a white tick on a transparent box
+        boxes = s["ticked"]["boxes"]
+        clear = {b["bg"] for b in boxes if not b["checked"] and not b["indeterminate"]}
+        ticked = {b["bg"] for b in boxes if b["checked"] or b["indeterminate"]}
+        assert len(ticked) == 1 and not ticked & clear and "rgba(0, 0, 0, 0)" not in ticked, (what, boxes)
         assert s["dialogs"] == ["Delete 2 files? This can't be undone."] * 2, what
         assert len(s["cancelled"]["allIds"]) == len(before["allIds"]), what  # Cancel: nothing happened
         assert not {r["id"] for r in picked} & set(deleted["allIds"]), what  # gone from the results at once

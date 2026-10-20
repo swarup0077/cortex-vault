@@ -9,7 +9,7 @@
 // Select all with the keyboard, ticks the picked rows' files, answers Cancel then OK to Delete selected, and reads
 // the results, the panel and The Archive after; then closes the panel with Esc (desktop) and searches again. Prints
 // one JSON object.
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { launch, openApp, sleep, upload, waitFor } from "./cdp.mjs";
 
@@ -40,7 +40,9 @@ const READ = `(() => {
     all: { checked: all.checked, indeterminate: all.indeterminate }, go: m.querySelector('[data-act="delete-selected"]').textContent,
     goDisabled: m.querySelector('[data-act="delete-selected"]').disabled,
     focus: a ? (a.dataset.act || (a.matches('[data-manage-all]') ? 'select-all' : a.dataset.manageId ? 'box:' + a.dataset.manageId : a.id || a.tagName)) : null,
-    inPanel: m.contains(a), toast: toast && toast.classList.contains('is-on') ? toast.textContent : null };
+    inPanel: m.contains(a), toast: toast && toast.classList.contains('is-on') ? toast.textContent : null,
+    boxes: Array.from(m.querySelectorAll('input[type="checkbox"]')).map((x) => ({ checked: x.checked,
+      indeterminate: x.indeterminate, bg: getComputedStyle(x).backgroundColor })) };
 })()`;
 
 let b;
@@ -120,6 +122,10 @@ try {
   else { await press('[data-act="manage-close"]'); out.closed = await read(); }
   await search(`${opt.query} again`);
   out.searchedAgain = await read();
+  if (opt.holdFile) {  // a live check: wait here while the server's disk is looked at (until the file is gone)
+    writeFileSync(opt.holdFile, "holding");
+    await waitFor(() => !existsSync(opt.holdFile), 600000, "the hold to end");
+  }
   if (opt.cleanup) {
     await press('[data-act="manage-uploads"]');
     await waitFor(async () => (await read()).list.length > 0, 15000, "the list");

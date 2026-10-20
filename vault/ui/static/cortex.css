@@ -426,7 +426,11 @@ body.cv-tray-open { overflow: hidden; }
 .cv-app .cv-manage__all { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 13px; color: var(--cv-ink);
   cursor: pointer; }
 .cv-app .cv-manage__row { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; cursor: pointer; }
-.cv-app .cv-manage input[type="checkbox"] { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--cv-brass); }
+/* Gradio draws every checkbox itself (a white tick on a transparent box: invisible on paper), so these are ours */
+.cv-app .cv-manage input[type="checkbox"] { -webkit-appearance: none; appearance: none; flex: none; width: 18px; height: 18px;
+  margin: 0; border: 1.5px solid var(--cv-muted); border-radius: 4px; background: transparent; cursor: pointer; }
+.cv-app .cv-manage input[type="checkbox"]:checked { border-color: var(--cv-brass); background: var(--cv-brass) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat center / 14px; }
+.cv-app .cv-manage input[type="checkbox"]:indeterminate { border-color: var(--cv-brass); background: var(--cv-brass) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8h8' stroke='white' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat center / 14px; }
 .cv-app .cv-manage .cv-tray__item { padding: 8px 2px; }
 .cv-app .cv-manage__go { border-color: var(--cv-rust); background: var(--cv-rust); color: #fff; }
 .cv-app .cv-manage input:focus-visible { outline: 2px solid var(--cv-brass); outline-offset: 2px; }
