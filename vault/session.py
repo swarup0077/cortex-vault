@@ -140,6 +140,16 @@ def _shred(path: Path) -> None:
             log.warning("could not overwrite %s: %s", f.name, e)
 
 
+def file_id(value: object) -> int | None:
+    """A file id from page data: a whole number above 0 that SQLite can hold (a larger one would make it raise),
+    as an int or a string of digits; anything else is None."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, str) and value.isascii() and value.isdigit() and len(value) <= 19:
+        value = int(value)
+    return value if isinstance(value, int) and 0 < value < 2**63 else None
+
+
 def token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8", "surrogatepass")).hexdigest()
 
@@ -308,7 +318,7 @@ class SessionManager:
         (nothing is touched), as for `delete`. Returns the ids removed. The session's idle time doesn't restart."""
         if not session_id or not _UUID4.match(session_id):
             return None
-        wanted = sorted({int(i) for i in list(file_ids)[:1000] if isinstance(i, int) or str(i).isdigit()})
+        wanted = sorted({n for i in list(file_ids)[:1000] if (n := file_id(i)) is not None})
         with self._lock:
             s = self.sessions.get(session_id)
             if s is None:

@@ -486,6 +486,8 @@ def test_deleting_some_uploads_touches_nothing_else(demo, inbox, tmp_path) -> No
     assert sm.remove(a.id, sample_ids + only_b) == [] and {x.id: x.library.count() for x in (a, b)} == before
     for nobody in (None, "../x", str(uuid.uuid4())):
         assert sm.remove(nobody, b_ids) is None
+    junk = [10**30, "9" * 30, -1, 0, True, 2**63, "1e3", " 7", None, [b_ids[0]], {"id": b_ids[0]}, 3.0]
+    assert sm.remove(b.id, junk) == [] and len(sm.uploads(b.id)) == 2  # ids SQLite can't hold don't make it raise
     b.busy = True
     assert sm.remove(b.id, b_ids) is False and len(sm.uploads(b.id)) == 2
     b.busy = False
