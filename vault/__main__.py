@@ -94,13 +94,13 @@ def cmd_eval(console: Console, cfg: Config, args: argparse.Namespace) -> int:
     if args.import_coverage:
         rep = ev.import_queries([args.import_coverage], paths, sources=("coverage",))
         ev.write_generated(rep.queries, paths, "coverage")
-        console.print(f"{len(rep.queries)} coverage queries; {len(rep.left_out)} left out → "
+        console.print(f"{len(rep.queries)} coverage queries; {len(rep.left_out)} left out; written to "
                       f"{paths.coverage_queries.relative_to(paths.repo).as_posix()}")
         return 0
     if args.import_generated:
         rep = ev.import_queries([args.import_generated], paths, sources=("generated",))
         ev.write_generated(rep.queries, paths)
-        console.print(f"{len(rep.queries)} generated-file queries; {len(rep.left_out)} left out → "
+        console.print(f"{len(rep.queries)} generated-file queries; {len(rep.left_out)} left out; written to "
                       f"{paths.generated_queries.relative_to(paths.repo).as_posix()}")
         return 0
     if (args.queries == "coverage") != (args.purpose == "coverage"):
