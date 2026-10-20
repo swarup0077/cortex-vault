@@ -1,0 +1,21 @@
+{"id": "c01", "text": "who books the seminar room and by when", "category": "meaning", "relevant": ["corpus/notes/meeting notes 2026-10-14.docx"], "split": "coverage", "source": "coverage"}
+{"id": "c02", "text": "which beach do we visit on day 3 of the Goa trip", "category": "meaning", "relevant": ["corpus/notes/travel plan goa.docx"], "split": "coverage", "source": "coverage"}
+{"id": "c03", "text": "spice farm lunch and ferry back before dark", "category": "exact word", "relevant": ["corpus/notes/travel plan goa.docx"], "split": "coverage", "source": "coverage"}
+{"id": "c04", "text": "singular values are the square roots of the eigenvalues of A transpose A", "category": "exact word", "relevant": ["corpus/decks/Linear algebra review.pptx"], "split": "coverage", "source": "coverage"}
+{"id": "c05", "text": "office hours on Tuesday afternoon", "category": "exact word", "relevant": ["corpus/decks/ML lecture v1.pptx"], "split": "coverage", "source": "coverage"}
+{"id": "c06", "text": "cross-entropy loss for classification", "category": "exact word", "relevant": ["corpus/decks/ML lecture v2.pptx"], "split": "coverage", "source": "coverage"}
+{"id": "c07", "text": "compress a matrix by keeping only the largest singular values", "category": "meaning", "relevant": ["corpus/decks/Linear algebra review.pptx", "corpus/papers/matrix-decompositions.pdf"], "split": "coverage", "source": "coverage"}
+{"id": "c08", "text": "slides on gradient descent", "category": "filtered", "relevant": ["corpus/decks/ML lecture v1.pptx", "corpus/decks/ML lecture v2.pptx"], "split": "coverage", "source": "coverage"}
+{"id": "c09", "text": "pdf about the Adam optimizer", "category": "filtered", "relevant": ["corpus/papers/1412.6980.pdf"], "split": "coverage", "source": "coverage"}
+{"id": "c10", "text": "screenshot of the interview schedule email", "category": "filtered", "relevant": ["corpus/screenshots/phone/Screenshot_20261014-090000_Mail.png"], "split": "coverage", "source": "coverage"}
+{"id": "c11", "text": "photo of the moon", "category": "filtered", "relevant": ["corpus/photos/IMG_20260924_221145.jpg"], "split": "coverage", "source": "coverage"}
+{"id": "c12", "text": "deck about eigenvalues and eigenvectors", "category": "filtered", "relevant": ["corpus/decks/Linear algebra review.pptx"], "split": "coverage", "source": "coverage"}
+{"id": "c13", "text": "pdf with the electricity amount due", "category": "filtered", "relevant": ["corpus/receipts/electricity-bill-october.pdf"], "split": "coverage", "source": "coverage"}
+{"id": "c14", "text": "docs about the project sync", "category": "filtered", "relevant": ["corpus/notes/meeting notes 2026-10-14.docx"], "split": "coverage", "source": "coverage"}
+{"id": "c15", "text": "train 12345 arrival time in Madgaon", "category": "mixed", "relevant": ["corpus/receipts/ticket-2026-10-24.pdf", "corpus/notes/travel plan goa.docx"], "split": "coverage", "source": "coverage"}
+{"id": "c16", "text": "coach B2 berth numbers for our trip", "category": "mixed", "relevant": ["corpus/receipts/ticket-2026-10-24.pdf", "corpus/screenshots/phone/Screenshot_20261012-080102_Messages.png"], "split": "coverage", "source": "coverage"}
+{"id": "c17", "text": "Room 4B interview what to bring", "category": "mixed", "relevant": ["corpus/screenshots/phone/Screenshot_20261014-090000_Mail.png"], "split": "coverage", "source": "coverage"}
+{"id": "c18", "text": "212 kWh units consumed on the bill", "category": "mixed", "relevant": ["corpus/receipts/electricity-bill-october.pdf"], "split": "coverage", "source": "coverage"}
+{"id": "c19", "text": "Q(s a) update rule in reinforcement learning", "category": "mixed", "relevant": ["corpus/slides-pdf/slides-export-rl.pdf"], "split": "coverage", "source": "coverage"}
+{"id": "c20", "text": "HACKATHON 2026 registration deadline and prize", "category": "mixed", "relevant": ["corpus/slides-pdf/poster-hackathon.pdf"], "split": "coverage", "source": "coverage"}
+{"id": "c21", "text": "max pooling over a 2 x 2 window halves the feature map", "category": "inside a scan", "relevant": ["corpus/slides-pdf/lecture-slides-cnn.pdf"], "split": "coverage", "source": "coverage"}

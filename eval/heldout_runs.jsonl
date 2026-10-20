@@ -4,3 +4,4 @@
 {"when": "2026-10-19T18:39:19", "purpose": "scale", "commit": "b6a93f1", "settings": {}}
 {"when": "2026-10-19T23:38:29", "purpose": "post-z", "commit": "ef51e68", "settings": {}, "report": "eval/results.json", "note": "the visual-query rule's gap, clip_strong_gap 0.035 (item z)"}
 {"when": "2026-10-19T23:39:13", "purpose": "scale", "commit": "ef51e68", "settings": {}, "report": "eval/results_scale.json", "note": "the current settings (after item z), with 1,000 generated files added to the index"}
+{"when": "2026-10-20T01:20:25", "purpose": "coverage", "commit": "e33e85b", "settings": {}, "report": "eval/results_coverage.json", "note": "21 queries about the generated files for the §9 coverage; no tuning follows"}

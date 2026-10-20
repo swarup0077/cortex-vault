@@ -1,0 +1,1486 @@
+{
+ "title": "Coverage queries (generated files)",
+ "purpose": "coverage",
+ "when": "2026-10-20T01:20:25",
+ "corpus": {
+  "files": 95,
+  "private_paths": 24,
+  "public_paths": 71
+ },
+ "settings": {},
+ "models": {
+  "text": "BAAI/bge-small-en-v1.5",
+  "clip": "Qdrant/clip-ViT-B-32-vision+Qdrant/clip-ViT-B-32-text",
+  "ocr": "PP-OCRv6_det_small.onnx+PP-OCRv6_rec_small.onnx"
+ },
+ "commit": "e33e85b",
+ "splits": {
+  "coverage": {
+   "rows": {
+    "6. All three, CLIP gated (the app)": {
+     "overall": {
+      "n": 21,
+      "r1": 18,
+      "r1_pct": 85.7,
+      "r5": 21,
+      "r5_pct": 100.0,
+      "r10": 21,
+      "r10_pct": 100.0,
+      "mrr": 0.929
+     },
+     "search type": {
+      "exact word": {
+       "n": 4,
+       "r1": 3,
+       "r1_pct": 75.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.875
+      },
+      "filtered": {
+       "n": 7,
+       "r1": 7,
+       "r1_pct": 100.0,
+       "r5": 7,
+       "r5_pct": 100.0,
+       "r10": 7,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "inside a scan": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "meaning": {
+       "n": 3,
+       "r1": 3,
+       "r1_pct": 100.0,
+       "r5": 3,
+       "r5_pct": 100.0,
+       "r10": 3,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "mixed": {
+       "n": 6,
+       "r1": 4,
+       "r1_pct": 66.7,
+       "r5": 6,
+       "r5_pct": 100.0,
+       "r10": 6,
+       "r10_pct": 100.0,
+       "mrr": 0.833
+      }
+     },
+     "file type": {
+      "doc": {
+       "n": 4,
+       "r1": 4,
+       "r1_pct": 100.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "pdf": {
+       "n": 8,
+       "r1": 6,
+       "r1_pct": 75.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 0.875
+      },
+      "photo": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "screenshot": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "slides": {
+       "n": 6,
+       "r1": 5,
+       "r1_pct": 83.3,
+       "r5": 6,
+       "r5_pct": 100.0,
+       "r10": 6,
+       "r10_pct": 100.0,
+       "mrr": 0.917
+      }
+     },
+     "set": {
+      "public": {
+       "n": 21,
+       "r1": 18,
+       "r1_pct": 85.7,
+       "r5": 21,
+       "r5_pct": 100.0,
+       "r10": 21,
+       "r10_pct": 100.0,
+       "mrr": 0.929
+      }
+     }
+    },
+    "1. BM25 only": {
+     "overall": {
+      "n": 21,
+      "r1": 19,
+      "r1_pct": 90.5,
+      "r5": 20,
+      "r5_pct": 95.2,
+      "r10": 20,
+      "r10_pct": 95.2,
+      "mrr": 0.921
+     },
+     "search type": {
+      "exact word": {
+       "n": 4,
+       "r1": 4,
+       "r1_pct": 100.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "filtered": {
+       "n": 7,
+       "r1": 5,
+       "r1_pct": 71.4,
+       "r5": 6,
+       "r5_pct": 85.7,
+       "r10": 6,
+       "r10_pct": 85.7,
+       "mrr": 0.762
+      },
+      "inside a scan": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "meaning": {
+       "n": 3,
+       "r1": 3,
+       "r1_pct": 100.0,
+       "r5": 3,
+       "r5_pct": 100.0,
+       "r10": 3,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "mixed": {
+       "n": 6,
+       "r1": 6,
+       "r1_pct": 100.0,
+       "r5": 6,
+       "r5_pct": 100.0,
+       "r10": 6,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "file type": {
+      "doc": {
+       "n": 4,
+       "r1": 4,
+       "r1_pct": 100.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "pdf": {
+       "n": 8,
+       "r1": 7,
+       "r1_pct": 87.5,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 0.917
+      },
+      "photo": {
+       "n": 1,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "screenshot": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "slides": {
+       "n": 6,
+       "r1": 6,
+       "r1_pct": 100.0,
+       "r5": 6,
+       "r5_pct": 100.0,
+       "r10": 6,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "public": {
+       "n": 21,
+       "r1": 19,
+       "r1_pct": 90.5,
+       "r5": 20,
+       "r5_pct": 95.2,
+       "r10": 20,
+       "r10_pct": 95.2,
+       "mrr": 0.921
+      }
+     }
+    },
+    "2. Dense only": {
+     "overall": {
+      "n": 21,
+      "r1": 18,
+      "r1_pct": 85.7,
+      "r5": 19,
+      "r5_pct": 90.5,
+      "r10": 20,
+      "r10_pct": 95.2,
+      "mrr": 0.877
+     },
+     "search type": {
+      "exact word": {
+       "n": 4,
+       "r1": 3,
+       "r1_pct": 75.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.812
+      },
+      "filtered": {
+       "n": 7,
+       "r1": 6,
+       "r1_pct": 85.7,
+       "r5": 6,
+       "r5_pct": 85.7,
+       "r10": 6,
+       "r10_pct": 85.7,
+       "mrr": 0.857
+      },
+      "inside a scan": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "meaning": {
+       "n": 3,
+       "r1": 2,
+       "r1_pct": 66.7,
+       "r5": 2,
+       "r5_pct": 66.7,
+       "r10": 3,
+       "r10_pct": 100.0,
+       "mrr": 0.722
+      },
+      "mixed": {
+       "n": 6,
+       "r1": 6,
+       "r1_pct": 100.0,
+       "r5": 6,
+       "r5_pct": 100.0,
+       "r10": 6,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "file type": {
+      "doc": {
+       "n": 4,
+       "r1": 2,
+       "r1_pct": 50.0,
+       "r5": 3,
+       "r5_pct": 75.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.604
+      },
+      "pdf": {
+       "n": 8,
+       "r1": 8,
+       "r1_pct": 100.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "photo": {
+       "n": 1,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "screenshot": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "slides": {
+       "n": 6,
+       "r1": 6,
+       "r1_pct": 100.0,
+       "r5": 6,
+       "r5_pct": 100.0,
+       "r10": 6,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "public": {
+       "n": 21,
+       "r1": 18,
+       "r1_pct": 85.7,
+       "r5": 19,
+       "r5_pct": 90.5,
+       "r10": 20,
+       "r10_pct": 95.2,
+       "mrr": 0.877
+      }
+     }
+    },
+    "3. CLIP only": {
+     "overall": {
+      "n": 21,
+      "r1": 2,
+      "r1_pct": 9.5,
+      "r5": 3,
+      "r5_pct": 14.3,
+      "r10": 3,
+      "r10_pct": 14.3,
+      "mrr": 0.119
+     },
+     "search type": {
+      "exact word": {
+       "n": 4,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "filtered": {
+       "n": 7,
+       "r1": 1,
+       "r1_pct": 14.3,
+       "r5": 2,
+       "r5_pct": 28.6,
+       "r10": 2,
+       "r10_pct": 28.6,
+       "mrr": 0.214
+      },
+      "inside a scan": {
+       "n": 1,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "meaning": {
+       "n": 3,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "mixed": {
+       "n": 6,
+       "r1": 1,
+       "r1_pct": 16.7,
+       "r5": 1,
+       "r5_pct": 16.7,
+       "r10": 1,
+       "r10_pct": 16.7,
+       "mrr": 0.167
+      }
+     },
+     "file type": {
+      "doc": {
+       "n": 4,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "pdf": {
+       "n": 8,
+       "r1": 1,
+       "r1_pct": 12.5,
+       "r5": 1,
+       "r5_pct": 12.5,
+       "r10": 1,
+       "r10_pct": 12.5,
+       "mrr": 0.125
+      },
+      "photo": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "screenshot": {
+       "n": 2,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 1,
+       "r5_pct": 50.0,
+       "r10": 1,
+       "r10_pct": 50.0,
+       "mrr": 0.25
+      },
+      "slides": {
+       "n": 6,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      }
+     },
+     "set": {
+      "public": {
+       "n": 21,
+       "r1": 2,
+       "r1_pct": 9.5,
+       "r5": 3,
+       "r5_pct": 14.3,
+       "r10": 3,
+       "r10_pct": 14.3,
+       "mrr": 0.119
+      }
+     }
+    },
+    "4. BM25 + dense": {
+     "overall": {
+      "n": 21,
+      "r1": 20,
+      "r1_pct": 95.2,
+      "r5": 20,
+      "r5_pct": 95.2,
+      "r10": 20,
+      "r10_pct": 95.2,
+      "mrr": 0.952
+     },
+     "search type": {
+      "exact word": {
+       "n": 4,
+       "r1": 4,
+       "r1_pct": 100.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "filtered": {
+       "n": 7,
+       "r1": 6,
+       "r1_pct": 85.7,
+       "r5": 6,
+       "r5_pct": 85.7,
+       "r10": 6,
+       "r10_pct": 85.7,
+       "mrr": 0.857
+      },
+      "inside a scan": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "meaning": {
+       "n": 3,
+       "r1": 3,
+       "r1_pct": 100.0,
+       "r5": 3,
+       "r5_pct": 100.0,
+       "r10": 3,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "mixed": {
+       "n": 6,
+       "r1": 6,
+       "r1_pct": 100.0,
+       "r5": 6,
+       "r5_pct": 100.0,
+       "r10": 6,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "file type": {
+      "doc": {
+       "n": 4,
+       "r1": 4,
+       "r1_pct": 100.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "pdf": {
+       "n": 8,
+       "r1": 8,
+       "r1_pct": 100.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "photo": {
+       "n": 1,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "screenshot": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "slides": {
+       "n": 6,
+       "r1": 6,
+       "r1_pct": 100.0,
+       "r5": 6,
+       "r5_pct": 100.0,
+       "r10": 6,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      }
+     },
+     "set": {
+      "public": {
+       "n": 21,
+       "r1": 20,
+       "r1_pct": 95.2,
+       "r5": 20,
+       "r5_pct": 95.2,
+       "r10": 20,
+       "r10_pct": 95.2,
+       "mrr": 0.952
+      }
+     }
+    },
+    "5. All three, CLIP ungated": {
+     "overall": {
+      "n": 21,
+      "r1": 12,
+      "r1_pct": 57.1,
+      "r5": 16,
+      "r5_pct": 76.2,
+      "r10": 18,
+      "r10_pct": 85.7,
+      "mrr": 0.643
+     },
+     "search type": {
+      "exact word": {
+       "n": 4,
+       "r1": 2,
+       "r1_pct": 50.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.675
+      },
+      "filtered": {
+       "n": 7,
+       "r1": 6,
+       "r1_pct": 85.7,
+       "r5": 6,
+       "r5_pct": 85.7,
+       "r10": 6,
+       "r10_pct": 85.7,
+       "mrr": 0.857
+      },
+      "inside a scan": {
+       "n": 1,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "meaning": {
+       "n": 3,
+       "r1": 1,
+       "r1_pct": 33.3,
+       "r5": 2,
+       "r5_pct": 66.7,
+       "r10": 3,
+       "r10_pct": 100.0,
+       "mrr": 0.492
+      },
+      "mixed": {
+       "n": 6,
+       "r1": 3,
+       "r1_pct": 50.0,
+       "r5": 4,
+       "r5_pct": 66.7,
+       "r10": 5,
+       "r10_pct": 83.3,
+       "mrr": 0.554
+      }
+     },
+     "file type": {
+      "doc": {
+       "n": 4,
+       "r1": 3,
+       "r1_pct": 75.0,
+       "r5": 3,
+       "r5_pct": 75.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.786
+      },
+      "pdf": {
+       "n": 8,
+       "r1": 4,
+       "r1_pct": 50.0,
+       "r5": 5,
+       "r5_pct": 62.5,
+       "r10": 6,
+       "r10_pct": 75.0,
+       "mrr": 0.541
+      },
+      "photo": {
+       "n": 1,
+       "r1": 0,
+       "r1_pct": 0.0,
+       "r5": 0,
+       "r5_pct": 0.0,
+       "r10": 0,
+       "r10_pct": 0.0,
+       "mrr": 0.0
+      },
+      "screenshot": {
+       "n": 2,
+       "r1": 2,
+       "r1_pct": 100.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "slides": {
+       "n": 6,
+       "r1": 3,
+       "r1_pct": 50.0,
+       "r5": 6,
+       "r5_pct": 100.0,
+       "r10": 6,
+       "r10_pct": 100.0,
+       "mrr": 0.672
+      }
+     },
+     "set": {
+      "public": {
+       "n": 21,
+       "r1": 12,
+       "r1_pct": 57.1,
+       "r5": 16,
+       "r5_pct": 76.2,
+       "r10": 18,
+       "r10_pct": 85.7,
+       "mrr": 0.643
+      }
+     }
+    },
+    "7. All three, gated, no every-word list": {
+     "overall": {
+      "n": 21,
+      "r1": 17,
+      "r1_pct": 81.0,
+      "r5": 21,
+      "r5_pct": 100.0,
+      "r10": 21,
+      "r10_pct": 100.0,
+      "mrr": 0.905
+     },
+     "search type": {
+      "exact word": {
+       "n": 4,
+       "r1": 3,
+       "r1_pct": 75.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 0.875
+      },
+      "filtered": {
+       "n": 7,
+       "r1": 7,
+       "r1_pct": 100.0,
+       "r5": 7,
+       "r5_pct": 100.0,
+       "r10": 7,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "inside a scan": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "meaning": {
+       "n": 3,
+       "r1": 3,
+       "r1_pct": 100.0,
+       "r5": 3,
+       "r5_pct": 100.0,
+       "r10": 3,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "mixed": {
+       "n": 6,
+       "r1": 3,
+       "r1_pct": 50.0,
+       "r5": 6,
+       "r5_pct": 100.0,
+       "r10": 6,
+       "r10_pct": 100.0,
+       "mrr": 0.75
+      }
+     },
+     "file type": {
+      "doc": {
+       "n": 4,
+       "r1": 4,
+       "r1_pct": 100.0,
+       "r5": 4,
+       "r5_pct": 100.0,
+       "r10": 4,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "pdf": {
+       "n": 8,
+       "r1": 6,
+       "r1_pct": 75.0,
+       "r5": 8,
+       "r5_pct": 100.0,
+       "r10": 8,
+       "r10_pct": 100.0,
+       "mrr": 0.875
+      },
+      "photo": {
+       "n": 1,
+       "r1": 1,
+       "r1_pct": 100.0,
+       "r5": 1,
+       "r5_pct": 100.0,
+       "r10": 1,
+       "r10_pct": 100.0,
+       "mrr": 1.0
+      },
+      "screenshot": {
+       "n": 2,
+       "r1": 1,
+       "r1_pct": 50.0,
+       "r5": 2,
+       "r5_pct": 100.0,
+       "r10": 2,
+       "r10_pct": 100.0,
+       "mrr": 0.75
+      },
+      "slides": {
+       "n": 6,
+       "r1": 5,
+       "r1_pct": 83.3,
+       "r5": 6,
+       "r5_pct": 100.0,
+       "r10": 6,
+       "r10_pct": 100.0,
+       "mrr": 0.917
+      }
+     },
+     "set": {
+      "public": {
+       "n": 21,
+       "r1": 17,
+       "r1_pct": 81.0,
+       "r5": 21,
+       "r5_pct": 100.0,
+       "r10": 21,
+       "r10_pct": 100.0,
+       "mrr": 0.905
+      }
+     }
+    }
+   },
+   "divider": {
+    "median_above": 9,
+    "all_correct_above": 20,
+    "of": 21,
+    "set": {
+     "public": {
+      "median_above": 9,
+      "all_correct_above": 20,
+      "of": 21
+     }
+    }
+   },
+   "latency_ms": {
+    "p50": 101.6,
+    "p95": 145.8
+   },
+   "queries": [
+    {
+     "id": "c01",
+     "split": "coverage",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "who books the seminar room and by when",
+     "relevant": [
+      "corpus/notes/meeting notes 2026-10-14.docx"
+     ],
+     "file_type": "doc",
+     "rank": 1,
+     "above_divider": 11,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 6
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 6,
+      "clip": null
+     }
+    },
+    {
+     "id": "c02",
+     "split": "coverage",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "which beach do we visit on day 3 of the Goa trip",
+     "relevant": [
+      "corpus/notes/travel plan goa.docx"
+     ],
+     "file_type": "doc",
+     "rank": 1,
+     "above_divider": 21,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "c03",
+     "split": "coverage",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "spice farm lunch and ferry back before dark",
+     "relevant": [
+      "corpus/notes/travel plan goa.docx"
+     ],
+     "file_type": "doc",
+     "rank": 1,
+     "above_divider": 9,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 4
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 4,
+      "clip": null
+     }
+    },
+    {
+     "id": "c04",
+     "split": "coverage",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "singular values are the square roots of the eigenvalues of A transpose A",
+     "relevant": [
+      "corpus/decks/Linear algebra review.pptx"
+     ],
+     "file_type": "slides",
+     "rank": 2,
+     "above_divider": 27,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "c05",
+     "split": "coverage",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "office hours on Tuesday afternoon",
+     "relevant": [
+      "corpus/decks/ML lecture v1.pptx"
+     ],
+     "file_type": "slides",
+     "rank": 1,
+     "above_divider": 11,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "c06",
+     "split": "coverage",
+     "search_type": "exact word",
+     "set": "public",
+     "query": "cross-entropy loss for classification",
+     "relevant": [
+      "corpus/decks/ML lecture v2.pptx"
+     ],
+     "file_type": "slides",
+     "rank": 1,
+     "above_divider": 14,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "c07",
+     "split": "coverage",
+     "search_type": "meaning",
+     "set": "public",
+     "query": "compress a matrix by keeping only the largest singular values",
+     "relevant": [
+      "corpus/decks/Linear algebra review.pptx",
+      "corpus/papers/matrix-decompositions.pdf"
+     ],
+     "file_type": "slides",
+     "rank": 1,
+     "above_divider": 24,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "c08",
+     "split": "coverage",
+     "search_type": "filtered",
+     "set": "public",
+     "query": "slides on gradient descent",
+     "relevant": [
+      "corpus/decks/ML lecture v1.pptx",
+      "corpus/decks/ML lecture v2.pptx"
+     ],
+     "file_type": "slides",
+     "rank": 1,
+     "above_divider": 2,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "c09",
+     "split": "coverage",
+     "search_type": "filtered",
+     "set": "public",
+     "query": "pdf about the Adam optimizer",
+     "relevant": [
+      "corpus/papers/1412.6980.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 3,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 3,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 3,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "c10",
+     "split": "coverage",
+     "search_type": "filtered",
+     "set": "public",
+     "query": "screenshot of the interview schedule email",
+     "relevant": [
+      "corpus/screenshots/phone/Screenshot_20261014-090000_Mail.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 1,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 2
+     }
+    },
+    {
+     "id": "c11",
+     "split": "coverage",
+     "search_type": "filtered",
+     "set": "public",
+     "query": "photo of the moon",
+     "relevant": [
+      "corpus/photos/IMG_20260924_221145.jpg"
+     ],
+     "file_type": "photo",
+     "rank": 1,
+     "above_divider": 2,
+     "all_correct_above": true,
+     "found_by": {
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": null,
+      "dense": null,
+      "clip": 1
+     }
+    },
+    {
+     "id": "c12",
+     "split": "coverage",
+     "search_type": "filtered",
+     "set": "public",
+     "query": "deck about eigenvalues and eigenvectors",
+     "relevant": [
+      "corpus/decks/Linear algebra review.pptx"
+     ],
+     "file_type": "slides",
+     "rank": 1,
+     "above_divider": 1,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "c13",
+     "split": "coverage",
+     "search_type": "filtered",
+     "set": "public",
+     "query": "pdf with the electricity amount due",
+     "relevant": [
+      "corpus/receipts/electricity-bill-october.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 7,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "c14",
+     "split": "coverage",
+     "search_type": "filtered",
+     "set": "public",
+     "query": "docs about the project sync",
+     "relevant": [
+      "corpus/notes/meeting notes 2026-10-14.docx"
+     ],
+     "file_type": "doc",
+     "rank": 1,
+     "above_divider": 7,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "c15",
+     "split": "coverage",
+     "search_type": "mixed",
+     "set": "public",
+     "query": "train 12345 arrival time in Madgaon",
+     "relevant": [
+      "corpus/receipts/ticket-2026-10-24.pdf",
+      "corpus/notes/travel plan goa.docx"
+     ],
+     "file_type": "pdf",
+     "rank": 2,
+     "above_divider": 15,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "c16",
+     "split": "coverage",
+     "search_type": "mixed",
+     "set": "public",
+     "query": "coach B2 berth numbers for our trip",
+     "relevant": [
+      "corpus/receipts/ticket-2026-10-24.pdf",
+      "corpus/screenshots/phone/Screenshot_20261012-080102_Messages.png"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 1,
+     "all_correct_above": false,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 1
+     }
+    },
+    {
+     "id": "c17",
+     "split": "coverage",
+     "search_type": "mixed",
+     "set": "public",
+     "query": "Room 4B interview what to bring",
+     "relevant": [
+      "corpus/screenshots/phone/Screenshot_20261014-090000_Mail.png"
+     ],
+     "file_type": "screenshot",
+     "rank": 1,
+     "above_divider": 9,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": 17
+     }
+    },
+    {
+     "id": "c18",
+     "split": "coverage",
+     "search_type": "mixed",
+     "set": "public",
+     "query": "212 kWh units consumed on the bill",
+     "relevant": [
+      "corpus/receipts/electricity-bill-october.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 8,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "all_terms": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "c19",
+     "split": "coverage",
+     "search_type": "mixed",
+     "set": "public",
+     "query": "Q(s a) update rule in reinforcement learning",
+     "relevant": [
+      "corpus/slides-pdf/slides-export-rl.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 30,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "c20",
+     "split": "coverage",
+     "search_type": "mixed",
+     "set": "public",
+     "query": "HACKATHON 2026 registration deadline and prize",
+     "relevant": [
+      "corpus/slides-pdf/poster-hackathon.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 2,
+     "above_divider": 30,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    },
+    {
+     "id": "c21",
+     "split": "coverage",
+     "search_type": "inside a scan",
+     "set": "public",
+     "query": "max pooling over a 2 x 2 window halves the feature map",
+     "relevant": [
+      "corpus/slides-pdf/lecture-slides-cnn.pdf"
+     ],
+     "file_type": "pdf",
+     "rank": 1,
+     "above_divider": 48,
+     "all_correct_above": true,
+     "found_by": {
+      "bm25": 1,
+      "dense": 1
+     },
+     "single_method_rank": {
+      "bm25": 1,
+      "dense": 1,
+      "clip": null
+     }
+    }
+   ]
+  }
+ },
+ "section9": {
+  "queries": {
+   "owner": 44,
+   "generated": 32,
+   "coverage": 21
+  },
+  "exact (exact word)": {
+   "owner": 9,
+   "generated": 8,
+   "coverage": 4
+  },
+  "semantic (meaning)": {
+   "owner": 19,
+   "generated": 10,
+   "coverage": 3
+  },
+  "visual (picture)": {
+   "owner": 10,
+   "generated": 6,
+   "coverage": 0
+  },
+  "filtered (kind words)": {
+   "owner": 0,
+   "generated": 0,
+   "coverage": 7
+  },
+  "mixed": {
+   "owner": 0,
+   "generated": 0,
+   "coverage": 6
+  },
+  "inside a scan (the owner's type, not in §9)": {
+   "owner": 6,
+   "generated": 8,
+   "coverage": 1
+  },
+  "a .docx or .pptx correct file": {
+   "owner": 0,
+   "generated": 2,
+   "coverage": 11
+  },
+  "a tall screenshot correct file": {
+   "owner": 0,
+   "generated": 5,
+   "coverage": 3
+  },
+  "a PDF correct file with text inside an image on a page": {
+   "owner": 2,
+   "generated": 0,
+   "coverage": 3
+  }
+ }
+}

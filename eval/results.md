@@ -42,6 +42,68 @@ Each run that touched the held-out half, in the order of `eval/heldout_runs.json
 
 <!-- /held-out runs -->
 
+<!-- coverage queries: written by vault eval -->
+## Coverage queries (21 queries about the generated files)
+
+Run 2026-10-20T01:20:25 at commit e33e85b, logged as `coverage`; full report in [`results_coverage.md`](results_coverage.md). Written from the generated files' contents before any search, for the §9 coverage the owner's 44 queries don't aim at: Word and PowerPoint files, kind words (filtered) and mixed queries (an exact number, code or name with words about the content). Nothing was tuned on them.
+
+| App, overall and by search type | n | R@1 | R@5 | R@10 | MRR@10 |
+|---|---|---|---|---|---|
+| all | 21 | 18/21 (86%) | 21/21 (100%) | 21/21 (100%) | 0.929 |
+| exact word | 4 | 3/4 (75%) | 4/4 (100%) | 4/4 (100%) | 0.875 |
+| filtered | 7 | 7/7 (100%) | 7/7 (100%) | 7/7 (100%) | 1.000 |
+| inside a scan | 1 | 1/1 (100%) | 1/1 (100%) | 1/1 (100%) | 1.000 |
+| meaning | 3 | 3/3 (100%) | 3/3 (100%) | 3/3 (100%) | 1.000 |
+| mixed | 6 | 4/6 (67%) | 6/6 (100%) | 6/6 (100%) | 0.833 |
+
+| App, by file type of the first correct file | n | R@1 | R@5 | R@10 | MRR@10 |
+|---|---|---|---|---|---|
+| doc | 4 | 4/4 (100%) | 4/4 (100%) | 4/4 (100%) | 1.000 |
+| pdf | 8 | 6/8 (75%) | 8/8 (100%) | 8/8 (100%) | 0.875 |
+| photo | 1 | 1/1 (100%) | 1/1 (100%) | 1/1 (100%) | 1.000 |
+| screenshot | 2 | 2/2 (100%) | 2/2 (100%) | 2/2 (100%) | 1.000 |
+| slides | 6 | 5/6 (83%) | 6/6 (100%) | 6/6 (100%) | 0.917 |
+
+| id | search type | query | correct file type | rank |
+|---|---|---|---|---|
+| c01 | meaning | who books the seminar room and by when | doc | 1 |
+| c02 | meaning | which beach do we visit on day 3 of the Goa trip | doc | 1 |
+| c03 | exact word | spice farm lunch and ferry back before dark | doc | 1 |
+| c04 | exact word | singular values are the square roots of the eigenvalues of A transpose A | slides | 2 |
+| c05 | exact word | office hours on Tuesday afternoon | slides | 1 |
+| c06 | exact word | cross-entropy loss for classification | slides | 1 |
+| c07 | meaning | compress a matrix by keeping only the largest singular values | slides | 1 |
+| c08 | filtered | slides on gradient descent | slides | 1 |
+| c09 | filtered | pdf about the Adam optimizer | pdf | 1 |
+| c10 | filtered | screenshot of the interview schedule email | screenshot | 1 |
+| c11 | filtered | photo of the moon | photo | 1 |
+| c12 | filtered | deck about eigenvalues and eigenvectors | slides | 1 |
+| c13 | filtered | pdf with the electricity amount due | pdf | 1 |
+| c14 | filtered | docs about the project sync | doc | 1 |
+| c15 | mixed | train 12345 arrival time in Madgaon | pdf | 2 |
+| c16 | mixed | coach B2 berth numbers for our trip | pdf | 1 |
+| c17 | mixed | Room 4B interview what to bring | screenshot | 1 |
+| c18 | mixed | 212 kWh units consumed on the bill | pdf | 1 |
+| c19 | mixed | Q(s a) update rule in reinforcement learning | pdf | 1 |
+| c20 | mixed | HACKATHON 2026 registration deadline and prize | pdf | 2 |
+| c21 | inside a scan | max pooling over a 2 x 2 window halves the feature map | pdf | 1 |
+
+**§9 coverage, by query set** (the owner's 44 deliberately cover the owner's four search types; the rest comes from the generated files):
+
+| queries with | owner's | generated | coverage | all | §9 asks |
+|---|---|---|---|---|---|
+| queries | 44 | 32 | 21 | 97 | ≥ 40 |
+| exact (exact word) | 9 | 8 | 4 | 21 | ≥ 6 |
+| semantic (meaning) | 19 | 10 | 3 | 32 | ≥ 6 |
+| visual (picture) | 10 | 6 | 0 | 16 | ≥ 6 |
+| filtered (kind words) | 0 | 0 | 7 | 7 | ≥ 6 |
+| mixed | 0 | 0 | 6 | 6 | ≥ 6 |
+| inside a scan (the owner's type, not in §9) | 6 | 8 | 1 | 15 | – |
+| a .docx or .pptx correct file | 0 | 2 | 11 | 13 | ≥ 6 |
+| a tall screenshot correct file | 0 | 5 | 3 | 8 | ≥ 3 |
+| a PDF correct file with text inside an image on a page | 2 | 0 | 3 | 5 | ≥ 3 |
+<!-- /coverage queries -->
+
 ## Final vs post-z
 
 The final run 2026-10-19T17:04:07 at commit 6d4c860; this run 2026-10-19T23:38:29 at commit ef51e68.
