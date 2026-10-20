@@ -6,7 +6,8 @@ looks at what is in each picture, using three small models that run on the CPU. 
 
 **Live demo:** https://swarup-vault.indiasouthcentral.cloudapp.azure.com/ searches 71 sample files: 52 generated
 ones and 19 of the author's own. You can add your own files to search them alongside; they stay on the demo server,
-are kept only for your session and are deleted 60 minutes after your last search or upload.
+are kept only for your session: delete them any time with Delete my uploads, otherwise they're deleted 60
+minutes after your last search or upload.
 
 **Source:** https://github.com/swarup0077/cortex-vault (AGPL-3.0; the demo's footer links here).
 
@@ -181,7 +182,8 @@ ones, which are OCR'd page by page): text and Word 5.2, PowerPoint 8.8, PDF 0.20
 - **No cloud calls.** No file, text or query is sent to any service. The app doesn't log queries, in either mode;
   recent searches are kept in your browser only.
 - **The demo's rules:** at most 5 upload sessions at once; per session 200 files, 500 MB in total and 50 MB per file;
-  uploads are deleted 60 minutes after the session's last search or upload. Files are served by database id or
+  uploads are deleted at once with Delete my uploads (overwritten, then removed: the files, the session's index
+  copy and thumbnails), or 60 minutes after the session's last search or upload. Files are served by database id or
   session id only, never by a path a visitor supplies. A session is created only by an upload, never by visiting or
   searching. The demo's 19 real files were checked for personal data before they were added, and images carrying GPS
   data are refused when the demo index is built.
@@ -281,6 +283,6 @@ Cortex Vault was built between 16 and 19 October 2026 from [SPEC.md](SPEC.md), t
 milestone per session,
 with [Claude Code](https://claude.com/claude-code): M0 scaffold and deploy probe, M1 text pipeline, M2 OCR, M3
 photos, CLIP and metadata, M4 UI and first deploy, M5 speed and visual polish, M6 real files and the evaluation.
-Each change came with a test on generated files (527 tests today), and every threshold was first calibrated on
+Each change came with a test on generated files (541 tests today), and every threshold was first calibrated on
 generated data with a script in [`bench/`](bench/README.md), marked provisional, and tuned only on the tuning half
 of the evaluation queries. The decisions, with what was measured and why, are logged in SPEC §19.
