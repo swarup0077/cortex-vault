@@ -21,7 +21,7 @@ from vault.demo import build_demo
 from vault.library import Library, Recent
 from vault.search.engine import SearchResponse, SearchResult
 from vault.search.parse import ParsedQuery
-from vault.session import FileStatus, SessionManager, UploadResult
+from vault.session import COOKIE, FileStatus, SessionManager, UploadResult
 from vault.ui import layout, views
 from vault.ui.layout import UiContext, build_blocks
 from vault.ui.server import HEAD, STATIC, make_app
@@ -163,12 +163,12 @@ def test_type_of_splits_plain_text_from_documents() -> None:
 
 def test_detail_rows_show_each_method_with_its_real_rank() -> None:
     r = result(1, ranks={"bm25": 1, "dense": 37}, weaker=True)
-    tpl = views.preview(r, response([r]), DEMO, place, None, 15)
+    tpl = views.preview(r, response([r]), DEMO, place, 15)
     assert "Result 15 / Screenshot" in tpl
     assert re.findall(r'cv-detail__method"><span>([^<]+)</span><b>rank (\d+)', tpl) == [("exact words", "1"),
                                                                                        ("meaning", "37")]
     assert "Download" in tpl and "Extracted text" in tpl and "OCR, on this server" in tpl
-    assert "Open" in views.preview(r, response([r]), LOCAL, place, None, 1)
+    assert "Open" in views.preview(r, response([r]), LOCAL, place, 1)
 
 
 def test_each_preview_copy_is_keyed_by_file_id_and_the_render() -> None:
@@ -226,11 +226,12 @@ def test_text_read_by_and_size() -> None:
 
 def test_copy_link_and_every_url_carry_ids_never_paths() -> None:
     r = result(7, paths=["C:/Users/me/secret folder/shot 7.png"])
-    page = views.results(response([r]), DEMO, place, query="access denied", session=str(uuid.uuid4()))
+    page = views.results(response([r]), DEMO, place, query="access denied")
     assert re.search(r'data-link="([^"]+)"', page).group(1) == "?q=access+denied&amp;r=7"
-    for attr in ("data-link", "data-open", "data-detail", "src"):
+    for attr in ("data-link", "data-open", "data-detail", "src", "data-src"):
         for value in re.findall(rf'{attr}="([^"]*)"', page):
             assert "secret" not in value and "Users" not in value and "C:" not in value
+            assert "s=" not in html.unescape(value).replace("?q=", "?").replace("&q=", "&"), value  # no session
 
 
 # ---------------------------------------------------------------- wording per mode
@@ -314,23 +315,43 @@ def upload(ctx: UiContext, files: dict[str, str], sid=None):
     return status, sid
 
 
+def app_for(ctx: UiContext):
+    return make_app(build_blocks(ctx), ctx.resolve, demo=ctx.demo, sessions=ctx.sessions)
+
+
+def browser(app, token: str | None = None) -> TestClient:
+    """A browser: its own cookie jar (HTTPS, so the Secure cookie is sent), holding `token` if given."""
+    return TestClient(app, base_url="https://testserver", cookies={COOKIE: token} if token else None)
+
+
+def token_for(ctx: UiContext, sid: str) -> str:
+    """What the session's page does after its first upload: trade the ticket for the cookie's token."""
+    token = ctx.sessions.claim(ctx.sessions.ticket(sid))
+    assert token
+    return token
+
+
 def test_file_route_sends_attachments_and_refuses_anything_path_like(demo_ctx) -> None:
-    client = TestClient(make_app(build_blocks(demo_ctx), demo_ctx.resolve, demo=True))
+    client = TestClient(app_for(demo_ctx))
     pdf = demo_ctx.library.search("diffusion").results[0]
     r = client.get(f"/file/{pdf.file_id}")
     assert r.status_code == 200 and r.headers["content-type"] == "application/pdf"
     assert r.headers["content-disposition"].startswith("attachment") and "diffusion.pdf" in \
         r.headers["content-disposition"]
     for bad in ("/file/999999", "/file/-1", "/file/1.0", "/file/1e3", "/file/%2e%2e", "/file/C:%5Cwindows",
-                "/file/..%2F..%2Fvault.db", "/file/1?s=not-a-session", f"/file/1?s={uuid.uuid4()}"):
+                "/file/..%2F..%2Fvault.db"):
         assert client.get(bad).status_code == 404, bad
+    assert client.get(f"/file/{pdf.file_id}?s={uuid.uuid4()}").content == r.content  # a URL never names a session
 
 
 def test_another_sessions_upload_is_a_404_not_a_403(demo_ctx) -> None:
-    """Session A has two uploads, session B one: A's second file id doesn't exist in B's index."""
-    client = TestClient(make_app(build_blocks(demo_ctx), demo_ctx.resolve, demo=True))
+    """Session A has two uploads, session B one: A's second file id doesn't exist in B's index. A browser reaches
+    only its own session's files, by its cookie: no URL names a session, and a forged cookie is no one's."""
+    app = app_for(demo_ctx)
     _, a = upload(demo_ctx, {"one.txt": "Robotics club budget.", "two.txt": "Robotics club minutes, October."})
     _, b = upload(demo_ctx, {"other.txt": "A recipe for flatbread."})
+    alice, bob = browser(app, token_for(demo_ctx, a)), browser(app, token_for(demo_ctx, b))
+    nobody, forger = browser(app), browser(app, "forged-" + uuid.uuid4().hex)
     lib_a = demo_ctx.session(a).library
     ids_a = {r.filename: r.file_id for r in lib_a.search("robotics club", roots=[demo_ctx.session(a).root]).results}
     with demo_ctx.session(b).library.connect() as conn:
@@ -338,17 +359,19 @@ def test_another_sessions_upload_is_a_404_not_a_403(demo_ctx) -> None:
     only_a = [i for i in ids_a.values() if i not in ids_b]
     assert only_a, "the test needs a file id that only session A has"
     for fid in only_a:
-        assert client.get(f"/file/{fid}?s={a}").status_code == 200
+        assert alice.get(f"/file/{fid}").status_code == 200 and alice.get(f"/detail/{fid}").status_code == 200
         for route in ("file", "thumb", "preview", "detail"):
-            assert client.get(f"/{route}/{fid}?s={b}").status_code == 404
-            assert client.get(f"/{route}/{fid}").status_code == 404  # and not without a session either
+            assert bob.get(f"/{route}/{fid}").status_code == 404
+            assert nobody.get(f"/{route}/{fid}").status_code == 404  # and not without a session either
+            assert nobody.get(f"/{route}/{fid}?s={a}").status_code == 404  # nor by naming it in the URL
+            assert forger.get(f"/{route}/{fid}").status_code == 404
     for fid in ids_a.values():  # an id both have is B's own file through B's session: never A's content
-        r = client.get(f"/file/{fid}?s={b}")
+        r = bob.get(f"/file/{fid}")
         assert r.status_code == 404 or b"Robotics" not in r.content
 
 
 def test_detail_route_returns_boxes_and_text_as_json(demo_ctx) -> None:
-    client = TestClient(make_app(build_blocks(demo_ctx), demo_ctx.resolve, demo=True))
+    client = TestClient(app_for(demo_ctx))
     hit = demo_ctx.library.search("denoising diffusion").results[0]
     data = client.get(f"/detail/{hit.file_id}?chunk={hit.chunk_id}&page=1&q=denoising+diffusion").json()
     assert data["text"].startswith("Denoising diffusion") and data["boxes"]
@@ -377,7 +400,7 @@ def test_the_stylesheet_and_script_urls_change_with_their_content(demo_ctx, tmp_
     before = server.asset("a.js", tmp_path)
     (tmp_path / "a.js").write_text("two", encoding="utf-8")
     assert before.startswith("/cv/a.js?v=") and server.asset("a.js", tmp_path) != before
-    client = TestClient(make_app(build_blocks(demo_ctx), demo_ctx.resolve, demo=True))
+    client = TestClient(app_for(demo_ctx))
     page = client.get("/")
     assert page.status_code == 200
     assert server.asset("cortex.js") in page.text and server.asset("cortex.css") in page.text
@@ -465,14 +488,14 @@ def test_upload_report_then_scopes(demo_ctx) -> None:
     mine = layout.run_search(demo_ctx, sid, "diffusion", "My uploads")
     samples = layout.run_search(demo_ctx, sid, "diffusion", "Samples")
     assert "minutes.txt" in mine and "diffusion.pdf" not in mine.split("Weaker matches")[0]
-    assert "diffusion.pdf" in samples and "minutes.txt" not in samples and f"s={sid}" in mine
+    assert "diffusion.pdf" in samples and "minutes.txt" not in samples and sid not in mine
 
 
 def test_the_bar_reports_listing_then_reading_with_real_counts(demo_ctx, monkeypatch) -> None:
     """The upload bar's server stages (SPEC §8): "Listing" as soon as the server has the files (no count until it
     knows one), the per-file report once they're listed, "Reading N of M" with real counts, then done. The upload
     never renders the main part, so results on screen don't move."""
-    def slow(session, files, upload_dir, progress, on_listed=None):
+    def slow(session, files, upload_dir, progress, on_listed=None, on_created=None):
         statuses = [FileStatus(Path(f).name, "indexed") for f in files]
         for i, f in enumerate(files):
             progress(i, len(files), str(f), phase="list")
@@ -502,14 +525,14 @@ def test_a_search_runs_and_returns_while_an_upload_is_being_read(demo_ctx, monke
     reading, searched = threading.Event(), threading.Event()
     real = demo_ctx.sessions.add_files
 
-    def held(session, files, upload_dir, progress=None, on_listed=None):
+    def held(session, files, upload_dir, progress=None, on_listed=None, on_created=None):
         def hold(done, total, path, phase="read"):
             if progress:
                 progress(done, total, path, phase=phase)
             if phase == "read" and not reading.is_set():
                 reading.set()
                 assert searched.wait(30)
-        return real(session, files, upload_dir, hold, on_listed)
+        return real(session, files, upload_dir, hold, on_listed, on_created)
 
     monkeypatch.setattr(demo_ctx.sessions, "add_files", held)
     steps: list = []
@@ -522,6 +545,10 @@ def test_a_search_runs_and_returns_while_an_upload_is_being_read(demo_ctx, monke
         started = time.monotonic()
         page = layout.run_search(demo_ctx, sid, "servo budget", "My uploads")
         assert "robotics minutes.txt" in page and time.monotonic() - started < 10
+        # Held until the bar has said "Reading" too: a status takes longer to build than this search (16 ms here)
+        deadline = time.monotonic() + 10
+        while not any('data-stage="read"' in st for st, _ in list(steps)) and time.monotonic() < deadline:
+            time.sleep(0.01)
     finally:
         searched.set()
         worker.join(30)
@@ -548,7 +575,7 @@ def test_the_server_logs_no_queries_in_either_mode(demo_ctx, tmp_path, make_sear
     browser."""
     caplog.set_level(logging.DEBUG)  # every logger, every level
     secret = "quokka zebra 7731 diffusion"
-    client = TestClient(make_app(build_blocks(demo_ctx), demo_ctx.resolve, demo=True))
+    client = TestClient(app_for(demo_ctx))
     hit = demo_ctx.library.search("denoising diffusion").results[0]
     layout.run_search(demo_ctx, None, secret)
     client.get(f"/detail/{hit.file_id}?chunk={hit.chunk_id}&q=" + secret.replace(" ", "+"))
@@ -601,16 +628,17 @@ def test_folders_panel_handlers(tmp_path, fake_embedder, make_search_corpus) -> 
 
 def test_opening_or_searching_the_page_never_creates_a_session(demo_ctx) -> None:
     """Owner's rule (19 Oct): only the first accepted upload creates a session, so crawlers can't use up the slots."""
-    client = TestClient(make_app(build_blocks(demo_ctx), demo_ctx.resolve, demo=True))
+    client = TestClient(app_for(demo_ctx))
     assert client.get("/?q=diffusion").status_code == 200
     layout.home_html(demo_ctx, None)
     layout.status_html(demo_ctx, None)
     layout.run_search(demo_ctx, None, "denoising diffusion")
     layout.run_search(demo_ctx, None, "denoising diffusion", "My uploads")
     for route in ("thumb", "preview", "detail", "file"):
-        client.get(f"/{route}/1?s={uuid.uuid4()}")
-    *_, (_, sid) = layout.handle_upload(demo_ctx, None, [gradio_file(demo_ctx, "notes.zip", "not supported")])
-    assert sid is None and demo_ctx.sessions.sessions == {}
+        assert "set-cookie" not in client.get(f"/{route}/1?s={uuid.uuid4()}").headers
+    assert "set-cookie" not in client.get("/").headers
+    *_, (status, sid) = layout.handle_upload(demo_ctx, None, [gradio_file(demo_ctx, "notes.zip", "not supported")])
+    assert sid is None and demo_ctx.sessions.sessions == {} and "data-claim" not in status  # no cookie to claim
 
 
 def test_with_all_sessions_open_uploads_say_busy_and_search_still_works(demo_ctx) -> None:
@@ -686,57 +714,264 @@ def test_delete_my_uploads_shows_only_in_demo_mode_with_uploads(demo_ctx, tmp_pa
     assert "Delete my uploads" not in views.Mode(demo=False).private_note
 
 
-@pytest.mark.filterwarnings("ignore:'future.no_silent_downcasting' is deprecated")  # Gradio's queue, in-process
-@pytest.mark.filterwarnings("ignore:The copy keyword is deprecated")
-def test_a_request_cannot_name_another_session(demo_ctx) -> None:
-    """The session to delete is the page's server-side state: a second visitor's delete event, whatever its data
-    says, can't reach the first visitor's session, and no route takes a session id for deleting."""
-    import socket
-    import threading
-    import time as time_mod
+# ---------------------------------------------------------------- the session cookie (owner, 20 Oct: v1.1.0)
 
-    import httpx
+
+def claim_ticket(status: str) -> str:
+    """The one-time ticket the page that made the session is given, as cortex.js reads it."""
+    found = re.search(r'data-claim="([^"]+)"', status)
+    assert found, "no ticket in the status"
+    return html.unescape(found.group(1))
+
+
+def cookie_parts(header: str) -> tuple[str, dict[str, str]]:
+    first, *attrs = [p.strip() for p in header.split(";")]
+    name, _, value = first.partition("=")
+    assert name == COOKIE
+    return value, {a.partition("=")[0].lower(): a.partition("=")[2] for a in attrs}
+
+
+def test_the_cookie_is_set_only_by_its_claim_from_this_site(demo_ctx, tmp_path, fake_embedder) -> None:
+    """The first accepted upload's page trades its ticket for the cookie: HttpOnly, Secure, SameSite=Strict, the
+    whole app, a random token of at least 128 bits. Once only, and only from this site's own page."""
+    app = app_for(demo_ctx)
+    status, sid = upload(demo_ctx, {"one.txt": "quokka field notes"})
+    ticket = claim_ticket(status)
+    c = browser(app)
+    good = {"Origin": "https://testserver"}
+    as_json = {"Content-Type": "application/json"}
+    for headers, body in (({"Origin": "https://evil.example", **as_json}, json.dumps({"ticket": ticket})),
+                          ({"Sec-Fetch-Site": "cross-site", **as_json}, json.dumps({"ticket": ticket})),
+                          ({"Content-Type": "application/x-www-form-urlencoded"}, f"ticket={ticket}"),
+                          ({"Content-Type": "text/plain"}, json.dumps({"ticket": ticket}))):
+        r = c.post("/session/claim", headers=headers, content=body)
+        assert r.status_code == 403 and "set-cookie" not in r.headers, headers
+    assert demo_ctx.sessions.ticket(sid) == ticket  # still unused
+    for content in (b"not json", b"[1]"):
+        r = c.post("/session/claim", content=content, headers={**good, **as_json})
+        assert r.status_code in (400, 404) and "set-cookie" not in r.headers
+    big = json.dumps({"ticket": ticket, "pad": "x" * 2000})
+    assert c.post("/session/claim", content=big, headers={**good, **as_json}).status_code == 413
+    r = c.post("/session/claim", json={"ticket": ticket}, headers=good)
+    assert r.status_code == 204
+    token, attrs = cookie_parts(r.headers["set-cookie"])
+    assert {"httponly", "secure", "path", "samesite"} <= set(attrs) and attrs["path"] == "/"
+    assert attrs["samesite"].lower() == "strict" and "max-age" not in attrs and "expires" not in attrs
+    assert len(token) >= 22 and demo_ctx.sessions.by_token(token) == sid  # 22 url-safe base64 characters: 132 bits
+    again = c.post("/session/claim", json={"ticket": ticket}, headers=good)
+    assert again.status_code == 404 and "set-cookie" not in again.headers  # once only
+    assert "data-claim" not in layout.status_html(demo_ctx, sid)
+    local = TestClient(make_app(build_blocks(UiContext("local", Library(Config(data_dir=tmp_path / "loc")))),
+                                lambda _: None, demo=False), base_url="https://testserver")
+    assert local.post("/session/claim", json={"ticket": ticket}, headers=good).status_code in (404, 405)
+
+
+@pytest.fixture
+def served_demo(demo_ctx):
+    """The demo app on a free port, reached the way a browser does: Gradio's queue, then the event's stream."""
+    import socket
+
     import uvicorn
 
-    import app
+    import app as app_module
 
+    with socket.socket() as s:
+        s.bind((app_module.HOST, 0))
+        port = s.getsockname()[1]
+    server = uvicorn.Server(app_module.server_config(app_for(demo_ctx), port))
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 30
+    while not server.started and time.monotonic() < deadline:
+        time.sleep(0.05)
+    yield f"http://{app_module.HOST}:{port}"
+    server.should_exit = True
+    thread.join(15)
+
+
+class Browser:
+    """One browser: a cookie jar its tabs share (each tab a Gradio session hash). It sends events the way the page
+    does, and the page's two fetches to the session routes. Served over plain HTTP here, so the jar is kept by hand
+    (an HTTP client won't send a Secure cookie over HTTP)."""
+
+    def __init__(self, base: str, token: str | None = None) -> None:
+        import httpx
+
+        self.http = httpx
+        self.base = base
+        self.token = token
+        self.config = httpx.get(f"{base}/config").json()
+
+    def headers(self) -> dict[str, str]:
+        return {"Cookie": f"{COOKIE}={self.token}"} if self.token else {}
+
+    def event(self, kind: str, event_data: dict | None = None, tab: str = "tab0000001") -> str:
+        """Every message of one event, as text: `kind` is "load", "search", "upload" or "click"."""
+        trigger = {"load": "load", "search": "submit", "upload": "upload", "click": "click"}[kind]
+        dep = next(d for d in self.config["dependencies"] if any(t[1] == trigger for t in d["targets"]))
+        target = next(t[0] for t in dep["targets"] if t[1] == trigger)
+        self.http.post(f"{self.base}/gradio_api/queue/join", headers=self.headers(),
+                       json={"data": [], "event_data": event_data, "fn_index": dep["id"], "trigger_id": target,
+                             "session_hash": tab}).raise_for_status()
+        messages = []
+        with self.http.stream("GET", f"{self.base}/gradio_api/queue/data", params={"session_hash": tab},
+                              headers=self.headers(), timeout=60) as stream:
+            for line in stream.iter_lines():
+                msg = json.loads(line[5:]) if line.startswith("data:") else {}
+                messages.append(msg)
+                if msg.get("msg") == "process_completed":
+                    assert msg.get("success"), msg
+                    break
+        return html.unescape(json.dumps(messages, ensure_ascii=False))
+
+    def route(self, path: str, body: dict | None = None):
+        r = self.http.post(f"{self.base}{path}", json=body or {}, headers={**self.headers(), "Origin": self.base})
+        if "set-cookie" in r.headers:
+            value, attrs = cookie_parts(r.headers["set-cookie"])
+            self.token = None if "max-age" in attrs and int(attrs["max-age"]) <= 0 else value
+        return r
+
+
+def my_uploads(page: str) -> int:
+    """My uploads' file count in the last status of an event's messages."""
+    found = re.findall(r'data-counts=\\"(\{.*?\}\})\\"', page)
+    assert found, "no counts in the status"
+    return sum(json.loads(found[-1].replace('\\"', '"'))["My uploads"].values())
+
+
+@pytest.mark.filterwarnings("ignore:'future.no_silent_downcasting' is deprecated")  # Gradio's queue, in-process
+@pytest.mark.filterwarnings("ignore:The copy keyword is deprecated")
+def test_a_reload_or_a_second_tab_keeps_the_uploads_another_browser_sees_none(demo_ctx, served_demo) -> None:
+    """Owner (v1.1.0): the session is per browser. A reload and a second tab get My uploads, the counts and the last
+    upload report back; another browser and a forged cookie get nothing (and the page clears a forged cookie)."""
+    status, sid = upload(demo_ctx, {"quokka-1.txt": "quokka field notes, north", "quokka-2.md": "quokka field notes"})
+    alice = Browser(served_demo)
+    assert alice.route("/session/claim", {"ticket": claim_ticket(status)}).status_code == 204 and alice.token
+    for tab in ("reloaded01", "secondtab1"):
+        page = alice.event("load", tab=tab)
+        assert my_uploads(page) == 2 and 'data-reattach=\\"true\\"' in page and "data-forget" not in page, tab
+        assert 'data-summary=\\"2 added\\"' in page and "quokka-1.txt" in page and "2 files received" in page, tab
+        assert "data-claim" not in page and "data-toast" not in page, tab
+        found = alice.event("search", {"q": "quokka field notes", "scope": "My uploads", "select": ""}, tab=tab)
+        assert "quokka-1.txt" in found and "quokka-2.md" in found, tab
+    for other in (Browser(served_demo), Browser(served_demo, "forged-" + uuid.uuid4().hex)):
+        page = other.event("load")
+        assert my_uploads(page) == 0 and "data-reattach" not in page and "quokka" not in page
+        assert "data-toast" not in page and ("data-forget" in page) is bool(other.token)  # nothing said, cookie cleared
+        found = other.event("search", {"q": "quokka field notes", "scope": "My uploads", "select": ""})
+        assert "Nothing uploaded yet" in found and "quokka-1.txt" not in found
+        both = other.event("search", {"q": "quokka field notes", "scope": "Both", "select": ""})
+        assert "quokka-1.txt" not in both and "quokka-2.md" not in both
+        if other.token:
+            assert other.route("/session/forget").status_code == 204 and other.token is None
+    assert alice.route("/session/forget").status_code == 204 and alice.token  # a live session's cookie is kept
+    assert demo_ctx.sessions.by_token(alice.token) == sid
+
+
+@pytest.mark.filterwarnings("ignore:'future.no_silent_downcasting' is deprecated")
+@pytest.mark.filterwarnings("ignore:The copy keyword is deprecated")
+def test_an_expired_session_is_gone_and_the_reloaded_page_says_so(demo_ctx, served_demo) -> None:
+    """Expiry unchanged (60 minutes after the last search or upload); a page opened later with its cookie says
+    "Your earlier uploads were deleted after 60 minutes" once and clears the cookie."""
+    _, sid = upload(demo_ctx, {"quokka.txt": "quokka field notes"})
+    alice = Browser(served_demo, token_for(demo_ctx, sid))
+    folder = demo_ctx.session(sid).dir
+    assert my_uploads(alice.event("load")) == 1
+    demo_ctx.sessions.sessions[sid].last_used -= demo_ctx.sessions.cfg.session_ttl_s - 30
+    alice.event("load")  # opening the page isn't a search: it doesn't keep the session alive
+    demo_ctx.sessions.sessions[sid].last_used -= 60
+    assert demo_ctx.sessions.expire() == [sid] and not folder.exists()
+    page = alice.event("load")
+    assert "Your earlier uploads were deleted after 60 minutes" in page and "data-forget" in page
+    assert my_uploads(page) == 0 and "quokka" not in page
+    assert alice.route("/session/forget").status_code == 204 and alice.token is None  # cleared
+    assert "data-toast" not in Browser(served_demo).event("load")
+
+
+@pytest.mark.filterwarnings("ignore:'future.no_silent_downcasting' is deprecated")
+@pytest.mark.filterwarnings("ignore:The copy keyword is deprecated")
+def test_a_request_cannot_name_another_session(demo_ctx, served_demo) -> None:
+    """Delete acts only on the cookie's session: whatever another visitor's event says, and with no cookie at all;
+    no route takes a session id, and a page's cookie is cleared once its session is deleted."""
     _, victim = upload(demo_ctx, {"one.txt": "first visitor's notes"})
+    victim_token = token_for(demo_ctx, victim)
+    _, own = upload(demo_ctx, {"two.txt": "second visitor's notes"})
     folder = demo_ctx.session(victim).dir
-    application = make_app(build_blocks(demo_ctx), demo_ctx.resolve, demo=True)
-    client = TestClient(application)
+    client = TestClient(app_for(demo_ctx))
     for method, route in (("post", f"/delete-uploads?s={victim}"), ("post", f"/session/{victim}"),
                           ("delete", f"/session/{victim}"), ("get", f"/delete?s={victim}")):
         assert getattr(client, method)(route).status_code in (404, 405)
-    with socket.socket() as s:
-        s.bind((app.HOST, 0))
-        port = s.getsockname()[1]
-    server = uvicorn.Server(app.server_config(application, port))
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-    while not server.started:
-        time_mod.sleep(0.05)
-    base = f"http://{app.HOST}:{port}"
+    named = {"action": "delete-uploads", "q": "", "session": victim, "sid": victim, "s": victim,
+             "token": victim_token, "cv_session": victim_token}
+    nobody = Browser(served_demo).event("click", named)
+    assert views.NOTHING_TO_DELETE in nobody and demo_ctx.session(victim) is not None
+    attacker = Browser(served_demo, token_for(demo_ctx, own))
+    out = attacker.event("click", named)
+    assert "Your 1 upload was deleted" in out and "data-forget" in out
+    assert demo_ctx.session(own) is None and demo_ctx.session(victim) is not None and folder.exists()
+    assert attacker.route("/session/forget").status_code == 204 and attacker.token is None
+
+
+def test_a_page_reloaded_during_an_upload_follows_it_to_the_report(demo_ctx, monkeypatch) -> None:
+    """The uploading tab reloaded mid-upload (its stream gone), or another tab: the bar comes back at the upload's
+    stage and follows it to the report, which the upload's worker keeps on the session."""
+    _, sid = upload(demo_ctx, {"first.txt": "first upload"})
+    token = token_for(demo_ctx, sid)
+    reading, release = threading.Event(), threading.Event()
+    real = demo_ctx.sessions.add_files
+
+    def held(session, files, upload_dir, progress=None, on_listed=None, on_created=None):
+        def hold(done, total, path, phase="read"):
+            if progress:
+                progress(done, total, path, phase=phase)
+            if phase == "read" and not reading.is_set():
+                reading.set()
+                assert release.wait(30)
+        return real(session, files, upload_dir, hold, on_listed, on_created)
+
+    monkeypatch.setattr(demo_ctx.sessions, "add_files", held)
+    stream = layout.handle_upload(demo_ctx, sid, [gradio_file(demo_ctx, "second.txt", "second upload, quokka")])
+    next(stream)  # the upload starts; then its page goes away and nobody reads the stream again
     try:
-        config = httpx.get(f"{base}/config").json()
-        main_id = next(c["id"] for c in config["components"] if c.get("props", {}).get("elem_id") == "cv-main")
-        dep = next(d for d in config["dependencies"] if [main_id, "click"] in d["targets"])
-        # the state value sent ([victim]) and every id in the event data are ignored: Gradio keeps the state per
-        # browser session server-side, and the handler reads only `action` and `q`
-        data = {"action": "delete-uploads", "q": "", "session": victim, "sid": victim, "s": victim}
-        httpx.post(f"{base}/gradio_api/queue/join", json={"data": [victim], "event_data": data, "fn_index": dep["id"],
-                                                         "trigger_id": main_id, "session_hash": "attacker01"}
-                   ).raise_for_status()
-        done = None
-        with httpx.stream("GET", f"{base}/gradio_api/queue/data", params={"session_hash": "attacker01"},
-                          timeout=30) as stream:
-            for line in stream.iter_lines():
-                msg = json.loads(line[5:]) if line.startswith("data:") else {}
-                if msg.get("msg") == "process_completed":
-                    done = msg
-                    break
+        assert reading.wait(30), "phase 2 never started"
+        pages = layout.load_page(demo_ctx, token)
+        _, status = next(pages)
+        assert 'data-stage="read"' in status and 'data-busy="true"' in status and 'data-reattach="true"' in status
+        assert "data-claim" not in status and "second.txt" in status  # listed already: the report rows are there
+        release.set()
+        rest = [st for _, st in pages]
+        assert rest and 'data-stage="done"' in rest[-1] and 'data-summary="1 added"' in rest[-1]
+        assert "second.txt" in rest[-1] and 'data-busy="false"' in rest[-1]
     finally:
-        server.should_exit = True
-        thread.join(15)
-    assert done and done["success"]  # the handler ran, for the attacker's own (empty) session
-    assert views.NOTHING_TO_DELETE in json.dumps(done["output"])
-    assert demo_ctx.session(victim) is not None and folder.exists()  # the first visitor's uploads are still there
+        release.set()
+        stream.close()
+
+
+def test_a_new_session_is_named_to_its_page_before_its_files_are_read(demo_ctx, monkeypatch) -> None:
+    """The ticket reaches the uploading page as soon as the first accepted file makes the session, not after phase 1
+    (17 s for 200 files on the VM), so a reload or a search meanwhile already carries the cookie."""
+    listing, release = threading.Event(), threading.Event()
+    real = demo_ctx.sessions.add_files
+
+    def held(session, files, upload_dir, progress=None, on_listed=None, on_created=None):
+        def hold(done, total, path, phase="read"):
+            if progress:
+                progress(done, total, path, phase=phase)
+            if not listing.is_set():
+                listing.set()
+                assert release.wait(30)
+        return real(session, files, upload_dir, hold, on_listed, on_created)
+
+    monkeypatch.setattr(demo_ctx.sessions, "add_files", held)
+    stream = layout.handle_upload(demo_ctx, None, [gradio_file(demo_ctx, "first.txt", "first upload")])
+    try:
+        first, _ = next(stream)
+        assert "data-claim" not in first  # no session yet
+        assert listing.wait(30)
+        status, sid = next(stream)
+        assert sid and 'data-stage="list"' in status and claim_ticket(status) == demo_ctx.sessions.ticket(sid)
+        assert 'data-new-session="true"' in status
+    finally:
+        release.set()
+        for _ in stream:
+            pass

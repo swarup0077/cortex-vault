@@ -3,7 +3,8 @@
 Pure functions from search results and index facts to HTML strings, so they're testable without a server. Every
 file name, path, snippet and OCR string is escaped here (snippets arrive escaped already, with only `<mark>`
 added); the only tags this module adds are the layout's. Images and downloads are referenced by file id, never
-by path. `cortex.js` reads the `data-*` attributes and never builds HTML from them.
+by path, and never name an upload session: the routes find a visitor's session from their browser's cookie.
+`cortex.js` reads the `data-*` attributes and never builds HTML from them.
 """
 
 from __future__ import annotations
@@ -236,10 +237,8 @@ def count_words(matches: int, weaker: int, label: str = "") -> str:
 # ---------------------------------------------------------------- URLs (ids only, never paths)
 
 
-def url(route: str, file_id: int, session: str | None = None, **params: object) -> str:
+def url(route: str, file_id: int, **params: object) -> str:
     query = {k: v for k, v in params.items() if v is not None and v != ""}
-    if session:
-        query["s"] = session
     return f"/{route}/{int(file_id)}" + (f"?{urlencode(query)}" if query else "")
 
 
@@ -248,9 +247,15 @@ def result_link(query: str, file_id: int) -> str:
     return "?" + urlencode({"q": query, "r": int(file_id)})
 
 
-def thumb_url(r: SearchResult, session: str | None) -> str:
+def thumb_url(r: SearchResult) -> str:
     version = Path(r.thumb_url).stem[:12] if r.thumb_url else None
-    return url("thumb", r.file_id, session, v=version)
+    return url("thumb", r.file_id, v=version)
+
+
+def preview_url(r: SearchResult) -> str:
+    """The picture's URL carries the file's content hash: a file id can come back for another file (a session
+    started again, or a file removed), and the browser keeps previews for a while."""
+    return url("preview", r.file_id, page=r.page if r.kind == "pdf" else None, v=r.sha256[:12] or None)
 
 
 # ---------------------------------------------------------------- icons
@@ -413,7 +418,8 @@ def upload_bar() -> str:
 def status(text: str, *, index: str = "", dial_state: str = "Ready", stage: str = "idle", done: int = 0,
            total: int = 0, version: int = 0, uploads_full: bool = False, upload_id: str = "", report: str = "",
            summary: str = "", message: str = "", new_session: bool = False,
-           counts: dict[str, dict[str, int]] | None = None, toast: str = "") -> str:
+           counts: dict[str, dict[str, int]] | None = None, toast: str = "", claim: str = "", forget: bool = False,
+           reattach: bool = False) -> str:
     """What cortex.js copies into place: the header status, the dial's state, the footer's index line, and the
     upload bar's server stages. `stage`: "list" or "read" while an upload is indexed (`done` of `total`, real
     counts), "done" after it, else "idle". `version`: the index's `Library.version()`, so results older than the
@@ -421,13 +427,21 @@ def status(text: str, *, index: str = "", dial_state: str = "Ready", stage: str 
     rows) and `summary` the line that opens it; `message` says why nothing was kept. `uploads_full`: no new upload
     session can open, so Add files and the drop zone say so instead of uploading. `counts`: files per type in each
     scope (demo), so The Archive follows an upload without the results moving. `toast`: said once, as a toast
-    (Delete my uploads)."""
+    (Delete my uploads). `claim`: a new session's one-time ticket, which the page trades for its cookie at
+    `/session/claim`; `forget`: the page's cookie names no live session, so the page clears it (`/session/forget`);
+    `reattach`: the page was opened on a session with uploads."""
     busy = stage in ("list", "read")
     # A hidden copy keyed by the upload it belongs to, not a <template> (see `preview`)
     report_copy = f'<div hidden data-report data-upload="{_e(upload_id)}">{report}</div>' if report else ""
     extra = f' data-counts="{_e(json.dumps(counts))}"' if counts else ""
     if toast:  # a fresh id each time, so cortex.js says it once
         extra += f' data-toast="{_e(toast)}" data-toast-id="{secrets.token_hex(6)}"'
+    if claim:
+        extra += f' data-claim="{_e(claim)}"'
+    if forget:  # a fresh id each time, so cortex.js clears the cookie once per message
+        extra += f' data-forget="{secrets.token_hex(6)}"'
+    if reattach:
+        extra += ' data-reattach="true"'
     return (f'<div class="cv-app cv-part" data-status-src data-busy="{str(busy).lower()}" data-text="{_e(text)}" '
             f'data-index="{_e(index)}" data-dial="{_e(dial_state)}" data-stage="{_e(stage)}" data-done="{int(done)}" '
             f'data-total="{int(total)}" data-version="{int(version)}" data-upload="{_e(upload_id)}" '
@@ -555,17 +569,16 @@ def details(r: SearchResult, resp: SearchResponse) -> str:
     return f'<details class="cv-details"><summary>Details</summary><dl>{"".join(rows)}</dl></details>'
 
 
-def preview(r: SearchResult, resp: SearchResponse, mode: Mode, place: Place, session: str | None, number: int,
-            render: str = "") -> str:
+def preview(r: SearchResult, resp: SearchResponse, mode: Mode, place: Place, number: int, render: str = "") -> str:
     """The detail view for one result: a hidden copy that cortex.js clones into the pane when the result is
     selected (the boxes and the text for Copy text come from `/detail/{id}`). Keyed by file id and the render's
     token. Not a <template>: Gradio updates an HTML part by syncing it node by node in place, and a template's
     content isn't a child node, so it kept an earlier search's preview under the new file id. The picture's URL is
     in data-src, so the hidden copies load no images."""
     if r.kind in ("photo", "screenshot", "pdf"):
-        src = url("preview", r.file_id, session, page=r.page if r.kind == "pdf" else None)
+        src = preview_url(r)
     elif r.thumb_url:
-        src = thumb_url(r, session)
+        src = thumb_url(r)
     else:
         src = ""
     t = type_of(r.kind, r.filename)
@@ -589,14 +602,14 @@ def preview(r: SearchResult, resp: SearchResponse, mode: Mode, place: Place, ses
             f"</section>{text_sec}</div>")
 
 
-def _option_attrs(r: SearchResult, query: str, mode: Mode, session: str | None, hidden: bool, rank: int) -> str:
-    opened = url("file", r.file_id, session) if mode.demo else ""
+def _option_attrs(r: SearchResult, query: str, mode: Mode, hidden: bool, rank: int) -> str:
+    opened = url("file", r.file_id) if mode.demo else ""
     pic = picture_only(r)  # no boxes and no passage for a match only CLIP found (SPEC §8)
     attrs = {
         "role": "option", "id": f"cv-r-{r.file_id}", "tabindex": "-1", "aria-selected": "false",
         "data-id": str(r.file_id), "data-rank": str(rank), "data-type": type_of(r.kind, r.filename),
         "data-title": r.filename, "data-open": opened,
-        "data-detail": url("detail", r.file_id, session, chunk=None if pic else r.chunk_id, page=r.page,
+        "data-detail": url("detail", r.file_id, chunk=None if pic else r.chunk_id, page=r.page,
                            q=None if pic else query),
         "data-link": result_link(query, r.file_id),
     }
@@ -604,12 +617,12 @@ def _option_attrs(r: SearchResult, query: str, mode: Mode, session: str | None, 
     return out + (" data-weaker" if r.weaker else "") + (" data-more hidden" if hidden else "")
 
 
-def row(r: SearchResult, query: str, mode: Mode, session: str | None, hidden: bool = False, rank: int = 0) -> str:
+def row(r: SearchResult, query: str, mode: Mode, hidden: bool = False, rank: int = 0) -> str:
     t = type_of(r.kind, r.filename)
     snip = f'<span class="cv-card__snip">{r.snippet_html}</span>' if r.snippet_html else ""
     strip = ""
     if r.kind in ("photo", "screenshot"):
-        img = (f'<img src="{_e(thumb_url(r, session))}" alt="" loading="lazy">' if r.thumb_url
+        img = (f'<img src="{_e(thumb_url(r))}" alt="" loading="lazy">' if r.thumb_url
                else icon("image"))
         strip = (f'<span class="cv-strip"><span class="cv-strip__img">{img}</span><span class="cv-strip__cap">'
                  f'{"Picture match" if picture_only(r) else "Matched text"}</span></span>')
@@ -617,7 +630,7 @@ def row(r: SearchResult, query: str, mode: Mode, session: str | None, hidden: bo
     methods = "".join(f'<span class="cv-method cv-method--{m}"><i></i>{_e(SHORT_METHODS[m])} <b>#{n}</b></span>'
                       for m, n in found_by_rows(r))
     found = f'<span class="cv-card__found">Found by</span>{methods}' if methods else ""
-    return (f'<div class="cv-card" {_option_attrs(r, query, mode, session, hidden, rank)}>'
+    return (f'<div class="cv-card" {_option_attrs(r, query, mode, hidden, rank)}>'
             f'<span class="cv-card__rank">{rank + 1:02d}</span>{glyph(t)}<span class="cv-card__body">'
             f'<span class="cv-card__title"><span class="cv-card__name">{_e(r.filename)}</span>'
             f'<span class="cv-card__date">{_e(short_date(r.effective_date))}</span></span>{snip}{strip}'
@@ -625,7 +638,7 @@ def row(r: SearchResult, query: str, mode: Mode, session: str | None, hidden: bo
 
 
 def results(resp: SearchResponse, mode: Mode, place: Place, archive: Archive | None = None, *, query: str,
-            session: str | None = None, select: int | None = None, page: int = PAGE, version: int = 0) -> str:
+            select: int | None = None, page: int = PAGE, version: int = 0) -> str:
     """The results view: the count line, one numbered list in fused order with the weaker matches after a
     divider, "Show N more", and the detail view. `query` is the text in the box (normalised) these results
     belong to; Enter only opens a result when the box still holds it. `version`: the index's version they were
@@ -640,8 +653,8 @@ def results(resp: SearchResponse, mode: Mode, place: Place, archive: Archive | N
              f'<span data-count-words>{_e(count_words(n, w))}</span>'
              '<button type="button" class="cv-count__clear" data-clear-filter aria-label="Clear the type filter" '
              f'hidden>{icon("x")}</button><span class="cv-count__time">in {secs:.2f} s</span></div>')
-    matches = "".join(row(r, query, mode, session, i >= page, i) for i, r in enumerate(resp.results))
-    weaker = "".join(row(r, query, mode, session, n + i >= page, n + i) for i, r in enumerate(resp.weaker))
+    matches = "".join(row(r, query, mode, i >= page, i) for i, r in enumerate(resp.results))
+    weaker = "".join(row(r, query, mode, n + i >= page, n + i) for i, r in enumerate(resp.weaker))
     groups = [f'<div role="group" aria-label="Matches" data-group="matches">{matches}</div>' if matches else ""]
     if weaker:
         groups.append(f'<div role="group" aria-labelledby="cv-weaker-h" data-group="weaker"'
@@ -657,7 +670,7 @@ def results(resp: SearchResponse, mode: Mode, place: Place, archive: Archive | N
     filter_empty = ('<div class="cv-empty" data-filter-empty hidden><strong data-filter-empty-text></strong>'
                     '<button type="button" class="cv-more" data-clear-filter>Show all types</button></div>')
     render = secrets.token_hex(6)
-    previews = "".join(preview(r, resp, mode, place, session, i + 1, render) for i, r in enumerate(items))
+    previews = "".join(preview(r, resp, mode, place, i + 1, render) for i, r in enumerate(items))
     content = (
         f'<div class="cv-toolbar">{count}</div><div class="cv-split">'
         f'<div class="cv-results">{top_note}<div id="cv-list" role="listbox" aria-label="Results">{"".join(groups)}'
@@ -709,6 +722,11 @@ UPLOAD_KEPT_NONE = "Your files weren't kept. Searching the sample files works as
 UPLOAD_FAILED = "The upload couldn't be read. Please try again."
 DELETE_BUSY = "Your upload is still being read. Delete it once it's done."
 NOTHING_TO_DELETE = "You have no uploads to delete."
+
+
+def expired_text(ttl_min: int) -> str:
+    """Said once when a reloaded page's session has expired (its cookie is cleared then)."""
+    return f"Your earlier uploads were deleted after {ttl_min} minute{'s' if ttl_min != 1 else ''}"
 
 
 def deleted_text(n: int) -> str:

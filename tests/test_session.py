@@ -323,3 +323,56 @@ def test_expiry_wipes_the_same_way(demo, inbox, tmp_path) -> None:
     s, _ = sm.add_files(None, [*make_files(inbox, 1), refused], inbox)
     clock.t += sm.cfg.session_ttl_s + 1
     assert sm.expire() == [s.id] and not s.dir.exists() and not refused.exists()
+
+
+# ---------------------------------------------------------------- the cookie (owner, 20 Oct: v1.1.0)
+
+
+def test_a_new_session_is_claimed_once_with_its_ticket(demo, inbox, tmp_path) -> None:
+    """The first accepted upload creates the session with a one-time ticket; its page trades it for the cookie's
+    token: at least 128 random bits, of which the server keeps only the hash. A used ticket is worth nothing."""
+    import base64
+    import secrets as _secrets
+
+    sm = manager(demo, tmp_path)
+    s, _ = sm.add_files(None, make_files(inbox, 1), inbox)
+    ticket = sm.ticket(s.id)
+    assert ticket and s.token is None and sm.by_token(ticket) is None  # the ticket isn't a cookie
+    token = sm.claim(ticket)
+    assert token and len(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4))) * 8 >= 128
+    assert sm.by_token(token) == s.id and s.token == hashlib.sha256(token.encode()).hexdigest()
+    assert token not in repr(vars(s)) and ticket not in repr(vars(s))  # neither is kept on the session
+    assert sm.claim(ticket) is None and sm.ticket(s.id) is None  # once only
+    assert sm.claim(_secrets.token_urlsafe(32)) is None and sm.claim("") is None and sm.claim(None) is None
+    _, more = sm.add_files(s.id, make_files(inbox, 1, start=3), inbox)  # a later upload makes no new ticket
+    assert more.session_id == s.id and sm.ticket(s.id) is None and sm.by_token(token) == s.id
+
+
+def test_an_unclaimed_ticket_expires(demo, inbox, tmp_path) -> None:
+    from vault.session import CLAIM_TTL_S
+
+    clock = Clock()
+    sm = manager(demo, tmp_path, clock=clock)
+    s, _ = sm.add_files(None, make_files(inbox, 1), inbox)
+    ticket = sm.ticket(s.id)
+    clock.t += CLAIM_TTL_S + 1
+    assert sm.ticket(s.id) is None and sm.claim(ticket) is None and s.token is None
+
+
+def test_forged_ended_and_deleted_tokens_name_no_session(demo, inbox, tmp_path) -> None:
+    """A forged token names nothing and isn't "ended"; an expired session's token is remembered as ended (so the
+    page can say its uploads were deleted after 60 minutes); a session its visitor deleted isn't. A restart forgets
+    them all."""
+    clock = Clock()
+    sm = manager(demo, tmp_path, clock=clock)
+    a, _ = sm.add_files(None, make_files(inbox, 1), inbox)
+    b, _ = sm.add_files(None, make_files(inbox, 1, start=1), inbox)
+    ta, tb = sm.claim(sm.ticket(a.id)), sm.claim(sm.ticket(b.id))
+    assert sm.by_token(ta) == a.id and sm.by_token(tb) == b.id and ta != tb
+    for forged in ("forged", ta[:-1], ta + "x", "x" * 5000, None, ""):
+        assert sm.by_token(forged) is None and not sm.ended(forged)
+    assert sm.delete(b.id) is True and sm.by_token(tb) is None and not sm.ended(tb)
+    clock.t += sm.cfg.session_ttl_s + 1
+    assert sm.expire() == [a.id] and sm.by_token(ta) is None and sm.ended(ta)
+    sm.wipe_all()
+    assert not sm.ended(ta)

@@ -56,6 +56,7 @@ class SearchResult:
     width: int | None = None
     height: int | None = None
     pages: int | None = None
+    sha256: str = ""  # the file's content hash: preview URLs carry its start, so a reused id isn't served from cache
     chunk_source: str | None = None  # 'pdf_text' | 'ocr' | 'doc_text' | 'slide_text' of the snippet chunk
     text_sources: list[str] = field(default_factory=list)  # every content-chunk source the file has
 
@@ -177,6 +178,7 @@ def _result(file: sqlite3.Row, paths: list[str], fused: Fused | None, chunk: sql
         width=file["width"],
         height=file["height"],
         pages=file["pages"],
+        sha256=file["sha256"],
         chunk_source=chunk["source"] if chunk else None,
         text_sources=list(sources),
     )

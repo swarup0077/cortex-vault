@@ -62,6 +62,7 @@ def _node() -> str | None:
 
 
 BROWSER, NODE = _browser(), _node()
+EXPIRY_S = 6  # the "demo-expiry" app's session lifetime
 needs_browser = pytest.mark.skipif(not (BROWSER and NODE), reason="needs Node 22+ and Edge, Chrome or Chromium")
 
 
@@ -74,12 +75,15 @@ def _context(mode: str, tmp: Path):
     from gradio.utils import get_upload_folder
 
     demo = REPO_ROOT / "demo_index"
-    if mode == "demo":
-        cfg = Config(data_dir=demo)
+    if mode.startswith("demo"):  # "demo-expiry": sessions end EXPIRY_S after the last search or upload
+        cfg = Config(data_dir=demo, **({"session_ttl_s": EXPIRY_S} if mode == "demo-expiry" else {}))
         lib = Library(cfg, read_only=True, base_dir=REPO_ROOT)
+        sessions = SessionManager(lib, cfg, tmp / "sessions")
+        if mode == "demo-expiry":
+            sessions.start_reaper(interval_s=1)
         # Gradio's own upload folder, as app.py: a session reads only files from there
         return UiContext("demo", lib, suggestions=views.DEMO_SUGGESTIONS, upload_dir=Path(get_upload_folder()),
-                         sessions=SessionManager(lib, cfg, tmp / "sessions"))
+                         sessions=sessions)
     copy = tmp / "index"  # local mode on a copy of the demo index: never the owner's data/vault.db
     shutil.copytree(demo, copy)
     return UiContext("local", Library(Config(data_dir=copy), base_dir=REPO_ROOT), suggestions=views.LOCAL_SUGGESTIONS)
@@ -96,7 +100,7 @@ def served(request, tmp_path, real_clip):
 
     ctx = _context(request.param, tmp_path)
     ctx.library.search("warm up")  # load the models before the browser types
-    application = make_app(build_blocks(ctx), ctx.resolve, demo=ctx.demo,
+    application = make_app(build_blocks(ctx), ctx.resolve, demo=ctx.demo, sessions=ctx.sessions,
                            max_file_size=ctx.sessions.cfg.upload_max_bytes if ctx.demo else None)
     with socket.socket() as s:
         s.bind((app.HOST, 0))
@@ -253,3 +257,71 @@ def test_delete_my_uploads_in_a_browser(served, tmp_path) -> None:
         assert not any(c.startswith("quokka-") for c in d["cards"]), what  # the query, run again in Samples
         assert not any(c.startswith("quokka-") for c in s["searchedAgain"]["cards"]), what
         assert not [p for p in sessions.iterdir() if p.is_dir()], what  # the session's folder is gone
+
+
+@needs_browser
+@pytest.mark.parametrize("served", ["demo"], indirect=True)
+def test_uploads_survive_a_reload_per_browser(served, tmp_path) -> None:
+    """Owner (v1.1.0): a reload and a second tab keep the uploads, the counts and the last upload report; another
+    browser sees none, and a forged cookie gets nothing and is cleared. Opening and searching set no cookie; the
+    first accepted upload sets an HttpOnly, Secure, SameSite=Strict session cookie that the page's script can't
+    read."""
+    (tmp_path / "up").mkdir()
+    files = []
+    for i in (1, 2):
+        f = tmp_path / "up" / f"quokka-{i}.txt"
+        f.write_text(f"quokka field notes from survey {i}", encoding="utf-8")
+        files.append(str(f))
+
+    def run(**more) -> dict:
+        options = {"url": served, "browser": BROWSER, "files": files, "query": "quokka field notes", **more}
+        out = subprocess.run([NODE, str(DRIVER.parent / "session_check.mjs"), json.dumps(options)],
+                             capture_output=True, text=True, encoding="utf-8", timeout=300)
+        state = json.loads(out.stdout)
+        assert "error" not in state, state.get("error")
+        return state
+
+    s = run()
+    mine = lambda state: sorted(c for c in state["cards"] if c.startswith("quokka-"))  # noqa: E731
+    assert s["start"]["cookie"] is None and s["searched"]["cookie"] is None  # opening and searching: no cookie
+    cookie = s["uploaded"]["cookie"]
+    assert cookie == {"httpOnly": True, "secure": True, "sameSite": "Strict", "session": True, "path": "/",
+                      "length": cookie["length"]} and cookie["length"] >= 22  # >= 128 random bits
+    assert "cv_session" not in s["uploaded"]["docCookie"] and s["uploaded"]["myUploads"] == 2
+    for step in ("reloaded", "secondTab"):
+        r = s[step]
+        assert r["myUploads"] == 2 and r["scope"] == "My uploads" and r["total"] == 2, step
+        assert r["bar"] == "Upload done: 2 added" and r["report"], step  # the last upload report is back
+        assert sorted(r["recent"])[:2] == ["quokka-1.txt", "quokka-2.txt"], step
+        assert mine(s[step + "Search"]) == ["quokka-1.txt", "quokka-2.txt"], step
+    for step in ("other", "forged"):
+        r = s[step]
+        assert r["myUploads"] == 0 and r["scope"] == "Both" and r["bar"] is None and r["cookie"] is None, step
+        assert r["toast"] is None and not mine(s[step + "Search"]), step
+    assert s["forgedSet"] is not None  # the forged cookie was there, and the page cleared it
+    phone = run(phone=True)  # a phone: no Search in, the scope stays Both, and the uploads are back
+    for step in ("reloaded", "secondTab"):
+        r = phone[step]
+        assert r["myUploads"] == 2 and r["scope"] == "Both" and r["bar"] == "Upload done: 2 added", step
+        assert mine(phone[step + "Search"]) == ["quokka-1.txt", "quokka-2.txt"], step
+    assert phone["other"]["myUploads"] == 0 and not mine(phone["otherSearch"])
+
+
+@needs_browser
+@pytest.mark.parametrize("served", ["demo-expiry"], indirect=True)
+def test_an_expired_session_is_gone_after_a_reload(served, tmp_path) -> None:
+    """A reload after the session expired: the uploads are gone, the page says so once, and the cookie is cleared."""
+    from vault.ui import views
+
+    f = tmp_path / "quokka.txt"
+    f.write_text("quokka field notes", encoding="utf-8")
+    options = {"url": served, "browser": BROWSER, "files": [str(f)], "expiry": EXPIRY_S + 3}
+    out = subprocess.run([NODE, str(DRIVER.parent / "session_check.mjs"), json.dumps(options)], capture_output=True,
+                         text=True, encoding="utf-8", timeout=300)
+    s = json.loads(out.stdout)
+    assert "error" not in s, s.get("error")
+    assert s["uploaded"]["cookie"] is not None and s["uploaded"]["myUploads"] == 1
+    assert s["toast"] == views.expired_text(1)  # "Your earlier uploads were deleted after 1 minute"
+    e = s["expired"]
+    assert e["myUploads"] == 0 and e["cookie"] is None and e["bar"] is None and "quokka.txt" not in e["recent"]
+    assert not [p for p in (tmp_path / "sessions").iterdir() if p.is_dir()]

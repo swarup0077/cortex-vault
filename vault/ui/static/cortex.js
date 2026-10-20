@@ -5,7 +5,9 @@
    visible, what the count line says, how recent searches are kept) are pure functions, exported for the tests
    (Node). The browser part wires them to the page. It never builds HTML from strings: the server escapes
    everything into the page, and this file only creates elements and sets textContent, attributes and numbers.
-   Recent searches live in this browser's localStorage only: they are never sent anywhere. */
+   Recent searches live in this browser's localStorage only: they are never sent anywhere. A demo visitor's upload
+   session is the one their browser's cookie names (HttpOnly: this file never sees it); a new session's page trades
+   the one-time ticket it is given for that cookie, and nothing here names a session. */
 (function (root, factory) {
   const api = factory(typeof window !== 'undefined' ? window : null);
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -163,6 +165,7 @@
     text: '', toast: null, toastTimer: 0, saveTimer: 0, turn: 0, recent: [], status: null,
     uploadsFull: false, busyText: '', lastRender: null,
     transfer: null, notSent: 0, dismissed: '', reportOpen: false, said: '', homeFor: '', awaiting: null,
+    claiming: null, claimed: '', forgotId: '',
   };
 
   const $ = (sel, el) => (el || doc).querySelector(sel);
@@ -180,6 +183,31 @@
     set(key, value) { try { win.localStorage.setItem(key, value); } catch (e) { /* storage blocked */ } },
     del(key) { try { win.localStorage.removeItem(key); } catch (e) { /* storage blocked */ } },
   };
+
+  /* ------------------------------------------------------------------ the session cookie (demo) */
+  /* A JSON POST to one of the app's own session routes (the server takes nothing else there). */
+  function post(path, body) {
+    return win.fetch(path, { method: 'POST', credentials: 'same-origin', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  }
+
+  /* After the upload that created the session: trade its one-time ticket for the session's cookie. Events wait for
+     it (`emit`), so the next search or upload already carries the cookie. */
+  function claim(ticket) {
+    if (!ticket || ticket === S.claimed) return;
+    S.claimed = ticket;
+    const done = post('session/claim', { ticket })
+      .catch(() => post('session/claim', { ticket }))  // a network blip: once more
+      .catch(() => null)
+      .then(() => { if (S.claiming === done) S.claiming = null; });
+    S.claiming = done;
+  }
+
+  /* Every event to the server goes after a pending claim. */
+  function emit(trigger, name, data) {
+    if (!trigger) return;
+    if (S.claiming) S.claiming.then(() => trigger(name, data)); else trigger(name, data);
+  }
 
   function say(message) {
     if (!S.toast) {
@@ -213,7 +241,7 @@
     S.last = q;
     win.clearTimeout(S.saveTimer);
     if (q) turnDial();
-    if (S.topTrigger) S.topTrigger('submit', { q, scope: effectiveScope(), select: select || '' });
+    emit(S.topTrigger, 'submit', { q, scope: effectiveScope(), select: select || '' });
   }
 
   function typed() {
@@ -420,7 +448,7 @@
       win.location.assign(opt.dataset.open);  // demo: /file/<id>, sent as an attachment
       say(`Downloading ${title}`);
     } else if (S.mainTrigger) {
-      S.mainTrigger('click', { action: 'open', file_id: Number(opt.dataset.id) });  // local: vault/platform.py
+      emit(S.mainTrigger, 'click', { action: 'open', file_id: Number(opt.dataset.id) });  // local: vault/platform.py
       say(`Opening ${title}`);
     }
   }
@@ -546,7 +574,7 @@
     const mine = S.status && scopeCounts(S.status.counts, 'My uploads');
     if (!mine || !mine.total || !S.mainTrigger) return;
     if (!win.confirm(confirmDelete(mine.total))) return;
-    S.mainTrigger('click', { action: 'delete-uploads', q: S.shown || '' });
+    emit(S.mainTrigger, 'click', { action: 'delete-uploads', q: S.shown || '' });
   }
 
   /* ------------------------------------------------------------------ the upload bar */
@@ -618,13 +646,16 @@
     }
   }
 
-  /* After the first upload of a session, home switches to My uploads and lists them (results never move). */
+  /* After the first upload of a session, home switches to My uploads and lists them (results never move); so does
+     a page opened on a session that has uploads (a reload, another tab), except on a phone, where the scope is
+     always Both and the page already shows them. */
   function afterUpload() {
     const st = S.status;
     const root = viewRoot();
-    if (!st || !st.newSession || st.upload === S.homeFor || !root || root.dataset.view !== 'home') return;
+    const key = st && (st.newSession ? st.upload : (st.reattach && !phone.matches ? 'reattach' : ''));
+    if (!key || key === S.homeFor || !root || root.dataset.view !== 'home') return;
     if (normalize(input().value)) return;
-    S.homeFor = st.upload;
+    S.homeFor = key;
     setScope('My uploads', false);
     search('');
   }
@@ -698,7 +729,7 @@
     S.notSent = t.failed;
     if (paths.length) {
       S.awaiting = (S.status && S.status.upload) || '';
-      S.topTrigger('upload', { paths, scope: effectiveScope() });
+      emit(S.topTrigger, 'upload', { paths, scope: effectiveScope() });
     } else say(`No file could be sent${limit ? ` (each must be under ${Math.round(limit / 1048576)} MB)` : ''}`);
     paintBar();
   }
@@ -842,7 +873,7 @@
         copy(win.location.origin + win.location.pathname + current().dataset.link, 'Link copied');
       } else if (act && act.dataset.act === 'add') pickFiles();
       else if (act && act.dataset.act === 'delete-uploads') deleteUploads();
-      else if (act && act.dataset.act === 'folders' && S.topTrigger) S.topTrigger('click', { action: 'folders' });
+      else if (act && act.dataset.act === 'folders') emit(S.topTrigger, 'click', { action: 'folders' });
       else if (q) setQuery(q.dataset.q);
     });
     element.addEventListener('dragover', (e) => {
@@ -877,9 +908,14 @@
       S.status = { text: d.text || '', index: d.index || '', dial: d.dial || '', busy: d.busy === 'true',
         stage: d.stage || 'idle', done: Number(d.done) || 0, total: Number(d.total) || 0,
         version: Number(d.version) || 0, upload: d.upload || '', summary: d.summary || '', message: d.message || '',
-        newSession: d.newSession === 'true', counts: d.counts || '' };
+        newSession: d.newSession === 'true', reattach: d.reattach === 'true', counts: d.counts || '' };
       S.uploadsFull = d.uploads === 'full';
       S.busyText = d.busyText || '';
+      if (d.claim) claim(d.claim);
+      if (d.forget && d.forget !== S.forgotId) {  // the cookie names no live session: clear it, once per message
+        S.forgotId = d.forget;
+        post('session/forget').catch(() => {});
+      }
       if (S.awaiting !== null && S.status.upload && S.status.upload !== S.awaiting) S.awaiting = null;
       if (d.toast && d.toastId !== S.toastSeen) { S.toastSeen = d.toastId; say(d.toast); }  // once per message
       paintStatus();

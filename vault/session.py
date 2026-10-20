@@ -7,13 +7,21 @@ Gradio's upload folder are read, and each is copied into the session and the Gra
 created only by the first accepted upload, never by opening or searching the page, so crawlers can't use up the
 `max_sessions` slots. It is wiped `session_ttl_s` after its last search or upload (fetching a thumbnail or a
 preview doesn't count), and every session is wiped when the app starts.
+
+A session belongs to a browser, not a tab (SPEC §8, v1.1): its cookie holds a random token (256 bits), of which the
+server keeps only the SHA-256. Gradio's handlers can read cookies but not set them, so the upload that creates a
+session gives its page a one-time ticket, which the page trades for the cookie (`claim`, the `/session/claim`
+route). The session's folder is named by a uuid4 that never leaves the server.
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import os
 import re
+import secrets
 import shutil
 import sqlite3
 import tempfile
@@ -33,6 +41,11 @@ log = logging.getLogger(__name__)
 
 DEFAULT_ROOT = Path(tempfile.gettempdir()) / "vault_sessions"
 BUSY = "The demo is busy, try again in a few minutes"  # max_sessions upload sessions are open
+COOKIE = "cv_session"  # HttpOnly, Secure, SameSite=Strict (vault/ui/server.py)
+CLAIM_TTL_S = 300  # a new session's one-time ticket can be traded for its cookie this long
+ENDED_KEEP_S = 24 * 3600  # an expired session's token is remembered this long, so its page can say why
+ENDED_MAX = 1000
+_TOKEN_MAX = 200  # longer cookie values aren't ours
 _UUID4 = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 _UNSAFE = re.compile(r'[\x00-\x1f<>:"/\\|?*]')
 
@@ -53,6 +66,19 @@ class UploadResult:
 
 
 @dataclass
+class UploadView:
+    """The latest upload as the upload bar shows it, kept on the session so a reload or a second tab shows it too:
+    its stage ("list", "read", "done"), real counts, and the per-file outcome once listed."""
+
+    id: str
+    phase: str = "list"
+    done: int = 0
+    total: int = 0
+    files: list[FileStatus] | None = None
+    received: int = 0
+
+
+@dataclass
 class Session:
     id: str
     dir: Path
@@ -64,6 +90,10 @@ class Session:
     busy: bool = False  # an upload is being checked or read: never wiped mid-run
     received: set[Path] = field(default_factory=set)  # Gradio's copies of its uploads (refused ones stay there)
     upload_dir: Path | None = None  # Gradio's upload folder they came from
+    claim: str | None = None  # the one-time ticket its page trades for the cookie; None once used
+    claim_until: float = 0.0
+    token: str | None = None  # SHA-256 of the cookie's token, once claimed
+    upload: UploadView | None = None  # the latest upload, for the bar after a reload
 
     @property
     def uploads(self) -> Path:
@@ -109,6 +139,10 @@ def _shred(path: Path) -> None:
             log.warning("could not overwrite %s: %s", f.name, e)
 
 
+def token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8", "surrogatepass")).hexdigest()
+
+
 def _unique(folder: Path, name: str) -> Path:
     p = folder / name
     n = 2
@@ -126,6 +160,7 @@ class SessionManager:
         self.root = root
         self.clock = clock
         self.sessions: dict[str, Session] = {}
+        self._ended: dict[str, float] = {}  # token hash → when its session expired
         self._lock = threading.Lock()
 
     # ------------------------------------------------------------ lifecycle
@@ -134,6 +169,7 @@ class SessionManager:
         """At app start: nothing from an earlier run survives."""
         with self._lock:
             self.sessions.clear()
+            self._ended.clear()
             if self.root.exists():
                 shutil.rmtree(self.root, ignore_errors=True)
 
@@ -165,10 +201,60 @@ class SessionManager:
             old = [s for s in self.sessions.values() if not s.busy and now - s.last_used > self.cfg.session_ttl_s]
             for s in old:
                 del self.sessions[s.id]
+                if s.token:
+                    self._ended[s.token] = now
+            if old:
+                kept = sorted(((t, h) for h, t in self._ended.items() if now - t < ENDED_KEEP_S), reverse=True)
+                self._ended = {h: t for t, h in kept[:ENDED_MAX]}
         for s in old:
             self._wipe(s)
             log.info("session %s expired", s.id[:8])
         return [s.id for s in old]
+
+    # ------------------------------------------------------------ the cookie
+
+    def by_token(self, token: str | None) -> str | None:
+        """The id of the live session this cookie's token names, or None: no cookie, a forged or stale one, or a
+        session that has ended."""
+        if not token or len(token) > _TOKEN_MAX:
+            return None
+        h = token_hash(token)
+        with self._lock:
+            for s in self.sessions.values():
+                if s.token is not None and hmac.compare_digest(s.token, h):
+                    return s.id
+        return None
+
+    def ended(self, token: str | None) -> bool:
+        """Whether this token named a session that expired (not one deleted by its visitor, nor a forged token)."""
+        if not token or len(token) > _TOKEN_MAX:
+            return False
+        with self._lock:
+            return token_hash(token) in self._ended
+
+    def claim(self, ticket: str | None) -> str | None:
+        """Trade a new session's one-time ticket for its cookie's token: fresh random bytes (256 bits) whose hash the
+        session keeps. None for a ticket that is unknown, used already, or older than CLAIM_TTL_S."""
+        if not ticket or len(ticket) > _TOKEN_MAX:
+            return None
+        now = self.clock()
+        with self._lock:
+            for s in self.sessions.values():
+                if s.claim is not None and hmac.compare_digest(s.claim, ticket):
+                    s.claim = None  # used, whatever happens next
+                    if now > s.claim_until:
+                        return None
+                    token = secrets.token_urlsafe(32)
+                    s.token = token_hash(token)
+                    return token
+        return None
+
+    def ticket(self, session_id: str | None) -> str | None:
+        """The session's unused, unexpired ticket, for its own page only (the upload that created it)."""
+        s = self.get(session_id, touch=False)
+        if s is None or s.claim is None or self.clock() > s.claim_until:
+            return None
+        return s.claim
 
     def delete(self, session_id: str | None) -> bool | None:
         """Delete my uploads: wipe this session now, the way expiry does, and free its slot. None when there's no
@@ -231,7 +317,8 @@ class SessionManager:
                 dst.close()
             cfg = replace(self.cfg, data_dir=folder, zip_max_total=self.cfg.upload_zip_max_total)
             lib = Library(cfg, thumb_dirs=self.demo.thumb_dirs, base_dir=self.demo.base_dir, display_root=folder)
-            s = Session(sid, folder, lib, self.clock(), busy=True)  # its first upload is being read
+            s = Session(sid, folder, lib, self.clock(), busy=True,  # its first upload is being read
+                        claim=secrets.token_urlsafe(32), claim_until=self.clock() + CLAIM_TTL_S)
             self.sessions[sid] = s
         log.info("session %s created", sid[:8])
         return s
@@ -240,20 +327,22 @@ class SessionManager:
 
     def add_files(self, session_id: str | None, files: Sequence[Path | str], upload_dir: Path,
                   progress: ProgressFn | None = None,
-                  on_listed: Callable[[UploadResult], None] | None = None) -> tuple[Session | None, UploadResult]:
+                  on_listed: Callable[[UploadResult], None] | None = None,
+                  on_created: Callable[[Session], None] | None = None) -> tuple[Session | None, UploadResult]:
         """Check, copy and index uploaded files. `upload_dir` is Gradio's upload folder: nothing outside it is
-        read. Creates the session on the first accepted file. `on_listed` gets the per-file outcome as soon as
-        phase 1 has listed the files (SPEC §6.1); the returned result is the final one."""
-        session = self._claim(session_id)  # busy from the start: Delete my uploads and the expiry wait for it
+        read. Creates the session on the first accepted file (`on_created` gets it then, before its files are
+        read). `on_listed` gets the per-file outcome as soon as phase 1 has listed the files (SPEC §6.1); the
+        returned result is the final one."""
+        session = self._hold(session_id)  # busy from the start: Delete my uploads and the expiry wait for it
         held = [session] if session else []  # the busy session(s): this one, or the one created on the way
         try:
-            return self._add(session, files, upload_dir.resolve(), progress, on_listed, held)
+            return self._add(session, files, upload_dir.resolve(), progress, on_listed, held, on_created)
         finally:
             for s in held:
                 s.busy = False
                 s.last_used = self.clock()
 
-    def _claim(self, session_id: str | None) -> Session | None:
+    def _hold(self, session_id: str | None) -> Session | None:
         """The live session, marked busy at once (under the lock, so a delete can't slip in between)."""
         if not session_id or not _UUID4.match(session_id):
             return None
@@ -265,8 +354,8 @@ class SessionManager:
             return s
 
     def _add(self, session: Session | None, files: Sequence[Path | str], upload_dir: Path,
-             progress: ProgressFn | None, on_listed: Callable[[UploadResult], None] | None, held: list[Session]
-             ) -> tuple[Session | None, UploadResult]:
+             progress: ProgressFn | None, on_listed: Callable[[UploadResult], None] | None, held: list[Session],
+             on_created: Callable[[Session], None] | None = None) -> tuple[Session | None, UploadResult]:
         statuses: list[FileStatus] = []
         accepted: list[tuple[Path, str, int, FileStatus]] = []
         received: list[Path] = []  # Gradio's copies this upload was given: a wipe removes any still there
@@ -323,6 +412,8 @@ class SessionManager:
             held.append(session)  # created busy; add_files releases it
             session.received.update(received)
             session.upload_dir = upload_dir
+            if on_created:
+                on_created(session)
 
         copied: list[tuple[Path, FileStatus]] = []
         for real, sha, size, st in accepted:
