@@ -144,6 +144,11 @@
     return { types, total: Object.values(types).reduce((a, n) => a + n, 0) };
   }
 
+  /* The full-page overlay while files are dragged over the page (demo): how many, when the browser says. */
+  function dropText(n) {
+    return n > 0 ? `Drop to add ${n} file${n === 1 ? '' : 's'}` : 'Drop to add files';
+  }
+
   /* Delete my uploads asks first (SPEC §8). */
   function confirmDelete(n) {
     return `Delete all ${n} file${n === 1 ? '' : 's'} you uploaded? This can't be undone.`;
@@ -151,7 +156,7 @@
 
   const api = { MIN_CHARS, DELAY_MS, PAGE, SAVE_MS, RECENT_MAX, PLURALS, normalize, searchFor, enterAction, escAction,
     visibility, countWords, remember, forget, parseRecent, barText, barValue, percent, stale, detailFits, scopeCounts,
-    confirmDelete };
+    confirmDelete, dropText };
   if (!win) return api;
 
   /* ------------------------------------------------------------------ browser */
@@ -165,7 +170,7 @@
     text: '', toast: null, toastTimer: 0, saveTimer: 0, turn: 0, recent: [], status: null,
     uploadsFull: false, busyText: '', lastRender: null,
     transfer: null, notSent: 0, dismissed: '', reportOpen: false, said: '', homeFor: '', awaiting: null,
-    claiming: null, claimed: '', forgotId: '',
+    claiming: null, claimed: '', forgotId: '', dropTimer: 0,
   };
 
   const $ = (sel, el) => (el || doc).querySelector(sel);
@@ -689,7 +694,8 @@
 
   async function uploadFiles(files) {
     const list = Array.from(files || []);
-    if (!list.length || !S.topTrigger || S.transfer) return;
+    if (!list.length || !S.topTrigger) return;
+    if (S.transfer) { say('Your files are still being sent. Add more once they are.'); return; }
     if (S.uploadsFull) { say(S.busyText); return; }
     const limit = Number((win.gradio_config || {}).max_file_size) || 0;  // the server refuses larger files anyway
     const send = list.filter((f) => !limit || f.size <= limit);
@@ -732,6 +738,47 @@
       emit(S.topTrigger, 'upload', { paths, scope: effectiveScope() });
     } else say(`No file could be sent${limit ? ` (each must be under ${Math.round(limit / 1048576)} MB)` : ''}`);
     paintBar();
+  }
+
+  /* ------------------------------------------------------------------ drag and drop anywhere (demo) */
+  const dragsFiles = (e) => !!e.dataTransfer && Array.from(e.dataTransfer.types || []).indexOf('Files') >= 0;
+  const draggedCount = (e) => Array.from(e.dataTransfer.items || []).filter((i) => i.kind === 'file').length;
+
+  /* The overlay on or off. A drag that leaves the window doesn't always say so, so it also goes once the browser
+     stops reporting the drag (it does every few hundred ms while the pointer is over the page). */
+  function showDrop(on, n) {
+    const over = S.top && $('[data-dropover]', S.top);
+    if (!over) return;
+    win.clearTimeout(S.dropTimer);
+    over.hidden = !on;
+    doc.body.classList.toggle('cv-dragging', on);
+    if (!on) return;
+    over.classList.toggle('is-busy', S.uploadsFull);
+    const text = S.uploadsFull ? S.busyText : dropText(n);
+    const slot = $('[data-dropover-text]', over);
+    if (slot.textContent !== text) slot.textContent = text;
+    S.dropTimer = win.setTimeout(() => showDrop(false), 1000);
+  }
+
+  function wireDrop() {
+    doc.addEventListener('dragenter', (e) => {
+      if (!dragsFiles(e)) return;
+      e.preventDefault();
+      showDrop(true, draggedCount(e));
+    });
+    doc.addEventListener('dragover', (e) => {
+      if (!dragsFiles(e)) return;
+      e.preventDefault();  // always, or a file dropped on the page opens in the browser
+      e.dataTransfer.dropEffect = S.uploadsFull ? 'none' : 'copy';
+      showDrop(true, draggedCount(e));
+    });
+    doc.addEventListener('dragleave', (e) => { if (dragsFiles(e) && !e.relatedTarget) showDrop(false); });
+    doc.addEventListener('drop', (e) => {
+      if (!dragsFiles(e)) return;
+      e.preventDefault();
+      showDrop(false);
+      if (S.uploadsFull) say(S.busyText); else uploadFiles(e.dataTransfer.files);
+    });
   }
 
   /* ------------------------------------------------------------------ keys */
@@ -808,6 +855,7 @@
     });
     const picker = $('[data-files]', element);
     if (picker) picker.addEventListener('change', () => { uploadFiles(picker.files); picker.value = ''; });
+    if ($('[data-dropover]', element)) wireDrop();  // demo: drop files anywhere on the page
     if (/Mac|iPhone|iPad/.test(win.navigator.platform || '')) $$('[data-kbd]').forEach((k) => { k.textContent = '⌘ K'; });
     new win.MutationObserver(syncThemeButton).observe(doc.body, { attributes: true, attributeFilter: ['class'] });
     syncThemeButton();
@@ -875,23 +923,6 @@
       else if (act && act.dataset.act === 'delete-uploads') deleteUploads();
       else if (act && act.dataset.act === 'folders') emit(S.topTrigger, 'click', { action: 'folders' });
       else if (q) setQuery(q.dataset.q);
-    });
-    element.addEventListener('dragover', (e) => {
-      const zone = e.target.closest && e.target.closest('.cv-drop, .cv-add');
-      if (!zone) return;
-      e.preventDefault();  // always, or a dropped file opens in the browser
-      if (!S.uploadsFull) zone.classList.add('is-over');
-    });
-    element.addEventListener('dragleave', (e) => {
-      const zone = e.target.closest && e.target.closest('.cv-drop, .cv-add');
-      if (zone) zone.classList.remove('is-over');
-    });
-    element.addEventListener('drop', (e) => {
-      const zone = e.target.closest && e.target.closest('.cv-drop, .cv-add');
-      if (!zone) return;
-      e.preventDefault();
-      zone.classList.remove('is-over');
-      uploadFiles(e.dataTransfer && e.dataTransfer.files);
     });
     // A part's HTML arrives after js_on_load and is replaced on every response: set up each new render once.
     new win.MutationObserver(rendered).observe(element, { childList: true, subtree: true, attributes: true,

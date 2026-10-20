@@ -150,3 +150,8 @@ def test_the_archive_numbers_come_from_the_selected_scope() -> None:
 def test_delete_my_uploads_asks_first_with_the_count() -> None:
     assert run("[C.confirmDelete(3), C.confirmDelete(1)]") == [
         "Delete all 3 files you uploaded? This can't be undone.", "Delete all 1 file you uploaded? This can't be undone."]
+
+
+def test_the_drop_overlay_says_how_many_files() -> None:
+    assert run("[C.dropText(1), C.dropText(3), C.dropText(0)]") == ["Drop to add 1 file", "Drop to add 3 files",
+                                                                   "Drop to add files"]

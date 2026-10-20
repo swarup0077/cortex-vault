@@ -233,7 +233,7 @@ def home_html(ctx: UiContext, session: str | None, scope: str = "Both") -> str:
     lib, roots = ctx.target(session, scope)
     folders = [] if ctx.demo else ctx.library.stats().roots
     return views.home(ctx.view_mode, archive(ctx, session, scope), recent=lib.recent_by_type(views.RECENT, roots),
-                      folders=folders, samples=ctx.library.count() if ctx.demo else 0)
+                      folders=folders)
 
 
 def run_search(ctx: UiContext, session: str | None, query: object, scope: object = "Both",

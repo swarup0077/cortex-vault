@@ -262,7 +262,7 @@ def test_no_served_html_css_or_js_contains_an_external_url() -> None:
     texts += [HEAD, views.top(DEMO, views.DEMO_SUGGESTIONS), views.top(LOCAL), views.footer(DEMO), views.sprite()]
     texts.append(views.results(response([result(1), visual(2)], weaker=[result(3, weaker=True)]), DEMO, place,
                                query="q"))
-    texts.append(views.home(DEMO, views.Archive(), recent=[], samples=52))
+    texts.append(views.home(DEMO, views.Archive(), recent=[]))
     for text in texts:
         urls = re.findall(r"https?://[^\s\"')<>]+", text)
         links = re.findall(r'<a [^>]*href="(https?://[^"]+)"', text)  # opens only when clicked: loads nothing
@@ -470,7 +470,7 @@ def test_the_folders_panel_exists_only_in_local_mode(demo_ctx, tmp_path, fake_em
 def test_search_handler_home_results_and_empty(demo_ctx) -> None:
     home = layout.run_search(demo_ctx, None, "  ")
     assert 'data-view="home"' in home and "2 files" in home and "IMG_red.jpg" in home
-    assert "This demo searches 2 sample files." in home and "generated" not in home  # counted from the index
+    assert "Drop files anywhere on this page" in home and "generated" not in home
     assert "bayes theorem" in views.top(demo_ctx.view_mode, demo_ctx.suggestions)  # the example searches
     page = layout.run_search(demo_ctx, None, "  denoising   diffusion ")
     assert 'data-query="denoising diffusion"' in page and "diffusion.pdf" in page
@@ -975,3 +975,29 @@ def test_a_new_session_is_named_to_its_page_before_its_files_are_read(demo_ctx, 
         release.set()
         for _ in stream:
             pass
+
+
+# ---------------------------------------------------------------- drag and drop anywhere (owner, 20 Oct: v1.1.0)
+
+
+def test_the_drop_zone_is_big_with_only_the_privacy_notice_under_it(demo_ctx, tmp_path, fake_embedder) -> None:
+    """Demo home: a bigger drop zone that says dropping works anywhere (on a phone: Add your own files), then the
+    privacy notice SPEC §8 requires right after it, and nothing else; the page has the full-page drop overlay. Local
+    mode has neither."""
+    home = layout.home_html(demo_ctx, None)
+    zone = home[home.index('<button type="button" class="cv-drop"'):]
+    zone = zone[:zone.index("</button>") + len("</button>")]
+    assert "Drop files anywhere on this page" in zone and "Add your own files" in zone and "Choose files" in zone
+    assert "up to 200 files" in zone and 'data-act="add"' in zone
+    after = home[home.index(zone) + len(zone):]
+    notice = f'<p class="cv-note cv-drop__note">{views._e(demo_ctx.view_mode.upload_notice)}</p>'
+    assert after.startswith(notice) and after[len(notice):].startswith("</div>")  # nothing else under it
+    assert "three small models (bge" not in home  # the long note is gone
+    top = views.top(DEMO)
+    assert top.count("data-dropover hidden") == 1 and "Drop to add files" in top and 'aria-hidden="true"' in top
+    assert "data-dropover" not in views.top(LOCAL)
+    lib = Library(Config(data_dir=tmp_path / "local"))
+    assert "cv-drop" not in layout.home_html(UiContext("local", lib), None)
+    demo_ctx.sessions.cfg = __import__("dataclasses").replace(demo_ctx.sessions.cfg, max_sessions=0)
+    busy = layout.home_html(demo_ctx, None)
+    assert views._e(views.DEMO_BUSY) in busy and 'data-act="add"' not in busy and notice in busy

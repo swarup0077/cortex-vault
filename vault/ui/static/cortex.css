@@ -225,7 +225,7 @@ body.cv-query .cv-queries, body.cv-off-home .cv-queries { display: none; }
 .cv-rail__note p { margin-top: 9px !important; color: var(--cv-muted); font-size: 11.5px; line-height: 1.5; }
 .cv-app .cv-add { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 26px; padding: 10px;
   border: 1px solid var(--cv-brass); border-radius: 5px; background: transparent; color: var(--cv-brass-ink); font-size: 13px; }
-.cv-app .cv-add:hover, .cv-add.is-over { background: var(--cv-active); }
+.cv-app .cv-add:hover { background: var(--cv-active); }
 .cv-app .cv-add--busy { border-style: dashed; color: var(--cv-muted); text-align: center; font-size: 12px; cursor: default; }
 .cv-app .cv-delete { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px;
   padding: 8px; border: 1px solid var(--cv-line); border-radius: 5px; background: transparent; color: var(--cv-muted);
@@ -373,14 +373,32 @@ body.cv-query .cv-queries, body.cv-off-home .cv-queries { display: none; }
 .cv-app .cv-recent .cv-glyph .cv-ico { width: 15px; height: 15px; }
 .cv-recent__name { flex: 1; min-width: 0; font: 600 14.5px var(--cv-serif); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cv-recent__when { color: var(--cv-muted); font-size: 11px; white-space: nowrap; }
-.cv-app .cv-drop { width: 100%; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 32px;
-  min-height: 72px; padding: 12px 16px; border: 1px dashed var(--cv-brass); border-radius: 10px; background: transparent;
-  color: var(--cv-ink); font-size: 14px; }
-.cv-app .cv-drop:hover, .cv-drop.is-over { background: var(--cv-active); }
-.cv-app .cv-drop .cv-ico { width: 18px; height: 18px; color: var(--cv-brass); }
-.cv-drop__hint, .cv-drop__sep { color: var(--cv-muted); }
+/* The home drop zone (demo): dropping works anywhere on the page; clicking it opens the file picker. */
+.cv-app .cv-drop { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  margin-top: 32px; min-height: 220px; padding: 32px 24px; border: 1.5px dashed var(--cv-brass); border-radius: 14px;
+  background: transparent; color: var(--cv-ink); font-size: 14px; text-align: center; }
+.cv-app .cv-drop:hover { background: var(--cv-active); }
+.cv-app .cv-drop .cv-drop__ico { width: 34px; height: 34px; margin-bottom: 4px; color: var(--cv-brass); }
+.cv-drop__title { font: 400 22px/1.3 var(--cv-serif); }
+.cv-drop__narrow { display: none; }
+.cv-drop__hint { color: var(--cv-muted); font-size: 13px; }
+.cv-drop__btn { margin-top: 10px; padding: 8px 18px; border: 1px solid var(--cv-line); border-radius: 8px; background: var(--cv-paper);
+  font-size: 13px; }
+.cv-app .cv-drop:hover .cv-drop__btn { border-color: var(--cv-brass); }
 .cv-app .cv-drop.cv-drop--busy { cursor: default; border-color: var(--cv-line); color: var(--cv-muted); }
 .cv-app .cv-drop.cv-drop--busy:hover { background: transparent; }
+.cv-app .cv-drop.cv-drop--busy .cv-drop__ico { color: var(--cv-muted); }
+.cv-app .cv-drop__note { margin-top: 12px !important; }
+
+/* The full-page drop overlay (demo), while files are dragged over the page */
+.cv-dropover { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: var(--cv-backdrop); pointer-events: none; }
+.cv-dropover[hidden] { display: none; }
+.cv-dropover__in { display: flex; flex-direction: column; align-items: center; gap: 14px; width: min(560px, 100%); padding: 56px 32px;
+  border: 2px dashed var(--cv-brass); border-radius: 18px; background: var(--cv-paper); color: var(--cv-ink);
+  font: 400 28px/1.25 var(--cv-serif); text-align: center; box-shadow: 0 20px 60px rgba(30, 24, 16, 0.25); }
+.cv-dropover__in .cv-ico { width: 40px; height: 40px; color: var(--cv-brass); }
+.cv-dropover.is-busy .cv-dropover__in { border-color: var(--cv-line); color: var(--cv-muted); font-size: 20px; }
 .cv-note { margin-top: 14px !important; color: var(--cv-muted); font-size: 12.5px; line-height: 1.6; }
 .cv-home + section { margin-top: 32px; }
 .cv-folders-list { margin: 0; padding: 0; list-style: none; }
@@ -437,8 +455,9 @@ body.cv-query .cv-queries, body.cv-off-home .cv-queries { display: none; }
   .cv-rail__head { margin-top: 12px; padding: 18px 0 0; border-bottom: 0; border-top: 1px solid var(--cv-line); }
   .cv-rail__rest { margin-top: -10px; }
   .cv-rail__note { margin-top: 0; padding-top: 0; border-top: 0; }
-  .cv-drop__sep { display: none; }
-  .cv-drop__hint { flex-basis: 100%; text-align: center; }
+  .cv-app .cv-drop { min-height: 150px; padding: 24px 16px; }
+  .cv-drop__wide { display: none; }  /* no dragging on a phone: the zone opens the file picker */
+  .cv-drop__narrow { display: inline; }
   .cv-rail__scope, .cv-rail__types .cv-rail__label { display: none; }
   .cv-filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px 2px; }
   .cv-filters::-webkit-scrollbar { display: none; }

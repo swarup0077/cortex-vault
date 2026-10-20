@@ -325,3 +325,46 @@ def test_an_expired_session_is_gone_after_a_reload(served, tmp_path) -> None:
     e = s["expired"]
     assert e["myUploads"] == 0 and e["cookie"] is None and e["bar"] is None and "quokka.txt" not in e["recent"]
     assert not [p for p in (tmp_path / "sessions").iterdir() if p.is_dir()]
+
+
+@needs_browser
+@pytest.mark.parametrize("served", ["demo"], indirect=True)
+def test_files_dropped_anywhere_are_added(served, tmp_path) -> None:
+    """Owner (v1.1.0): dragging files anywhere over the page shows a full-page overlay with their number, and
+    dropping them anywhere adds them, on the home page and on the results page; a cancelled drag adds nothing. The
+    home drop zone is bigger, with only the privacy notice under it. A phone has no dragging: the zone says Add your
+    own files and opens the picker."""
+    from vault.ui import views
+
+    lists = []
+    for name, files in (("first", ["quokka-a1.txt", "quokka-a2.txt"]), ("second", ["quokka-b1.txt"])):
+        (tmp_path / name).mkdir()
+        for f in files:
+            (tmp_path / name / f).write_text(f"quokka field notes {f}", encoding="utf-8")
+        lists.append([str(tmp_path / name / f) for f in files])
+
+    def run(**more) -> dict:
+        options = {"url": served, "browser": BROWSER, "files": lists, "query": "quokka field notes", **more}
+        out = subprocess.run([NODE, str(DRIVER.parent / "drop_check.mjs"), json.dumps(options)], capture_output=True,
+                             text=True, encoding="utf-8", timeout=300)
+        state = json.loads(out.stdout)
+        assert "error" not in state, state.get("error")
+        return state
+
+    s = run()
+    zone = s["home"]["zone"]
+    assert zone["height"] >= 200 and zone["text"].startswith("Drop files anywhere on this page |")
+    assert "Add your own files" not in zone["text"] and zone["text"].endswith("Choose files")
+    assert zone["next"] == "cv-note cv-drop__note" and zone["nextText"] == views.Mode(demo=True).upload_notice
+    assert s["home"]["overlay"] is None
+    first = s["first"]
+    assert first["during"]["overlay"] == "Drop to add 2 files" and first["dropped"]["overlay"] is None
+    assert first["after"]["myUploads"] == 2 and first["after"]["stage"] == "done"
+    assert sorted(s["results"]["cards"]) == ["quokka-a1.txt", "quokka-a2.txt"]  # home switched to My uploads
+    assert s["cancelDuring"]["overlay"] == "Drop to add 1 file" and s["cancelled"]["overlay"] is None
+    assert s["cancelled"]["myUploads"] == 2 and s["cancelled"]["upload"] == first["after"]["upload"]  # nothing sent
+    second = s["second"]
+    assert second["during"]["overlay"] == "Drop to add 1 file" and second["during"]["view"] == "results"
+    assert second["after"]["myUploads"] == 3 and second["after"]["render"] == s["results"]["render"]  # results stay
+    phone = run(phone=True)["home"]["zone"]
+    assert phone["text"].startswith("Add your own files |") and "Drop files anywhere" not in phone["text"]

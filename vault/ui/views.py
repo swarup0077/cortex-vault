@@ -345,7 +345,7 @@ def top(mode: Mode, suggestions: Sequence[Suggestion] = ()) -> str:
     """Header, hero, search box and the recent / example searches: rendered once; cortex.js keeps them in step
     with the other parts (the status, the query, the recent searches it keeps in this browser)."""
     upload = ('<input type="file" class="cv-sr" data-files multiple tabindex="-1" aria-hidden="true">'
-              if mode.demo else "")
+              + drop_overlay() if mode.demo else "")
     examples = "".join(
         f'<button type="button" class="cv-chip" data-q="{_e(s.query)}" title="Found by {_e(s.how)}">{_e(s.query)}'
         "</button>" for s in suggestions)
@@ -397,6 +397,13 @@ def footer(mode: Mode) -> str:
             '<span data-index-line></span><span class="cv-keys">' + icon("keyboard") +
             '<span><b data-kbd>Ctrl K</b> search</span><span><b>↑↓</b> move</span><span><b>↵</b> open</span>'
             "<span><b>esc</b> clear</span></span></div></footer>")
+
+
+def drop_overlay() -> str:
+    """Demo: the full-page overlay while files are dragged over the page (cortex.js shows it and says how many).
+    Dropping anywhere adds them. Drag and drop is a mouse gesture; Add files is the way in for everyone else."""
+    return ('<div class="cv-dropover" data-dropover hidden aria-hidden="true"><div class="cv-dropover__in">'
+            f'{icon("upload")}<span data-dropover-text>Drop to add files</span></div></div>')
 
 
 def upload_bar() -> str:
@@ -500,10 +507,11 @@ def _page(view: str, mode: Mode, archive: Archive, content: str, *, query: str =
 # ---------------------------------------------------------------- home
 
 
-def home(mode: Mode, archive: Archive, *, recent: Sequence[Recent], folders: Sequence[str] = (), samples: int = 0,
+def home(mode: Mode, archive: Archive, *, recent: Sequence[Recent], folders: Sequence[str] = (),
          now: datetime | None = None) -> str:
     """Home below the search box: Recently added (`recent` holds the newest overall and per type, newest first;
-    cortex.js shows the ones the type filter asks for), then the drop zone and notes, or the indexed folders."""
+    cortex.js shows the ones the type filter asks for), then the drop zone with the upload notice, or the indexed
+    folders."""
     rows = []
     for i, r in enumerate(recent):
         t = type_of(r.kind, r.name)
@@ -513,20 +521,17 @@ def home(mode: Mode, archive: Archive, *, recent: Sequence[Recent], folders: Seq
                     f'<span class="cv-recent__when">{_e(ago(r.indexed_at, now))}</span></button>')
     listing = "".join(rows) or '<p class="cv-note">Nothing indexed yet.</p>'
     none = '<p class="cv-note" data-recent-none hidden>None of this type yet.</p>' if rows else ""
-    if mode.demo:
-        drop = ('<button type="button" class="cv-drop" data-act="add">' + icon("upload") +
-                'Drop your own files here to search them too <span class="cv-drop__sep">·</span>'
-                f'<span class="cv-drop__hint">PDF, Office, images, text · up to {mode.max_files}</span></button>')
+    if mode.demo:  # dropping works anywhere on the page; on a phone the zone is a button that opens the picker
+        drop = ('<button type="button" class="cv-drop" data-act="add">' + icon("upload", "cv-ico cv-drop__ico") +
+                '<span class="cv-drop__title"><span class="cv-drop__wide">Drop files anywhere on this page</span>'
+                '<span class="cv-drop__narrow">Add your own files</span></span>'
+                f'<span class="cv-drop__hint">to search them with the samples · PDF, Office, images, text · up to '
+                f'{mode.max_files} files</span><span class="cv-drop__btn">Choose files</span></button>')
         if archive.uploads_full:
-            drop = (f'<div class="cv-drop cv-drop--busy" role="status">{_e(DEMO_BUSY)} '
-                    '<span class="cv-drop__hint">· searching the sample files works as usual</span></div>')
-        extra = (
-            drop +
-            f'<p class="cv-note">{_e(mode.upload_notice)}</p>'
-            f'<p class="cv-note">This demo searches {samples} sample file{"s" if samples != 1 else ""}. '
-            "Text, meaning and pictures are read by three small models (bge-small, CLIP ViT-B/32, PP-OCRv6) running on this server; nothing is "
-            "sent to any outside service. On your own computer, the same app indexes your folders and never leaves "
-            "the machine.</p>")
+            drop = (f'<div class="cv-drop cv-drop--busy" role="status">{icon("upload", "cv-ico cv-drop__ico")}'
+                    f'<span class="cv-drop__title">{_e(DEMO_BUSY)}</span>'
+                    '<span class="cv-drop__hint">Searching the sample files works as usual.</span></div>')
+        extra = f'{drop}<p class="cv-note cv-drop__note">{_e(mode.upload_notice)}</p>'
     else:
         items = "".join(f"<li>{_e(f)}</li>" for f in folders) or "<li>No folders yet: use Folders to add one.</li>"
         extra = (f'<section aria-labelledby="h-folders"><h2 class="cv-heading" id="h-folders">Indexed folders</h2>'
