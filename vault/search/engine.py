@@ -59,6 +59,9 @@ class SearchResult:
     sha256: str = ""  # the file's content hash: preview URLs carry its start, so a reused id isn't served from cache
     chunk_source: str | None = None  # 'pdf_text' | 'ocr' | 'doc_text' | 'slide_text' of the snippet chunk
     text_sources: list[str] = field(default_factory=list)  # every content-chunk source the file has
+    # Which criteria found it, for the "Show: exact text / meaning / picture / file name & path" choice: any of
+    # "text", "meaning", "picture", "name" (see `matched_by`)
+    matched_by: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -144,9 +147,22 @@ def divide(fused: Sequence[Fused], cfg: Config, terms: dict[int, int] | None = N
     return above, why
 
 
+MATCH_ORDER = ("text", "meaning", "picture", "name")
+
+
+def matched_by(ranks: dict[str, int | None], keyword: set[str]) -> list[str]:
+    """The criteria that found a file. `ranks`: each method's rank; `keyword`: where the query's words occur in it,
+    "text" (its content) and/or "path" (its file name or folders). Meaning and picture follow the dense and CLIP
+    lists; a weaker match counts too, by the rank it has in the method's full list."""
+    found = {"text": "text" in keyword, "name": "path" in keyword,
+             "meaning": bool(ranks.get("dense")), "picture": bool(ranks.get("clip"))}
+    return [c for c in MATCH_ORDER if found[c]]
+
+
 def _result(file: sqlite3.Row, paths: list[str], fused: Fused | None, chunk: sqlite3.Row | None, query: str, cfg: Config,
             clip_gated: bool = False, weaker: bool = False, *, size: int | None = None, sources: Sequence[str] = (),
-            clip: _Clip = _Clip(), real_ranks: dict[str, dict[int, int]] | None = None, below: str = "") -> SearchResult:
+            clip: _Clip = _Clip(), real_ranks: dict[str, dict[int, int]] | None = None, below: str = "",
+            keyword: set[str] = frozenset()) -> SearchResult:
     primary = Path(paths[0]) if paths else Path("")
     ranks = {name: fused.ranks.get(name) for name in cfg.weights} if fused else {}
     if real_ranks is not None:  # a weaker match: each method's rank in its full list, not in the tail's fusion
@@ -181,6 +197,7 @@ def _result(file: sqlite3.Row, paths: list[str], fused: Fused | None, chunk: sql
         sha256=file["sha256"],
         chunk_source=chunk["source"] if chunk else None,
         text_sources=list(sources),
+        matched_by=matched_by(ranks, set(keyword)) if fused else [],
     )
 
 
@@ -232,8 +249,8 @@ def _shown(text: str, cfg: Config) -> str:
 
 def _hydrate(conn: sqlite3.Connection, fused: list[Fused], query: str, cfg: Config, clip_gated: bool,
              weaker: bool = False, *, clip: _Clip = _Clip(), real_ranks: dict[str, dict[int, int]] | None = None,
-             chunk_lists: dict[str, Sequence[Hit]] | None = None, below: dict[int, str] | None = None
-             ) -> list[SearchResult]:
+             chunk_lists: dict[str, Sequence[Hit]] | None = None, below: dict[int, str] | None = None,
+             pq: ParsedQuery | None = None) -> list[SearchResult]:
     """Cards for fused files, in order, each with its snippet chunk (`_snippet_chunks`). `below`: why each file
     the divider's bar moved below it is there."""
     best_chunk = _snippet_chunks(conn, fused, chunk_lists or {}, cfg, query)
@@ -251,11 +268,12 @@ def _hydrate(conn: sqlite3.Connection, fused: list[Fused], query: str, cfg: Conf
         for fid, src in conn.execute("SELECT DISTINCT file_id, source FROM chunks WHERE source != 'path' AND file_id IN "
                                      f"({','.join('?' * len(ids))}) ORDER BY source", ids):
             sources.setdefault(fid, []).append(src)
+    keyword = retrievers.keyword_places(conn, pq, ids) if pq else {}
     return [
         _result(files[f.file_id], paths.get(f.file_id, []), f, chunks.get(best_chunk[f.file_id]), query, cfg,
                 clip_gated, weaker or f.file_id in (below or {}), size=sizes.get(f.file_id),
                 sources=sources.get(f.file_id, ()), clip=clip, real_ranks=real_ranks,
-                below=(below or {}).get(f.file_id, ""))
+                below=(below or {}).get(f.file_id, ""), keyword=keyword.get(f.file_id, set()))
         for f in fused
     ]
 
@@ -371,16 +389,16 @@ def search(
     real_ranks = {"dense": {f: i for i, (f, _) in enumerate(collapse(dense_all), start=1)},
                   "clip": {f: i for i, f in enumerate(clip_ranked, start=1)}}
     chunk_lists = {"all_terms": all_hits, "bm25": bm25_hits, "dense": dense_all}  # for each card's snippet chunk
-    results = _hydrate(conn, above, pq.text, cfg, gated.gated, clip=clip_info, chunk_lists=chunk_lists)
+    results = _hydrate(conn, above, pq.text, cfg, gated.gated, clip=clip_info, chunk_lists=chunk_lists, pq=pq)
     weaker = _hydrate(conn, [f for f in fused if f.file_id in moved], pq.text, cfg, gated.gated, clip=clip_info,
-                      chunk_lists=chunk_lists, below=moved)
+                      chunk_lists=chunk_lists, below=moved, pq=pq)
     by_id = {r.file_id: r for r in [*results, *weaker]}
     weaker += _hydrate(conn, tail, pq.text, cfg, False, weaker=True, clip=clip_info, real_ranks=real_ranks,
-                       chunk_lists=chunk_lists)
+                       chunk_lists=chunk_lists, pq=pq)
     row_ids = [file_id for file_id, _ in gated.hits[: cfg.visual_row]]
     fused_by_id = {f.file_id: f for f in fused_all}
     missing = _hydrate(conn, [fused_by_id[i] for i in row_ids if i not in by_id], pq.text, cfg, gated.gated,
-                       clip=clip_info, chunk_lists=chunk_lists)
+                       clip=clip_info, chunk_lists=chunk_lists, pq=pq)
     by_id.update({r.file_id: r for r in missing})
     sw.lap("hydrate")
     clip_summary = {"candidates": gated.candidates, "kept": len(gated.hits), "strong": len(gated.strong),

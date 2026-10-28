@@ -53,8 +53,8 @@
 
   /* Which results show under the type filter (`filter`) and "Show more" (`expanded`): the top `page` matching
      ones by fused rank (`ranks`, one per result in list order); and how many more the button offers. */
-  function visibility(types, ranks, filter, expanded, page = PAGE) {
-    const matching = types.map((type) => filter === 'all' || type === filter);
+  function visibility(types, ranks, filter, expanded, page = PAGE, matched = null) {
+    const matching = types.map((type, i) => (filter === 'all' || type === filter) && (!matched || matched[i]));
     const top = new Set(ranks.filter((r, i) => matching[i]).sort((a, b) => a - b).slice(0, page));
     const visible = matching.map((m, i) => m && (expanded || top.has(ranks[i])));
     const total = matching.filter(Boolean).length;
@@ -228,7 +228,7 @@
   const phone = win.matchMedia('(max-width: 760px)');
   const S = {
     top: null, main: null, topTrigger: null, mainTrigger: null, upload: null,
-    scope: 'Both', last: '', shown: null, timer: 0, filter: 'all', expanded: false,
+    scope: 'Both', last: '', shown: null, timer: 0, filter: 'all', by: 'all', expanded: false,
     selected: null, ticket: 0, detailAbort: null, toastSeen: '',
     text: '', toast: null, toastTimer: 0, saveTimer: 0, turn: 0, recent: [], status: null,
     uploadsFull: false, busyText: '', lastRender: null,
@@ -549,6 +549,23 @@
     applyView();
   }
 
+  /* "Matched by": narrow the results to the ones found by one criterion (exact text, meaning, visual, name & path). */
+  function setBy(by) {
+    S.by = S.by === by ? 'all' : by;  // the chosen chip again goes back to All
+    S.expanded = false;
+    applyView();
+  }
+
+  function clearFilters() {
+    S.filter = 'all';
+    S.by = 'all';
+    S.expanded = false;
+    applyView();
+  }
+
+  const BY_NAMES = { text: 'exact text', meaning: 'meaning', picture: 'visual', name: 'name & path' };
+  const foundBy = (o, by) => by === 'all' || (o.dataset.by || '').split(' ').includes(by);
+
   function applyView() {
     const root = viewRoot();
     if (!root) return;
@@ -574,10 +591,17 @@
     const opts = options();
     const page = Number(root.dataset.page) || PAGE;
     const { visible, more } = visibility(opts.map((o) => o.dataset.type), opts.map((o) => Number(o.dataset.rank)),
-      S.filter, S.expanded, page);
+      S.filter, S.expanded, page, S.by === 'all' ? null : opts.map((o) => foundBy(o, S.by)));
+    $$('[data-by-btn]', root).forEach((b) => {  // each chip counts what it would show under the type filter
+      const key = b.dataset.byBtn;
+      const n = opts.filter((o) => (S.filter === 'all' || o.dataset.type === S.filter) && foundBy(o, key)).length;
+      $('[data-by-n]', b).textContent = String(n);
+      b.disabled = key !== 'all' && !n && S.by !== key;
+      b.setAttribute('aria-pressed', String(key === S.by));
+    });
     opts.forEach((o, i) => { o.hidden = !visible[i]; });
     $$('[data-group]', root).forEach((g) => { g.hidden = !$$('[role="option"]', g).some((o) => !o.hidden); });
-    const of = (o) => S.filter === 'all' || o.dataset.type === S.filter;
+    const of = (o) => (S.filter === 'all' || o.dataset.type === S.filter) && foundBy(o, S.by);
     const n = opts.filter((o) => of(o) && !('weaker' in o.dataset)).length;
     const w = opts.filter((o) => of(o) && 'weaker' in o.dataset).length;
     const label = S.filter === 'all' ? '' : PLURALS[S.filter] || '';
@@ -586,11 +610,13 @@
     const words = $('[data-count-words]', root);
     if (words) words.textContent = countWords(n, w, label);
     const clear = $('.cv-count [data-clear-filter]', root);
-    if (clear) clear.hidden = S.filter === 'all';
+    if (clear) clear.hidden = S.filter === 'all' && S.by === 'all';
     const none = $('[data-filter-empty]', root);
     if (none) {
-      none.hidden = S.filter === 'all' || n + w > 0;
-      $('[data-filter-empty-text]', none).textContent = `No ${label.toLowerCase()} among the matches for “${S.shown}”`;
+      none.hidden = (S.filter === 'all' && S.by === 'all') || n + w > 0;
+      const by = S.by === 'all' ? '' : ` found by ${BY_NAMES[S.by]}`;
+      $('[data-filter-empty-text]', none).textContent =
+        `No ${(label || 'results').toLowerCase()}${by} among the matches for “${S.shown}”`;
     }
     const btn = $('[data-more-btn]', root);
     if (btn) {
@@ -1261,6 +1287,7 @@
     doc.body.classList.remove('cv-overlay');
     if (root.dataset.scope) setScope(root.dataset.scope, false);
     S.expanded = false;
+    S.by = 'all';  // a new search starts with every criterion
     S.shown = view === 'results' ? (root.dataset.query || '') : null;
     const box = input();
     if (view === 'results' && box && !box.value && S.shown) { box.value = S.shown; S.last = S.shown; }
@@ -1288,8 +1315,10 @@
       const opt = t.closest('[role="option"]');
       const act = t.closest('[data-act]');
       const q = t.closest('[data-q]');
-      if (filter && !filter.disabled) setFilter(filter.dataset.filter);
-      else if (t.closest('[data-clear-filter]')) setFilter('all');
+      const by = t.closest('[data-by-btn]');
+      if (by) { if (!by.disabled) setBy(by.dataset.byBtn); }
+      else if (filter && !filter.disabled) setFilter(filter.dataset.filter);
+      else if (t.closest('[data-clear-filter]')) clearFilters();
       else if (scope) setScope(scope.dataset.scopeBtn, true);
       else if (t.closest('[data-more-btn]')) {
         const root = viewRoot();

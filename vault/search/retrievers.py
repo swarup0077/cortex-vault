@@ -171,3 +171,19 @@ def clip_scores(pq: ParsedQuery, model: ClipText, index: VectorIndex,
         return np.zeros(0, np.int64), np.zeros(0, np.float32)
     mask = index.mask_groups(allowed) if allowed is not None else None
     return index.scores(model.embed_text(pq.text), mask)
+
+
+def keyword_places(conn: sqlite3.Connection, pq: ParsedQuery, file_ids: list[int]) -> dict[int, set[str]]:
+    """Where the query's words occur in each file: "text" (a content chunk) and/or "path" (the chunk holding its file
+    name and folders), matched the way BM25 matches them. It asks the index directly, not the BM25 hits (at most
+    `chunks_per_file` chunks a file), so a long file's name match isn't missed."""
+    q = fts_query(pq)
+    out: dict[int, set[str]] = {}
+    if q is None or not file_ids:
+        return out
+    marks = ",".join("?" * len(file_ids))
+    for file_id, source in conn.execute(
+            "SELECT DISTINCT c.file_id, c.source FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid "
+            f"WHERE chunks_fts MATCH ? AND c.file_id IN ({marks})", [q, *file_ids]):
+        out.setdefault(file_id, set()).add("path" if source == "path" else "text")
+    return out

@@ -256,6 +256,13 @@ body.cv-query .cv-queries, body.cv-off-home .cv-queries { display: none; }
 .cv-app .cv-count__clear:hover { border-color: var(--cv-brass); background: var(--cv-active); }
 .cv-app .cv-count__clear .cv-ico { width: 12px; height: 12px; stroke-width: 2.2; }
 .cv-count__time { margin-left: 8px; font-size: 11px; }
+.cv-by { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--cv-line); }
+.cv-app .cv-by__chip { height: 30px; padding: 0 12px; border: 1px solid var(--cv-line); border-radius: 15px; background: transparent;
+  color: var(--cv-muted); font-size: 12.5px; cursor: pointer; }
+.cv-app .cv-by__chip b { margin-left: 4px; font-weight: 700; color: var(--cv-ink); }
+.cv-app .cv-by__chip:hover:not(:disabled) { border-color: var(--cv-brass); color: var(--cv-ink); }
+.cv-app .cv-by__chip[aria-pressed="true"] { background: var(--cv-active); border-color: var(--cv-brass); color: var(--cv-ink); font-weight: 700; }
+.cv-app .cv-by__chip:disabled { opacity: .45; cursor: default; }
 .cv-split { display: grid; grid-template-columns: minmax(0, 1fr); }
 .cv-results { min-width: 0; }
 

@@ -34,6 +34,8 @@ TYPE_NAMES = {"screenshot": "Screenshot", "pdf": "PDF", "text": "Text", "photo":
 TYPE_PLURALS = {"screenshot": "Screenshots", "pdf": "PDFs", "text": "Text files", "photo": "Photos",
                 "doc": "Documents", "slides": "Slides"}
 METHODS = {"bm25": "exact words", "all_terms": "every word", "dense": "meaning", "clip": "what is in the picture"}
+# The "Matched by" choice above the results: what each criterion is called, in the order the chips show them
+MATCH_LABELS = {"text": "Exact text", "meaning": "Meaning", "picture": "Visual", "name": "Name & path"}
 SHORT_METHODS = {"bm25": "exact words", "all_terms": "every word", "dense": "meaning", "clip": "picture"}
 
 Place = Callable[[str], str]  # a stored path → where the UI says the file is ("Sample files / screenshots")
@@ -586,6 +588,18 @@ def home(mode: Mode, archive: Archive, *, recent: Sequence[Recent], folders: Seq
 # ---------------------------------------------------------------- results
 
 
+def matched_chips(items: Sequence[SearchResult]) -> str:
+    """"Matched by": All, then one chip per criterion (exact text, meaning, visual, name & path) with how many of
+    the results it found. cortex.js narrows the list to the chosen one and keeps the counts (and the disabled
+    chips) up to date under the type filter."""
+    def chip(key: str, label: str, n: int) -> str:
+        return (f'<button type="button" class="cv-by__chip" data-by-btn="{key}" aria-pressed="{str(key == "all").lower()}"'
+                f'{" disabled" if key != "all" and not n else ""}>{_e(label)} <b data-by-n>{n}</b></button>')
+    chips = chip("all", "All", len(items)) + "".join(
+        chip(k, label, sum(k in r.matched_by for r in items)) for k, label in MATCH_LABELS.items())
+    return f'<div class="cv-by" role="group" aria-label="Show results matched by">{chips}</div>'
+
+
 def counts_by_type(items: Sequence[SearchResult]) -> dict[str, int]:
     out = dict.fromkeys(TYPES, 0)
     for r in items:
@@ -658,7 +672,7 @@ def _option_attrs(r: SearchResult, query: str, mode: Mode, hidden: bool, rank: i
         "data-title": r.filename, "data-open": opened,
         "data-detail": url("detail", r.file_id, chunk=None if pic else r.chunk_id, page=r.page,
                            q=None if pic else query),
-        "data-link": result_link(query, r.file_id),
+        "data-link": result_link(query, r.file_id), "data-by": " ".join(r.matched_by),
     }
     out = " ".join(f'{k}="{_e(v)}"' for k, v in attrs.items())
     return out + (" data-weaker" if r.weaker else "") + (" data-more hidden" if hidden else "")
@@ -715,11 +729,11 @@ def results(resp: SearchResponse, mode: Mode, place: Place, archive: Archive | N
     more = len(items) - page
     more_btn = (f'<button type="button" class="cv-more" data-more-btn>Show {more} more</button>' if more > 0 else "")
     filter_empty = ('<div class="cv-empty" data-filter-empty hidden><strong data-filter-empty-text></strong>'
-                    '<button type="button" class="cv-more" data-clear-filter>Show all types</button></div>')
+                    '<button type="button" class="cv-more" data-clear-filter>Show all</button></div>')
     render = secrets.token_hex(6)
     previews = "".join(preview(r, resp, mode, place, i + 1, render) for i, r in enumerate(items))
     content = (
-        f'<div class="cv-toolbar">{count}</div><div class="cv-split">'
+        f'<div class="cv-toolbar">{count}</div>{matched_chips(items)}<div class="cv-split">'
         f'<div class="cv-results">{top_note}<div id="cv-list" role="listbox" aria-label="Results">{"".join(groups)}'
         f"</div>{filter_empty}{more_btn}</div>"
         '<div class="cv-backdrop" data-close hidden></div>'

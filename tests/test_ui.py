@@ -1095,3 +1095,14 @@ def test_delete_selected_reaches_only_the_cookies_session(demo_ctx, served_demo)
     assert upload_ids(demo_ctx, own) == own_ids
     assert views.NOTHING_TO_DELETE in Browser(served_demo).event("click", named)  # and no cookie at all
     assert upload_ids(demo_ctx, victim) == victim_ids
+
+
+def test_the_matched_by_chips_count_each_criterion() -> None:
+    a, b, c = result(1), result(2), result(3)
+    a.matched_by, b.matched_by, c.matched_by = ["text", "name"], ["meaning"], ["text"]
+    page = views.results(response([a, b, c]), DEMO, place, query="q")
+    for key, n in {"all": 3, "text": 2, "meaning": 1, "name": 1}.items():
+        assert f'data-by-btn="{key}" aria-pressed="{str(key == "all").lower()}">' in page
+        assert re.search(rf'data-by-btn="{key}"[^>]*>[^<]*<b data-by-n>{n}</b>', page)
+    assert re.search(r'data-by-btn="picture"[^>]*disabled', page)  # nothing was found by picture
+    assert 'data-by="text name"' in page

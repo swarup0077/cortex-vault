@@ -168,3 +168,13 @@ def test_the_tray_reads_extensions_sizes_and_types_as_the_server_does() -> None:
               "maxTotalText": "1000 bytes", "files": 0, "bytes": 0}
     assert run(f"C.trayCheck([{{name: 'photos', size: 0, folder: true}}, {{name: 'a.txt', size: 10}}], "
                f"{json.dumps(limits)})") == ["a folder: add the files in it instead", ""]
+
+
+def test_the_matched_by_choice_narrows_the_list_before_show_more() -> None:
+    types = ["pdf"] * 30
+    ranks = list(range(30))
+    matched = [i % 3 == 0 for i in range(30)]  # 10 results were found by the chosen criterion
+    out = run(f"C.visibility({json.dumps(types)}, {json.dumps(ranks)}, 'all', false, 20, {json.dumps(matched)})")
+    assert out["visible"] == matched and out["more"] == 0
+    out = run(f"C.visibility({json.dumps(types)}, {json.dumps(ranks)}, 'photo', false, 20, {json.dumps(matched)})")
+    assert sum(out["visible"]) == 0  # both choices apply together

@@ -207,3 +207,13 @@ def test_a_contents_page_never_outranks_its_section_page(conn, cfg, fake_embedde
     assert toc_chunk not in set(load_text_index(conn, fake_embedder.dim, cfg.dense_min_word, cfg.toc_min_entries).ids)
     only_toc = search(conn, "random variables expectation counting", cfg).results[0]
     assert only_toc.page == 1 and "…" in only_toc.snippet_html and "........" not in only_toc.snippet_html
+
+
+def test_results_say_which_criteria_found_them(conn, cfg, fake_embedder, tmp_path, make_search_corpus) -> None:
+    index_paths(conn, [make_search_corpus(tmp_path / "c")], cfg)
+    by_text = top(search(conn, "singular value decomposition", cfg))
+    assert "text" in by_text.matched_by and "name" not in by_text.matched_by  # in the pages, not the file name
+    by_name = next(r for r in search(conn, "recipe", cfg).results if r.filename == "recipe.txt")
+    assert "name" in by_name.matched_by  # its name is "recipe.txt"
+    assert all(set(r.matched_by) <= {"text", "meaning", "picture", "name"} for r in search(conn, "recipe", cfg).results)
+    assert search(conn, "   ", cfg).results[0].matched_by == []  # a filter-only list has no criteria
